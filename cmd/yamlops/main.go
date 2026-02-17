@@ -579,15 +579,24 @@ func runClean() {
 			continue
 		}
 
-		stdout, _, err := client.Run("sudo docker ps -a --format '{{json .}}'")
+		containerStdout, _, err := client.Run("sudo docker ps -a --format '{{json .}}'")
 		if err != nil {
 			fmt.Printf("[%s] Failed to list containers: %v\n", srv.Name, err)
 			client.Close()
 			continue
 		}
 
-		var orphans []string
-		for _, line := range strings.Split(strings.TrimSpace(stdout), "\n") {
+		dirStdout, _, err := client.Run("sudo ls -1 /data/yamlops 2>/dev/null || true")
+		if err != nil {
+			fmt.Printf("[%s] Failed to list directories: %v\n", srv.Name, err)
+			client.Close()
+			continue
+		}
+
+		orphanContainers := make(map[string]bool)
+		orphanDirs := make(map[string]bool)
+
+		for _, line := range strings.Split(strings.TrimSpace(containerStdout), "\n") {
 			if line == "" {
 				continue
 			}
@@ -607,19 +616,39 @@ func runClean() {
 			_, isService := serviceMap[serviceName]
 			_, isGateway := gatewayMap[serviceName]
 			if !isService && !isGateway {
-				orphans = append(orphans, container.Name)
+				orphanContainers[container.Name] = true
 			}
 		}
+
+		for _, line := range strings.Split(strings.TrimSpace(dirStdout), "\n") {
+			if line == "" {
+				continue
+			}
+			if !strings.HasPrefix(line, "yo-"+env+"-") {
+				continue
+			}
+			serviceName := strings.TrimPrefix(line, "yo-"+env+"-")
+			_, isService := serviceMap[serviceName]
+			_, isGateway := gatewayMap[serviceName]
+			if !isService && !isGateway {
+				orphanDirs[line] = true
+			}
+		}
+
 		client.Close()
 
-		if len(orphans) == 0 {
+		if len(orphanContainers) == 0 && len(orphanDirs) == 0 {
 			fmt.Printf("[%s] No orphan services found\n", srv.Name)
 			continue
 		}
 
-		fmt.Printf("[%s] Found %d orphan service(s):\n", srv.Name, len(orphans))
-		for _, name := range orphans {
-			fmt.Printf("  - %s\n", name)
+		fmt.Printf("[%s] Found %d orphan container(s) and %d orphan director(ies)\n",
+			srv.Name, len(orphanContainers), len(orphanDirs))
+		for name := range orphanContainers {
+			fmt.Printf("  - container: %s\n", name)
+		}
+		for name := range orphanDirs {
+			fmt.Printf("  - directory: %s\n", name)
 		}
 
 		client2, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
@@ -628,13 +657,24 @@ func runClean() {
 			continue
 		}
 
-		for _, name := range orphans {
-			fmt.Printf("[%s] Removing %s...\n", srv.Name, name)
+		for name := range orphanContainers {
+			fmt.Printf("[%s] Removing container %s...\n", srv.Name, name)
 			_, stderr, err := client2.Run(fmt.Sprintf("sudo docker rm -f %s", name))
 			if err != nil {
-				fmt.Printf("[%s] Failed to remove %s: %v\n%s\n", srv.Name, name, err, stderr)
+				fmt.Printf("[%s] Failed to remove container %s: %v\n%s\n", srv.Name, name, err, stderr)
 			} else {
-				fmt.Printf("[%s] Removed %s\n", srv.Name, name)
+				fmt.Printf("[%s] Removed container %s\n", srv.Name, name)
+			}
+		}
+
+		for name := range orphanDirs {
+			remoteDir := fmt.Sprintf("/data/yamlops/%s", name)
+			fmt.Printf("[%s] Removing directory %s...\n", srv.Name, remoteDir)
+			_, stderr, err := client2.Run(fmt.Sprintf("sudo rm -rf %s", remoteDir))
+			if err != nil {
+				fmt.Printf("[%s] Failed to remove directory %s: %v\n%s\n", srv.Name, remoteDir, err, stderr)
+			} else {
+				fmt.Printf("[%s] Removed directory %s\n", srv.Name, remoteDir)
 			}
 		}
 		client2.Close()
