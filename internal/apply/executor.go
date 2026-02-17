@@ -91,6 +91,17 @@ func (e *Executor) applyCreate(ch *plan.Change) *Result {
 		Success: false,
 	}
 
+	switch ch.Entity {
+	case "isp", "zone", "domain", "dns_record", "certificate", "registry":
+		result.Success = true
+		result.Output = "skipped (not a deployable entity)"
+		return result
+	case "server":
+		result.Success = true
+		result.Output = "server registered"
+		return result
+	}
+
 	serverName := e.extractServerFromChange(ch)
 	if serverName == "" {
 		result.Error = fmt.Errorf("cannot determine server for change %s", ch.Name)
@@ -104,34 +115,40 @@ func (e *Executor) applyCreate(ch *plan.Change) *Result {
 	}
 
 	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s-%s", e.env, ch.Name)
-	if err := client.MkdirAll(remoteDir); err != nil {
+	if err := client.MkdirAllSudo(remoteDir); err != nil {
 		result.Error = fmt.Errorf("failed to create remote directory: %w", err)
 		return result
 	}
 
 	composeFile := e.getComposeFilePath(ch)
+	hasCompose := false
 	if composeFile != "" {
-		content, err := os.ReadFile(composeFile)
-		if err != nil {
-			result.Error = fmt.Errorf("failed to read compose file: %w", err)
-			return result
-		}
-		if err := e.syncContent(client, string(content), remoteDir+"/docker-compose.yml"); err != nil {
-			result.Error = fmt.Errorf("failed to sync compose file: %w", err)
-			return result
+		if _, err := os.Stat(composeFile); err == nil {
+			content, err := os.ReadFile(composeFile)
+			if err != nil {
+				result.Error = fmt.Errorf("failed to read compose file: %w", err)
+				return result
+			}
+			if err := e.syncContent(client, string(content), remoteDir+"/docker-compose.yml"); err != nil {
+				result.Error = fmt.Errorf("failed to sync compose file: %w", err)
+				return result
+			}
+			hasCompose = true
 		}
 	}
 
 	gatewayFile := e.getGatewayFilePath(ch)
 	if gatewayFile != "" {
-		content, err := os.ReadFile(gatewayFile)
-		if err != nil {
-			result.Error = fmt.Errorf("failed to read gateway file: %w", err)
-			return result
-		}
-		if err := e.syncContent(client, string(content), remoteDir+"/gateway.yml"); err != nil {
-			result.Error = fmt.Errorf("failed to sync gateway file: %w", err)
-			return result
+		if _, err := os.Stat(gatewayFile); err == nil {
+			content, err := os.ReadFile(gatewayFile)
+			if err != nil {
+				result.Error = fmt.Errorf("failed to read gateway file: %w", err)
+				return result
+			}
+			if err := e.syncContent(client, string(content), remoteDir+"/gateway.yml"); err != nil {
+				result.Error = fmt.Errorf("failed to sync gateway file: %w", err)
+				return result
+			}
 		}
 	}
 
@@ -143,16 +160,21 @@ func (e *Executor) applyCreate(ch *plan.Change) *Result {
 		}
 	}
 
-	cmd := fmt.Sprintf("cd %s && docker compose up -d", remoteDir)
-	stdout, stderr, err := client.Run(cmd)
-	if err != nil {
-		result.Error = fmt.Errorf("failed to run docker compose: %w, stderr: %s", err, stderr)
-		result.Output = stdout + "\n" + stderr
-		return result
+	if hasCompose {
+		networkCmd := fmt.Sprintf("sudo docker network create yamlops-%s 2>/dev/null || true", e.env)
+		_, _, _ = client.Run(networkCmd)
+
+		cmd := fmt.Sprintf("cd %s && sudo docker compose up -d", remoteDir)
+		stdout, stderr, err := client.Run(cmd)
+		if err != nil {
+			result.Error = fmt.Errorf("failed to run docker compose: %w, stderr: %s", err, stderr)
+			result.Output = stdout + "\n" + stderr
+			return result
+		}
+		result.Output = stdout
 	}
 
 	result.Success = true
-	result.Output = stdout
 	return result
 }
 
@@ -162,6 +184,17 @@ func (e *Executor) applyUpdate(ch *plan.Change) *Result {
 		Success: false,
 	}
 
+	switch ch.Entity {
+	case "isp", "zone", "domain", "dns_record", "certificate", "registry":
+		result.Success = true
+		result.Output = "skipped (not a deployable entity)"
+		return result
+	case "server":
+		result.Success = true
+		result.Output = "server updated"
+		return result
+	}
+
 	serverName := e.extractServerFromChange(ch)
 	if serverName == "" {
 		result.Error = fmt.Errorf("cannot determine server for change %s", ch.Name)
@@ -177,28 +210,34 @@ func (e *Executor) applyUpdate(ch *plan.Change) *Result {
 	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s-%s", e.env, ch.Name)
 
 	composeFile := e.getComposeFilePath(ch)
+	hasCompose := false
 	if composeFile != "" {
-		content, err := os.ReadFile(composeFile)
-		if err != nil {
-			result.Error = fmt.Errorf("failed to read compose file: %w", err)
-			return result
-		}
-		if err := e.syncContent(client, string(content), remoteDir+"/docker-compose.yml"); err != nil {
-			result.Error = fmt.Errorf("failed to sync compose file: %w", err)
-			return result
+		if _, err := os.Stat(composeFile); err == nil {
+			content, err := os.ReadFile(composeFile)
+			if err != nil {
+				result.Error = fmt.Errorf("failed to read compose file: %w", err)
+				return result
+			}
+			if err := e.syncContent(client, string(content), remoteDir+"/docker-compose.yml"); err != nil {
+				result.Error = fmt.Errorf("failed to sync compose file: %w", err)
+				return result
+			}
+			hasCompose = true
 		}
 	}
 
 	gatewayFile := e.getGatewayFilePath(ch)
 	if gatewayFile != "" {
-		content, err := os.ReadFile(gatewayFile)
-		if err != nil {
-			result.Error = fmt.Errorf("failed to read gateway file: %w", err)
-			return result
-		}
-		if err := e.syncContent(client, string(content), remoteDir+"/gateway.yml"); err != nil {
-			result.Error = fmt.Errorf("failed to sync gateway file: %w", err)
-			return result
+		if _, err := os.Stat(gatewayFile); err == nil {
+			content, err := os.ReadFile(gatewayFile)
+			if err != nil {
+				result.Error = fmt.Errorf("failed to read gateway file: %w", err)
+				return result
+			}
+			if err := e.syncContent(client, string(content), remoteDir+"/gateway.yml"); err != nil {
+				result.Error = fmt.Errorf("failed to sync gateway file: %w", err)
+				return result
+			}
 		}
 	}
 
@@ -210,16 +249,21 @@ func (e *Executor) applyUpdate(ch *plan.Change) *Result {
 		}
 	}
 
-	cmd := fmt.Sprintf("cd %s && docker compose up -d", remoteDir)
-	stdout, stderr, err := client.Run(cmd)
-	if err != nil {
-		result.Error = fmt.Errorf("failed to run docker compose: %w, stderr: %s", err, stderr)
-		result.Output = stdout + "\n" + stderr
-		return result
+	if hasCompose {
+		networkCmd := fmt.Sprintf("sudo docker network create yamlops-%s 2>/dev/null || true", e.env)
+		_, _, _ = client.Run(networkCmd)
+
+		cmd := fmt.Sprintf("cd %s && sudo docker compose up -d", remoteDir)
+		stdout, stderr, err := client.Run(cmd)
+		if err != nil {
+			result.Error = fmt.Errorf("failed to run docker compose: %w, stderr: %s", err, stderr)
+			result.Output = stdout + "\n" + stderr
+			return result
+		}
+		result.Output = stdout
 	}
 
 	result.Success = true
-	result.Output = stdout
 	return result
 }
 
@@ -227,6 +271,17 @@ func (e *Executor) applyDelete(ch *plan.Change) *Result {
 	result := &Result{
 		Change:  ch,
 		Success: false,
+	}
+
+	switch ch.Entity {
+	case "isp", "zone", "domain", "dns_record", "certificate", "registry":
+		result.Success = true
+		result.Output = "skipped (not a deployable entity)"
+		return result
+	case "server":
+		result.Success = true
+		result.Output = "server removed"
+		return result
 	}
 
 	serverName := e.extractServerFromChange(ch)
@@ -243,10 +298,10 @@ func (e *Executor) applyDelete(ch *plan.Change) *Result {
 
 	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s-%s", e.env, ch.Name)
 
-	cmd := fmt.Sprintf("cd %s && docker compose down -v 2>/dev/null || true", remoteDir)
+	cmd := fmt.Sprintf("cd %s && sudo docker compose down -v 2>/dev/null || true", remoteDir)
 	stdout, stderr, _ := client.Run(cmd)
 
-	rmCmd := fmt.Sprintf("rm -rf %s", remoteDir)
+	rmCmd := fmt.Sprintf("sudo rm -rf %s", remoteDir)
 	stdout2, stderr2, err := client.Run(rmCmd)
 	if err != nil {
 		result.Error = fmt.Errorf("failed to remove directory: %w, stderr: %s", err, stderr2)
@@ -287,12 +342,20 @@ func (e *Executor) extractServerFromChange(ch *plan.Change) string {
 }
 
 func (e *Executor) getComposeFilePath(ch *plan.Change) string {
-	return filepath.Join("deployments", ch.Name, ch.Name+".compose.yaml")
+	serverName := e.extractServerFromChange(ch)
+	if serverName == "" {
+		return ""
+	}
+	return filepath.Join("deployments", serverName, ch.Name+".compose.yaml")
 }
 
 func (e *Executor) getGatewayFilePath(ch *plan.Change) string {
 	if ch.Entity == "gateway" {
-		return filepath.Join("deployments", ch.Name, ch.Name+".gate.yaml")
+		serverName := e.extractServerFromChange(ch)
+		if serverName == "" {
+			return ""
+		}
+		return filepath.Join("deployments", serverName, ch.Name+".gate.yaml")
 	}
 	return ""
 }
@@ -333,7 +396,7 @@ func (e *Executor) syncContent(client *ssh.Client, content, remotePath string) e
 	}
 	tmpFile.Close()
 
-	return client.UploadFile(tmpFile.Name(), remotePath)
+	return client.UploadFileSudo(tmpFile.Name(), remotePath)
 }
 
 func (e *Executor) syncConfigDir(client *ssh.Client, localDir, remoteDir string) error {
@@ -354,10 +417,10 @@ func (e *Executor) syncConfigDir(client *ssh.Client, localDir, remoteDir string)
 		remotePath := filepath.Join(remoteDir, relPath)
 
 		if info.IsDir() {
-			return client.MkdirAll(remotePath)
+			return client.MkdirAllSudo(remotePath)
 		}
 
-		return client.UploadFile(path, remotePath)
+		return client.UploadFileSudo(path, remotePath)
 	})
 }
 

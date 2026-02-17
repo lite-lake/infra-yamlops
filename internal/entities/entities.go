@@ -203,6 +203,10 @@ type Gateway struct {
 	LogLevel int              `yaml:"log_level,omitempty"`
 }
 
+func (g *Gateway) GetServer() string {
+	return g.Server
+}
+
 func (g *Gateway) Validate() error {
 	if g.Name == "" {
 		return fmt.Errorf("%w: gateway name is required", ErrInvalidName)
@@ -389,6 +393,10 @@ type Service struct {
 	Volumes     []ServiceVolume      `yaml:"volumes,omitempty"`
 	Gateway     ServiceGatewayConfig `yaml:"gateway,omitempty"`
 	Internal    bool                 `yaml:"internal,omitempty"`
+}
+
+func (s *Service) GetServer() string {
+	return s.Server
 }
 
 func (s *Service) Validate() error {

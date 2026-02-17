@@ -90,6 +90,46 @@ func (c *Client) MkdirAll(path string) error {
 	return sftpClient.MkdirAll(path)
 }
 
+func (c *Client) MkdirAllSudo(path string) error {
+	_, stderr, err := c.Run(fmt.Sprintf("sudo mkdir -p %s", path))
+	if err != nil {
+		return fmt.Errorf("sudo mkdir failed: %w, stderr: %s", err, stderr)
+	}
+	return nil
+}
+
+func (c *Client) UploadFileSudo(localPath, remotePath string) error {
+	sftpClient, err := c.newSFTPClient()
+	if err != nil {
+		return err
+	}
+	defer sftpClient.Close()
+
+	localFile, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("failed to open local file: %w", err)
+	}
+	defer localFile.Close()
+
+	tmpPath := fmt.Sprintf("/tmp/yamlops-%d", os.Getpid())
+	tmpFile, err := sftpClient.Create(tmpPath)
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer tmpFile.Close()
+
+	_, err = io.Copy(tmpFile, localFile)
+	if err != nil {
+		return fmt.Errorf("failed to copy file: %w", err)
+	}
+
+	_, stderr, err := c.Run(fmt.Sprintf("sudo mv %s %s", tmpPath, remotePath))
+	if err != nil {
+		return fmt.Errorf("sudo mv failed: %w, stderr: %s", err, stderr)
+	}
+	return nil
+}
+
 func (c *Client) FileExists(path string) (bool, error) {
 	sftpClient, err := c.newSFTPClient()
 	if err != nil {

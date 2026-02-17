@@ -357,7 +357,7 @@ func runEnvCheck(server, zone string) {
 			continue
 		}
 
-		stdout, _, err := client.Run("docker ps --format '{{.Names}}'")
+		stdout, _, err := client.Run("sudo docker ps --format '{{.Names}}'")
 		client.Close()
 
 		if err != nil {
@@ -405,7 +405,7 @@ func runEnvSync(server, zone string) {
 			continue
 		}
 
-		stdout, stderr, err := client.Run("docker pull alpine:latest && docker images alpine:latest --format '{{.ID}}'")
+		_, stderr, err := client.Run("sudo docker network create yamlops-" + env + " 2>/dev/null || true")
 		client.Close()
 
 		if err != nil {
@@ -413,7 +413,7 @@ func runEnvSync(server, zone string) {
 			continue
 		}
 
-		fmt.Printf("[%s] Synced: alpine:%s\n", srv.Name, strings.TrimSpace(stdout))
+		fmt.Printf("[%s] Network yamlops-%s ready\n", srv.Name, env)
 	}
 }
 
@@ -573,7 +573,7 @@ func runClean() {
 			continue
 		}
 
-		stdout, _, err := client.Run("docker ps -a --format '{{json .}}'")
+		stdout, _, err := client.Run("sudo docker ps -a --format '{{json .}}'")
 		if err != nil {
 			fmt.Printf("[%s] Failed to list containers: %v\n", srv.Name, err)
 			client.Close()
@@ -622,7 +622,7 @@ func runClean() {
 
 		for _, name := range orphans {
 			fmt.Printf("[%s] Removing %s...\n", srv.Name, name)
-			_, stderr, err := client2.Run(fmt.Sprintf("docker rm -f %s", name))
+			_, stderr, err := client2.Run(fmt.Sprintf("sudo docker rm -f %s", name))
 			if err != nil {
 				fmt.Printf("[%s] Failed to remove %s: %v\n%s\n", srv.Name, name, err, stderr)
 			} else {

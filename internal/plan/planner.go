@@ -854,7 +854,43 @@ func (p *Planner) generateGatewayConfig(serverDir string, gw *entities.Gateway) 
 		return fmt.Errorf("failed to write gateway config file %s: %w", configFile, err)
 	}
 
+	composeContent, err := p.generateGatewayCompose(gw)
+	if err != nil {
+		return fmt.Errorf("failed to generate gateway compose for %s: %w", gw.Name, err)
+	}
+
+	composeFile := filepath.Join(serverDir, fmt.Sprintf("%s.compose.yaml", gw.Name))
+	if err := os.WriteFile(composeFile, []byte(composeContent), 0644); err != nil {
+		return fmt.Errorf("failed to write gateway compose file %s: %w", composeFile, err)
+	}
+
 	return nil
+}
+
+func (p *Planner) generateGatewayCompose(gw *entities.Gateway) (string, error) {
+	serviceName := "yo-" + p.env + "-" + gw.Name
+	networkName := "yamlops-" + p.env
+
+	compose := fmt.Sprintf(`services:
+  %s:
+    image: %s
+    container_name: %s
+    restart: unless-stopped
+    ports:
+      - "%d:%d"
+      - "%d:%d"
+    volumes:
+      - ./gateway.yml:/app/configs/server.yml:ro
+      - ./cache:/app/cache
+    networks:
+      - %s
+
+networks:
+  %s:
+    external: true
+`, serviceName, gw.Image, serviceName, gw.Ports.HTTP, gw.Ports.HTTP, gw.Ports.HTTPS, gw.Ports.HTTPS, networkName, networkName)
+
+	return compose, nil
 }
 
 func (p *Planner) GetConfig() *entities.Config {
