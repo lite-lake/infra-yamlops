@@ -375,12 +375,26 @@ servers:
 - `./xxx` - 相对路径，在服务器上创建
 - `/xxx` 或 `xxx:xxx` - 普通 docker volume
 
+**端口映射**：
+- `container` - 容器内端口
+- `host` - 宿主机端口
+- `protocol` - 协议（tcp/udp），默认 tcp
+
+**Gateway 路由**：
+- `hostname` - 域名
+- `container_port` - 容器端口
+- `path` - 路径前缀，默认 /
+- `http` - 是否启用 HTTP
+- `https` - 是否启用 HTTPS
+
 ```yaml
 services:
   - name: api-server
     server: srv-east-01
     image: myapp/api:v1.2.0
-    port: 3000
+    ports:
+      - container: 3000
+        host: 13000
     env:
       DATABASE_URL: postgres://...
       REDIS_URL: redis://yo-prod-redis:6379
@@ -399,30 +413,36 @@ services:
         target: /app/config
         sync: true                       # 同步配置到服务器
       - ./data:/app/data                 # 相对路径，服务器上自动创建
-    gateway:
-      enabled: true
-      hostname: api.example.com
-      path: /
-      ssl: true
+    gateways:
+      - hostname: api.example.com
+        container_port: 3000
+        path: /
+        http: true
+        https: true
 
   - name: web-frontend
     server: srv-east-01
     image: myapp/web:v1.2.0
-    port: 8080
+    ports:
+      - container: 80
+        host: 10080
     env:
       API_URL: https://api.example.com
     volumes:
       - ./html:/usr/share/nginx/html
-    gateway:
-      enabled: true
-      hostname: www.example.com
-      path: /
-      ssl: true
+    gateways:
+      - hostname: www.example.com
+        container_port: 80
+        path: /
+        http: true
+        https: true
 
   - name: redis
     server: srv-east-01
     image: redis:7-alpine
-    port: 6379
+    ports:
+      - container: 6379
+        host: 16379
     volumes:
       - redis-data:/data                 # 普通 docker volume
     internal: true                       # 不对外暴露，仅内部使用

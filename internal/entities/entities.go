@@ -364,35 +364,59 @@ func (v *ServiceVolume) Validate() error {
 	return nil
 }
 
-type ServiceGatewayConfig struct {
-	Enabled  bool   `yaml:"enabled"`
-	Hostname string `yaml:"hostname,omitempty"`
-	Path     string `yaml:"path,omitempty"`
-	SSL      bool   `yaml:"ssl,omitempty"`
+type ServicePort struct {
+	Container int    `yaml:"container"`
+	Host      int    `yaml:"host"`
+	Protocol  string `yaml:"protocol,omitempty"`
 }
 
-func (g *ServiceGatewayConfig) Validate() error {
-	if !g.Enabled {
-		return nil
+func (p *ServicePort) Validate() error {
+	if p.Container <= 0 || p.Container > 65535 {
+		return fmt.Errorf("%w: container port must be between 1 and 65535", ErrInvalidPort)
 	}
-	if g.Hostname == "" {
-		return errors.New("gateway hostname is required when enabled")
+	if p.Host <= 0 || p.Host > 65535 {
+		return fmt.Errorf("%w: host port must be between 1 and 65535", ErrInvalidPort)
+	}
+	if p.Protocol != "" && p.Protocol != "tcp" && p.Protocol != "udp" {
+		return errors.New("protocol must be 'tcp' or 'udp'")
 	}
 	return nil
 }
 
+type ServiceGatewayRoute struct {
+	Hostname      string `yaml:"hostname"`
+	ContainerPort int    `yaml:"container_port"`
+	Path          string `yaml:"path,omitempty"`
+	HTTP          bool   `yaml:"http,omitempty"`
+	HTTPS         bool   `yaml:"https,omitempty"`
+}
+
+func (r *ServiceGatewayRoute) Validate() error {
+	if r.Hostname == "" {
+		return errors.New("gateway hostname is required")
+	}
+	if r.ContainerPort <= 0 || r.ContainerPort > 65535 {
+		return fmt.Errorf("%w: container_port must be between 1 and 65535", ErrInvalidPort)
+	}
+	return nil
+}
+
+func (r *ServiceGatewayRoute) HasGateway() bool {
+	return r.HTTP || r.HTTPS
+}
+
 type Service struct {
-	Name        string               `yaml:"name"`
-	Server      string               `yaml:"server"`
-	Image       string               `yaml:"image"`
-	Port        int                  `yaml:"port"`
-	Env         map[string]SecretRef `yaml:"env,omitempty"`
-	Secrets     []string             `yaml:"secrets,omitempty"`
-	Healthcheck *ServiceHealthcheck  `yaml:"healthcheck,omitempty"`
-	Resources   ServiceResources     `yaml:"resources,omitempty"`
-	Volumes     []ServiceVolume      `yaml:"volumes,omitempty"`
-	Gateway     ServiceGatewayConfig `yaml:"gateway,omitempty"`
-	Internal    bool                 `yaml:"internal,omitempty"`
+	Name        string                `yaml:"name"`
+	Server      string                `yaml:"server"`
+	Image       string                `yaml:"image"`
+	Ports       []ServicePort         `yaml:"ports,omitempty"`
+	Env         map[string]SecretRef  `yaml:"env,omitempty"`
+	Secrets     []string              `yaml:"secrets,omitempty"`
+	Healthcheck *ServiceHealthcheck   `yaml:"healthcheck,omitempty"`
+	Resources   ServiceResources      `yaml:"resources,omitempty"`
+	Volumes     []ServiceVolume       `yaml:"volumes,omitempty"`
+	Gateways    []ServiceGatewayRoute `yaml:"gateways,omitempty"`
+	Internal    bool                  `yaml:"internal,omitempty"`
 }
 
 func (s *Service) GetServer() string {
@@ -409,8 +433,10 @@ func (s *Service) Validate() error {
 	if s.Image == "" {
 		return errors.New("image is required")
 	}
-	if s.Port <= 0 || s.Port > 65535 {
-		return fmt.Errorf("%w: port must be between 1 and 65535", ErrInvalidPort)
+	for i, port := range s.Ports {
+		if err := port.Validate(); err != nil {
+			return fmt.Errorf("port %d: %w", i, err)
+		}
 	}
 	if s.Healthcheck != nil {
 		if err := s.Healthcheck.Validate(); err != nil {
@@ -422,8 +448,10 @@ func (s *Service) Validate() error {
 			return fmt.Errorf("volume %d: %w", i, err)
 		}
 	}
-	if err := s.Gateway.Validate(); err != nil {
-		return err
+	for i, gw := range s.Gateways {
+		if err := gw.Validate(); err != nil {
+			return fmt.Errorf("gateway %d: %w", i, err)
+		}
 	}
 	return nil
 }

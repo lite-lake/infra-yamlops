@@ -636,14 +636,30 @@ func (p *Planner) planServices(plan *Plan, scope *Scope) {
 }
 
 func (p *Planner) serviceEquals(a, b *entities.Service) bool {
-	if a.Name != b.Name || a.Server != b.Server || a.Image != b.Image || a.Port != b.Port {
+	if a.Name != b.Name || a.Server != b.Server || a.Image != b.Image {
 		return false
+	}
+	if len(a.Ports) != len(b.Ports) {
+		return false
+	}
+	for i, port := range a.Ports {
+		if i >= len(b.Ports) || port != b.Ports[i] {
+			return false
+		}
 	}
 	if len(a.Env) != len(b.Env) {
 		return false
 	}
 	for k, v := range a.Env {
 		if bv, ok := b.Env[k]; !ok || bv != v {
+			return false
+		}
+	}
+	if len(a.Gateways) != len(b.Gateways) {
+		return false
+	}
+	for i, gw := range a.Gateways {
+		if i >= len(b.Gateways) || gw != b.Gateways[i] {
 			return false
 		}
 	}
@@ -697,8 +713,8 @@ func (p *Planner) generateServiceComposes() error {
 
 func (p *Planner) generateServiceCompose(serverDir string, svc *entities.Service) error {
 	ports := []string{}
-	if svc.Port > 0 {
-		ports = append(ports, fmt.Sprintf("%d:%d", svc.Port, svc.Port))
+	for _, port := range svc.Ports {
+		ports = append(ports, fmt.Sprintf("%d:%d", port.Host, port.Container))
 	}
 
 	volumes := []string{}
@@ -792,16 +808,40 @@ func (p *Planner) generateGatewayConfigs() error {
 func (p *Planner) generateGatewayConfig(serverDir string, gw *entities.Gateway) error {
 	serverMap := p.config.GetServerMap()
 	var hosts []gate.HostRoute
+
+	containerPortToHostPort := make(map[string]int)
 	for _, svc := range p.config.Services {
-		if svc.Server == gw.Server && svc.Gateway.Enabled {
+		if svc.Server == gw.Server {
+			for _, port := range svc.Ports {
+				key := fmt.Sprintf("%s:%d", svc.Name, port.Container)
+				containerPortToHostPort[key] = port.Host
+			}
+		}
+	}
+
+	for _, svc := range p.config.Services {
+		if svc.Server != gw.Server {
+			continue
+		}
+		for _, route := range svc.Gateways {
+			if !route.HasGateway() {
+				continue
+			}
+
 			var backendIP string
 			if server, ok := serverMap[svc.Server]; ok && server.IP.Private != "" {
 				backendIP = server.IP.Private
 			} else {
 				backendIP = "127.0.0.1"
 			}
-			backend := fmt.Sprintf("http://%s:%d", backendIP, svc.Port)
-			hostname := svc.Gateway.Hostname
+
+			hostPort := route.ContainerPort
+			if key := fmt.Sprintf("%s:%d", svc.Name, route.ContainerPort); containerPortToHostPort[key] > 0 {
+				hostPort = containerPortToHostPort[key]
+			}
+			backend := fmt.Sprintf("http://%s:%d", backendIP, hostPort)
+
+			hostname := route.Hostname
 			if hostname == "" {
 				hostname = svc.Name
 			}
@@ -812,7 +852,7 @@ func (p *Planner) generateGatewayConfig(serverDir string, gw *entities.Gateway) 
 			}
 
 			sslPort := 0
-			if svc.Gateway.SSL {
+			if route.HTTPS {
 				sslPort = gw.Ports.HTTPS
 			}
 

@@ -451,7 +451,14 @@ func runList(entity string) {
 		}
 	case "services":
 		for _, s := range cfg.Services {
-			fmt.Printf("- %s (server: %s, port: %d)\n", s.Name, s.Server, s.Port)
+			portStr := ""
+			for i, p := range s.Ports {
+				if i > 0 {
+					portStr += ", "
+				}
+				portStr += fmt.Sprintf("%d->%d", p.Host, p.Container)
+			}
+			fmt.Printf("- %s (server: %s, ports: %s)\n", s.Name, s.Server, portStr)
 		}
 	case "registries":
 		for _, r := range cfg.Registries {

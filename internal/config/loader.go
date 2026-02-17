@@ -466,10 +466,12 @@ func (l *Loader) validatePortConflicts() error {
 		if servicePorts[key] == nil {
 			servicePorts[key] = make(map[int]string)
 		}
-		if existing, ok := servicePorts[key][service.Port]; ok {
-			return fmt.Errorf("%w: port %d on server '%s' is used by both services '%s' and '%s'", ErrPortConflict, service.Port, service.Server, existing, service.Name)
+		for _, port := range service.Ports {
+			if existing, ok := servicePorts[key][port.Host]; ok {
+				return fmt.Errorf("%w: host port %d on server '%s' is used by both services '%s' and '%s'", ErrPortConflict, port.Host, service.Server, existing, service.Name)
+			}
+			servicePorts[key][port.Host] = service.Name
 		}
-		servicePorts[key][service.Port] = service.Name
 	}
 
 	return nil
@@ -499,12 +501,14 @@ func (l *Loader) validateDomainConflicts() error {
 func (l *Loader) validateHostnameConflicts() error {
 	hostnames := make(map[string]string)
 	for _, service := range l.config.Services {
-		if service.Gateway.Enabled && service.Gateway.Hostname != "" {
-			hostname := strings.ToLower(service.Gateway.Hostname)
-			if existing, ok := hostnames[hostname]; ok {
-				return fmt.Errorf("%w: hostname '%s' is used by both services '%s' and '%s'", ErrHostnameConflict, hostname, existing, service.Name)
+		for _, route := range service.Gateways {
+			if route.HasGateway() && route.Hostname != "" {
+				hostname := strings.ToLower(route.Hostname)
+				if existing, ok := hostnames[hostname]; ok {
+					return fmt.Errorf("%w: hostname '%s' is used by both services '%s' and '%s'", ErrHostnameConflict, hostname, existing, service.Name)
+				}
+				hostnames[hostname] = service.Name
 			}
-			hostnames[hostname] = service.Name
 		}
 	}
 	return nil
