@@ -594,7 +594,11 @@ func runClean() {
 				continue
 			}
 
-			if _, exists := serviceMap[container.Name]; !exists {
+			if !strings.HasPrefix(container.Name, "yo-") {
+				continue
+			}
+			serviceName := strings.TrimPrefix(container.Name, "yo-")
+			if _, exists := serviceMap[serviceName]; !exists {
 				orphans = append(orphans, container.Name)
 			}
 		}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/litelake/yamlops/internal/compose"
 	"github.com/litelake/yamlops/internal/entities"
@@ -719,6 +720,12 @@ func (p *Planner) generateServiceCompose(serverDir string, svc *entities.Service
 		}
 		envMap[k] = val
 	}
+	for _, secretName := range svc.Secrets {
+		if val, ok := secrets[secretName]; ok {
+			envKey := strings.ToUpper(secretName)
+			envMap[envKey] = val
+		}
+	}
 
 	composeSvc := &compose.ComposeService{
 		Name:        svc.Name,
@@ -768,10 +775,17 @@ func (p *Planner) generateGatewayConfigs() error {
 }
 
 func (p *Planner) generateGatewayConfig(serverDir string, gw *entities.Gateway) error {
+	serverMap := p.config.GetServerMap()
 	var hosts []gate.HostRoute
 	for _, svc := range p.config.Services {
 		if svc.Server == gw.Server && svc.Gateway.Enabled {
-			backend := fmt.Sprintf("127.0.0.1:%d", svc.Port)
+			var backendIP string
+			if server, ok := serverMap[svc.Server]; ok && server.IP.Private != "" {
+				backendIP = server.IP.Private
+			} else {
+				backendIP = "127.0.0.1"
+			}
+			backend := fmt.Sprintf("http://%s:%d", backendIP, svc.Port)
 			hostname := svc.Gateway.Hostname
 			if hostname == "" {
 				hostname = svc.Name
@@ -787,23 +801,38 @@ func (p *Planner) generateGatewayConfig(serverDir string, gw *entities.Gateway) 
 				sslPort = gw.Ports.HTTPS
 			}
 
+			healthInterval := "30s"
+			healthTimeout := "10s"
+			if svc.Healthcheck != nil {
+				if svc.Healthcheck.Interval != "" {
+					healthInterval = svc.Healthcheck.Interval
+				}
+				if svc.Healthcheck.Timeout != "" {
+					healthTimeout = svc.Healthcheck.Timeout
+				}
+			}
+
 			hosts = append(hosts, gate.HostRoute{
-				Name:        hostname,
-				Port:        gw.Ports.HTTP,
-				SSLPort:     sslPort,
-				Backend:     []string{backend},
-				HealthCheck: healthPath,
+				Name:                hostname,
+				Port:                gw.Ports.HTTP,
+				SSLPort:             sslPort,
+				Backend:             []string{backend},
+				HealthCheck:         healthPath,
+				HealthCheckInterval: healthInterval,
+				HealthCheckTimeout:  healthTimeout,
 			})
 		}
 	}
 
 	gatewayConfig := &gate.GatewayConfig{
-		Port:        gw.Ports.HTTP,
-		LogLevel:    gw.LogLevel,
-		WAFEnabled:  gw.WAF.Enabled,
-		Whitelist:   gw.WAF.Whitelist,
-		SSLMode:     gw.SSL.Mode,
-		SSLEndpoint: gw.SSL.Endpoint,
+		Port:               gw.Ports.HTTP,
+		LogLevel:           gw.LogLevel,
+		WAFEnabled:         gw.WAF.Enabled,
+		Whitelist:          gw.WAF.Whitelist,
+		SSLMode:            gw.SSL.Mode,
+		SSLEndpoint:        gw.SSL.Endpoint,
+		SSLAutoUpdate:      true,
+		SSLUpdateCheckTime: "00:00-00:59",
 	}
 
 	content, err := p.gateGen.Generate(gatewayConfig, hosts)

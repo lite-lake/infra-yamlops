@@ -98,7 +98,7 @@ func (e *Executor) applyCreate(ch *plan.Change) *Result {
 		return result
 	}
 
-	remoteDir := fmt.Sprintf("/opt/yamlops/%s", ch.Name)
+	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s", ch.Name)
 	if err := client.MkdirAll(remoteDir); err != nil {
 		result.Error = fmt.Errorf("failed to create remote directory: %w", err)
 		return result
@@ -138,10 +138,10 @@ func (e *Executor) applyCreate(ch *plan.Change) *Result {
 		}
 	}
 
-	cmd := fmt.Sprintf("cd %s && docker-compose up -d", remoteDir)
+	cmd := fmt.Sprintf("cd %s && docker compose up -d", remoteDir)
 	stdout, stderr, err := client.Run(cmd)
 	if err != nil {
-		result.Error = fmt.Errorf("failed to run docker-compose: %w, stderr: %s", err, stderr)
+		result.Error = fmt.Errorf("failed to run docker compose: %w, stderr: %s", err, stderr)
 		result.Output = stdout + "\n" + stderr
 		return result
 	}
@@ -169,7 +169,7 @@ func (e *Executor) applyUpdate(ch *plan.Change) *Result {
 		return result
 	}
 
-	remoteDir := fmt.Sprintf("/opt/yamlops/%s", ch.Name)
+	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s", ch.Name)
 
 	composeFile := e.getComposeFilePath(ch)
 	if composeFile != "" {
@@ -205,10 +205,10 @@ func (e *Executor) applyUpdate(ch *plan.Change) *Result {
 		}
 	}
 
-	cmd := fmt.Sprintf("cd %s && docker-compose up -d", remoteDir)
+	cmd := fmt.Sprintf("cd %s && docker compose up -d", remoteDir)
 	stdout, stderr, err := client.Run(cmd)
 	if err != nil {
-		result.Error = fmt.Errorf("failed to run docker-compose: %w, stderr: %s", err, stderr)
+		result.Error = fmt.Errorf("failed to run docker compose: %w, stderr: %s", err, stderr)
 		result.Output = stdout + "\n" + stderr
 		return result
 	}
@@ -236,9 +236,9 @@ func (e *Executor) applyDelete(ch *plan.Change) *Result {
 		return result
 	}
 
-	remoteDir := fmt.Sprintf("/opt/yamlops/%s", ch.Name)
+	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s", ch.Name)
 
-	cmd := fmt.Sprintf("cd %s && docker-compose down -v 2>/dev/null || true", remoteDir)
+	cmd := fmt.Sprintf("cd %s && docker compose down -v 2>/dev/null || true", remoteDir)
 	stdout, stderr, _ := client.Run(cmd)
 
 	rmCmd := fmt.Sprintf("rm -rf %s", remoteDir)

@@ -5,20 +5,24 @@ import (
 )
 
 type GatewayConfig struct {
-	Port        int
-	LogLevel    int
-	WAFEnabled  bool
-	Whitelist   []string
-	SSLMode     string
-	SSLEndpoint string
+	Port               int
+	LogLevel           int
+	WAFEnabled         bool
+	Whitelist          []string
+	SSLMode            string
+	SSLEndpoint        string
+	SSLAutoUpdate      bool
+	SSLUpdateCheckTime string
 }
 
 type HostRoute struct {
-	Name        string
-	Port        int
-	SSLPort     int
-	Backend     []string
-	HealthCheck string
+	Name                string
+	Port                int
+	SSLPort             int
+	Backend             []string
+	HealthCheck         string
+	HealthCheckInterval string
+	HealthCheckTimeout  string
 }
 
 type Generator struct{}
@@ -34,8 +38,10 @@ type serverConfig struct {
 }
 
 type loggerConfig struct {
-	Level         int  `yaml:"level"`
-	EnableConsole bool `yaml:"enable_console"`
+	Level         int    `yaml:"level"`
+	EnableConsole bool   `yaml:"enable_console"`
+	EnableFile    bool   `yaml:"enable_file"`
+	LogDir        string `yaml:"log_dir,omitempty"`
 }
 
 type wafConfig struct {
@@ -43,20 +49,29 @@ type wafConfig struct {
 	Whitelist struct {
 		IPRanges []string `yaml:"ip_ranges"`
 	} `yaml:"whitelist"`
+	CRS struct {
+		Enabled bool   `yaml:"enabled"`
+		Version string `yaml:"version"`
+	} `yaml:"crs"`
 }
 
 type sslConfig struct {
 	Remote struct {
-		Enabled  bool   `yaml:"enabled"`
-		Endpoint string `yaml:"endpoint"`
+		Enabled           bool   `yaml:"enabled"`
+		Endpoint          string `yaml:"endpoint"`
+		AutoUpdate        bool   `yaml:"auto_update"`
+		UpdateCheckWindow string `yaml:"update_check_window,omitempty"`
 	} `yaml:"remote"`
 }
 
 type hostConfig struct {
-	Name    string   `yaml:"name"`
-	Port    int      `yaml:"port"`
-	SSLPort int      `yaml:"ssl_port"`
-	Backend []string `yaml:"backend"`
+	Name                string   `yaml:"name"`
+	Port                int      `yaml:"port"`
+	SSLPort             int      `yaml:"ssl_port,omitempty"`
+	Backend             []string `yaml:"backend"`
+	HealthCheck         string   `yaml:"health_check,omitempty"`
+	HealthCheckInterval string   `yaml:"health_check_interval,omitempty"`
+	HealthCheckTimeout  string   `yaml:"health_check_timeout,omitempty"`
 }
 
 type gateConfig struct {
@@ -79,6 +94,8 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 		Logger: loggerConfig{
 			Level:         cfg.LogLevel,
 			EnableConsole: true,
+			EnableFile:    true,
+			LogDir:        "./applogs",
 		},
 		WAF: wafConfig{
 			Enabled: cfg.WAFEnabled,
@@ -87,14 +104,25 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 			}{
 				IPRanges: cfg.Whitelist,
 			},
+			CRS: struct {
+				Enabled bool   `yaml:"enabled"`
+				Version string `yaml:"version"`
+			}{
+				Enabled: true,
+				Version: "v4.19.0",
+			},
 		},
 		SSL: sslConfig{
 			Remote: struct {
-				Enabled  bool   `yaml:"enabled"`
-				Endpoint string `yaml:"endpoint"`
+				Enabled           bool   `yaml:"enabled"`
+				Endpoint          string `yaml:"endpoint"`
+				AutoUpdate        bool   `yaml:"auto_update"`
+				UpdateCheckWindow string `yaml:"update_check_window,omitempty"`
 			}{
-				Enabled:  sslEnabled,
-				Endpoint: cfg.SSLEndpoint,
+				Enabled:           sslEnabled,
+				Endpoint:          cfg.SSLEndpoint,
+				AutoUpdate:        cfg.SSLAutoUpdate,
+				UpdateCheckWindow: cfg.SSLUpdateCheckTime,
 			},
 		},
 		Hosts: make([]hostConfig, 0, len(hosts)),
@@ -102,10 +130,13 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 
 	for _, h := range hosts {
 		host := hostConfig{
-			Name:    h.Name,
-			Port:    h.Port,
-			SSLPort: h.SSLPort,
-			Backend: h.Backend,
+			Name:                h.Name,
+			Port:                h.Port,
+			SSLPort:             h.SSLPort,
+			Backend:             h.Backend,
+			HealthCheck:         h.HealthCheck,
+			HealthCheckInterval: h.HealthCheckInterval,
+			HealthCheckTimeout:  h.HealthCheckTimeout,
 		}
 		config.Hosts = append(config.Hosts, host)
 	}

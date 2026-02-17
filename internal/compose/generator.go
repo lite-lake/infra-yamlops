@@ -29,14 +29,15 @@ type Deploy struct {
 }
 
 type Service struct {
-	Image       string            `yaml:"image"`
-	Ports       []string          `yaml:"ports,omitempty"`
-	Environment map[string]string `yaml:"environment,omitempty"`
-	Volumes     []string          `yaml:"volumes,omitempty"`
-	HealthCheck *HealthCheck      `yaml:"healthcheck,omitempty"`
-	Deploy      *Deploy           `yaml:"deploy,omitempty"`
-	Networks    []string          `yaml:"networks,omitempty"`
-	Restart     string            `yaml:"restart,omitempty"`
+	Image         string            `yaml:"image"`
+	ContainerName string            `yaml:"container_name,omitempty"`
+	Ports         []string          `yaml:"ports,omitempty"`
+	Environment   map[string]string `yaml:"environment,omitempty"`
+	Volumes       []string          `yaml:"volumes,omitempty"`
+	HealthCheck   *HealthCheck      `yaml:"healthcheck,omitempty"`
+	Deploy        *Deploy           `yaml:"deploy,omitempty"`
+	Networks      []string          `yaml:"networks,omitempty"`
+	Restart       string            `yaml:"restart,omitempty"`
 }
 
 type ComposeFile struct {
@@ -76,13 +77,14 @@ func (g *Generator) Generate(svc *ComposeService) (string, error) {
 	serviceName := "yo-" + svc.Name
 
 	service := Service{
-		Image:       svc.Image,
-		Ports:       svc.Ports,
-		Environment: svc.Environment,
-		Volumes:     svc.Volumes,
-		HealthCheck: svc.HealthCheck,
-		Networks:    []string{"yamlops"},
-		Restart:     "unless-stopped",
+		Image:         svc.Image,
+		ContainerName: serviceName,
+		Ports:         svc.Ports,
+		Environment:   svc.Environment,
+		Volumes:       svc.Volumes,
+		HealthCheck:   svc.HealthCheck,
+		Networks:      []string{"yamlops"},
+		Restart:       "unless-stopped",
 	}
 
 	if svc.Resources != nil {
