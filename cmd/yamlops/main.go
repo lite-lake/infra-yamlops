@@ -199,7 +199,7 @@ func runPlan(scope, domain, zone, server, service string) {
 		os.Exit(1)
 	}
 
-	planner := plan.NewPlanner(cfg)
+	planner := plan.NewPlanner(cfg, env)
 	planScope := &plan.Scope{
 		Domain:  domain,
 		Zone:    zone,
@@ -252,7 +252,7 @@ func runApply(scope, domain, zone, server, service string) {
 		os.Exit(1)
 	}
 
-	planner := plan.NewPlanner(cfg)
+	planner := plan.NewPlanner(cfg, env)
 	planScope := &plan.Scope{
 		Domain:  domain,
 		Zone:    zone,
@@ -276,7 +276,7 @@ func runApply(scope, domain, zone, server, service string) {
 		os.Exit(1)
 	}
 
-	executor := apply.NewExecutor(executionPlan)
+	executor := apply.NewExecutor(executionPlan, env)
 	executor.SetSecrets(cfg.GetSecretsMap())
 
 	for _, srv := range cfg.Servers {
@@ -594,10 +594,10 @@ func runClean() {
 				continue
 			}
 
-			if !strings.HasPrefix(container.Name, "yo-") {
+			if !strings.HasPrefix(container.Name, "yo-"+env+"-") {
 				continue
 			}
-			serviceName := strings.TrimPrefix(container.Name, "yo-")
+			serviceName := strings.TrimPrefix(container.Name, "yo-"+env+"-")
 			if _, exists := serviceMap[serviceName]; !exists {
 				orphans = append(orphans, container.Name)
 			}

@@ -14,6 +14,7 @@ type Executor struct {
 	sshClients map[string]*ssh.Client
 	secrets    map[string]string
 	servers    map[string]*serverInfo
+	env        string
 }
 
 type serverInfo struct {
@@ -30,12 +31,16 @@ type Result struct {
 	Output  string
 }
 
-func NewExecutor(pl *plan.Plan) *Executor {
+func NewExecutor(pl *plan.Plan, env string) *Executor {
+	if env == "" {
+		env = "dev"
+	}
 	return &Executor{
 		plan:       pl,
 		sshClients: make(map[string]*ssh.Client),
 		secrets:    make(map[string]string),
 		servers:    make(map[string]*serverInfo),
+		env:        env,
 	}
 }
 
@@ -98,7 +103,7 @@ func (e *Executor) applyCreate(ch *plan.Change) *Result {
 		return result
 	}
 
-	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s", ch.Name)
+	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s-%s", e.env, ch.Name)
 	if err := client.MkdirAll(remoteDir); err != nil {
 		result.Error = fmt.Errorf("failed to create remote directory: %w", err)
 		return result
@@ -169,7 +174,7 @@ func (e *Executor) applyUpdate(ch *plan.Change) *Result {
 		return result
 	}
 
-	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s", ch.Name)
+	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s-%s", e.env, ch.Name)
 
 	composeFile := e.getComposeFilePath(ch)
 	if composeFile != "" {
@@ -236,7 +241,7 @@ func (e *Executor) applyDelete(ch *plan.Change) *Result {
 		return result
 	}
 
-	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s", ch.Name)
+	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s-%s", e.env, ch.Name)
 
 	cmd := fmt.Sprintf("cd %s && docker compose down -v 2>/dev/null || true", remoteDir)
 	stdout, stderr, _ := client.Run(cmd)

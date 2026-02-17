@@ -94,22 +94,28 @@ yamlops/
 
 所有由 yamlops 管理的服务：
 
-- **命名前缀**：`yo-` (便于识别和管理)
-- **部署路径**：`/data/yamlops/yo-<服务名>/`
+- **命名前缀**：`yo-<env>-` (便于识别环境和管理)
+- **部署路径**：`/data/yamlops/yo-<env>-<服务名>/`
+
+这样设计支持一台服务器同时运行多个环境的服务，节约服务器资源。
 
 ```
 /data/yamlops/
-├── yo-infra-gate/              # 网关服务
+├── yo-prod-infra-gate/          # 生产环境网关服务
 │   ├── docker-compose.yml
 │   └── volumes/
 │       └── config/
 │           └── server.yml
-├── yo-api-server/
+├── yo-prod-api-server/
 │   └── docker-compose.yml
-├── yo-web-frontend/
-│   └── docker-compose.yml
-└── yo-redis/
-    └── docker-compose.yml
+├── yo-staging-infra-gate/       # 预发环境网关服务
+│   └── ...
+├── yo-staging-api-server/
+│   └── ...
+├── yo-dev-infra-gate/           # 开发环境网关服务
+│   └── ...
+└── yo-dev-api-server/
+    └── ...
 ```
 
 ### 3.2 Volume 同步机制
@@ -138,40 +144,44 @@ services:
         sync: true                                  # 同步到服务器
 ```
 
-**同步后服务器路径**：
+**同步后服务器路径** (以 prod 环境为例)：
 ```
-/data/yamlops/yo-api-server/volumes/api-server/config.yml
+/data/yamlops/yo-prod-api-server/volumes/api-server/config.yml
 ```
 
 ### 3.3 网关服务
 
-网关也是一个普通服务，名为 `infra-gate`，部署为 `yo-infra-gate`。
+网关也是一个普通服务，名为 `infra-gate`，部署为 `yo-<env>-infra-gate`（如 `yo-prod-infra-gate`）。
 
 与其他服务区别：
 - 需要 `volumes/config/server.yml` 配置文件（通过 volume 同步）
 - 需要暴露 80/443 端口
 - 路由配置根据其他服务的 `gateway` 设置自动生成
+- 不同环境使用不同端口（如 prod 用 80/443，staging 用 8080/8443）
 
 ### 3.4 网络互通
 
-同一台服务器上的所有 `yo-*` 服务加入同一个 Docker 网络：
+每个环境使用独立的 Docker 网络，实现环境隔离：
 
 ```yaml
 networks:
-  yamlops:
-    name: yamlops
+  yamlops-prod:
+    name: yamlops-prod
     external: true
 ```
 
-服务间可通过**容器名**（即 `yo-服务名`）相互访问：
+同一环境内的服务加入同一个网络，服务间可通过**容器名**（即 `yo-<env>-服务名`）相互访问：
 
 ```
-yo-api-server ──► http://yo-redis:6379  ✅ 同机互通
+yo-prod-api-server ──► http://yo-prod-redis:6379  ✅ 同环境互通
+yo-staging-api-server ──► http://yo-staging-redis:6379  ✅ 同环境互通
 ```
+
+不同环境的服务网络隔离，无法直接访问。
 
 ### 3.5 孤儿服务检测
 
-Plan 阶段会扫描服务器上的 `yo-*` 目录，对比 YAML 配置：
+Plan 阶段会扫描服务器上的 `yo-<env>-*` 目录，对比 YAML 配置：
 
 - 配置中存在，服务器不存在 → CREATE
 - 两边都存在但配置不同 → UPDATE
@@ -373,7 +383,7 @@ services:
     port: 3000
     env:
       DATABASE_URL: postgres://...
-      REDIS_URL: redis://yo-redis:6379
+      REDIS_URL: redis://yo-prod-redis:6379
     secrets:
       - db_password                      # 引用 secrets，注入为环境变量
       - jwt_secret
@@ -514,12 +524,12 @@ Plan 时在本地生成部署文件：
 
 ```
 deployments/
-├── yo-api-server/
+├── yo-prod-api-server/
 │   ├── docker-compose.yml
 │   └── volumes/                  # 需要同步的配置
 │       └── api-server/
 │           └── config.yml
-├── yo-infra-gate/
+├── yo-prod-infra-gate/
 │   ├── docker-compose.yml
 │   └── volumes/
 │       └── infra-gate/
@@ -532,26 +542,26 @@ deployments/
 Apply 时将 `deployments/` 目录同步到服务器 `/data/yamlops/`：
 
 ```bash
-# 本地
-deployments/yo-api-server/  →  服务器 /data/yamlops/yo-api-server/
+# 本地 (prod 环境)
+deployments/yo-prod-api-server/  →  服务器 /data/yamlops/yo-prod-api-server/
 ```
 
 ### 5.3 docker-compose.yml (普通服务)
 
-基于 `services.yaml` 自动生成，部署到服务器的 `/data/yamlops/yo-<服务名>/docker-compose.yml`。
+基于 `services.yaml` 自动生成，部署到服务器的 `/data/yamlops/yo-<env>-<服务名>/docker-compose.yml`。
 
 ```yaml
-# /data/yamlops/yo-api-server/docker-compose.yml
+# /data/yamlops/yo-prod-api-server/docker-compose.yml
 services:
-  yo-api-server:
-    container_name: yo-api-server
+  yo-prod-api-server:
+    container_name: yo-prod-api-server
     image: myapp/api:v1.2.0
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
       DATABASE_URL: postgres://...
-      REDIS_URL: redis://yo-redis:6379
+      REDIS_URL: redis://yo-prod-redis:6379
       DB_PASSWORD: your-db-password
       JWT_SECRET: your-jwt-secret
     healthcheck:
@@ -565,20 +575,20 @@ services:
           cpus: "0.5"
           memory: 256M
     networks:
-      - yamlops
+      - yamlops-prod
 
 networks:
-  yamlops:
+  yamlops-prod:
     external: true
 ```
 
 ### 5.4 docker-compose.yml (网关服务)
 
 ```yaml
-# /data/yamlops/yo-infra-gate/docker-compose.yml
+# /data/yamlops/yo-prod-infra-gate/docker-compose.yml
 services:
-  yo-infra-gate:
-    container_name: yo-infra-gate
+  yo-prod-infra-gate:
+    container_name: yo-prod-infra-gate
     image: infra-gate:latest
     restart: unless-stopped
     ports:
@@ -588,10 +598,10 @@ services:
       - ./volumes/infra-gate:/app/configs:ro
       - ./cache:/app/cache
     networks:
-      - yamlops
+      - yamlops-prod
 
 networks:
-  yamlops:
+  yamlops-prod:
     external: true
 ```
 
@@ -600,7 +610,7 @@ networks:
 基于网关和服务配置，自动生成到 `userdata/{env}/volumes/infra-gate/server.yml`：
 
 ```yaml
-# /data/yamlops/yo-infra-gate/configs/server.yml
+# /data/yamlops/yo-prod-infra-gate/configs/server.yml
 server:
   port: 80
   g_zip_enabled: true
@@ -847,7 +857,7 @@ Apply 前自动执行校验：
 3. **冲突检查**：端口/域名/路径等无冲突
 4. **可达性检查**：SSH 连接、API 凭证有效性
 5. **环境检查**：Sudo 免密、Docker 可用、Registry 登录状态
-6. **孤儿检测**：扫描服务器上多余的 `yo-*` 服务
+6. **孤儿检测**：扫描服务器上多余的 `yo-<env>-*` 服务
 
 ---
 

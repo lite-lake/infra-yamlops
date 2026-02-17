@@ -474,30 +474,35 @@ vim userdata/prod/services.yaml
 
 ```
 /data/yamlops/
-├── yo-infra-gate/          # 网关服务
+├── yo-prod-infra-gate/      # 生产环境网关服务
 │   ├── docker-compose.yml
 │   └── volumes/
-├── yo-api-server/          # API 服务
+├── yo-prod-api-server/      # 生产环境 API 服务
 │   ├── docker-compose.yml
 │   └── volumes/
-└── yo-redis/               # Redis 服务
-    └── docker-compose.yml
+├── yo-staging-infra-gate/   # 预发环境网关服务
+│   └── ...
+└── yo-dev-api-server/       # 开发环境 API 服务
+    └── ...
 ```
 
 ### 命名规范
 
-- 所有服务容器名: `yo-<服务名>`
-- 服务间通信使用容器名: `http://yo-api-server:3000`
+- 所有服务容器名: `yo-<env>-<服务名>` (例如: `yo-prod-api-server`)
+- 支持同一台服务器运行多个环境的服务，通过环境前缀区分
+- 服务间通信使用容器名: `http://yo-<env>-<服务名>:<端口>`
 
 ### Docker 网络
 
-所有服务加入 `yamlops` 网络：
+每个环境使用独立的 Docker 网络 `yamlops-<env>`：
 
 ```yaml
 networks:
-  yamlops:
+  yamlops-prod:
     external: true
 ```
+
+不同环境的服务使用各自的网络，实现环境隔离。
 
 ## 变更类型
 

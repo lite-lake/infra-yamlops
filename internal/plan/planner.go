@@ -30,9 +30,13 @@ type Planner struct {
 	composeGen *compose.Generator
 	gateGen    *gate.Generator
 	outputDir  string
+	env        string
 }
 
-func NewPlanner(cfg *entities.Config) *Planner {
+func NewPlanner(cfg *entities.Config, env string) *Planner {
+	if env == "" {
+		env = "dev"
+	}
 	state := &DeploymentState{
 		Services:   make(map[string]*entities.Service),
 		Gateways:   make(map[string]*entities.Gateway),
@@ -50,10 +54,14 @@ func NewPlanner(cfg *entities.Config) *Planner {
 		composeGen: compose.NewGenerator(),
 		gateGen:    gate.NewGenerator(),
 		outputDir:  "deployments",
+		env:        env,
 	}
 }
 
-func NewPlannerWithState(cfg *entities.Config, state *DeploymentState) *Planner {
+func NewPlannerWithState(cfg *entities.Config, state *DeploymentState, env string) *Planner {
+	if env == "" {
+		env = "dev"
+	}
 	if state == nil {
 		state = &DeploymentState{
 			Services:   make(map[string]*entities.Service),
@@ -73,6 +81,7 @@ func NewPlannerWithState(cfg *entities.Config, state *DeploymentState) *Planner 
 		composeGen: compose.NewGenerator(),
 		gateGen:    gate.NewGenerator(),
 		outputDir:  "deployments",
+		env:        env,
 	}
 }
 
@@ -738,7 +747,7 @@ func (p *Planner) generateServiceCompose(serverDir string, svc *entities.Service
 		Internal:    svc.Internal,
 	}
 
-	content, err := p.composeGen.Generate(composeSvc)
+	content, err := p.composeGen.Generate(composeSvc, p.env)
 	if err != nil {
 		return fmt.Errorf("failed to generate compose for service %s: %w", svc.Name, err)
 	}

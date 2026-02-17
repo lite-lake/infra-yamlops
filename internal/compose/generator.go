@@ -63,7 +63,7 @@ func NewGenerator() *Generator {
 	return &Generator{}
 }
 
-func (g *Generator) Generate(svc *ComposeService) (string, error) {
+func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 	if svc == nil {
 		return "", fmt.Errorf("service cannot be nil")
 	}
@@ -73,8 +73,12 @@ func (g *Generator) Generate(svc *ComposeService) (string, error) {
 	if svc.Image == "" {
 		return "", fmt.Errorf("service image cannot be empty")
 	}
+	if env == "" {
+		env = "dev"
+	}
 
-	serviceName := "yo-" + svc.Name
+	serviceName := "yo-" + env + "-" + svc.Name
+	networkName := "yamlops-" + env
 
 	service := Service{
 		Image:         svc.Image,
@@ -83,7 +87,7 @@ func (g *Generator) Generate(svc *ComposeService) (string, error) {
 		Environment:   svc.Environment,
 		Volumes:       svc.Volumes,
 		HealthCheck:   svc.HealthCheck,
-		Networks:      []string{"yamlops"},
+		Networks:      []string{networkName},
 		Restart:       "unless-stopped",
 	}
 
@@ -99,7 +103,7 @@ func (g *Generator) Generate(svc *ComposeService) (string, error) {
 			serviceName: service,
 		},
 		Networks: map[string]struct{}{
-			"yamlops": {},
+			networkName: {},
 		},
 	}
 
