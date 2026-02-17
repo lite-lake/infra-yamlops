@@ -557,10 +557,7 @@ func runClean() {
 
 	secrets := cfg.GetSecretsMap()
 	serviceMap := cfg.GetServiceMap()
-	knownServices := make(map[string]bool)
-	for _, s := range cfg.Services {
-		knownServices[s.Name] = true
-	}
+	gatewayMap := cfg.GetGatewayMap()
 
 	for _, srv := range cfg.Servers {
 		password, err := srv.SSH.Password.Resolve(secrets)
@@ -600,7 +597,9 @@ func runClean() {
 				continue
 			}
 			serviceName := strings.TrimPrefix(container.Name, "yo-"+env+"-")
-			if _, exists := serviceMap[serviceName]; !exists {
+			_, isService := serviceMap[serviceName]
+			_, isGateway := gatewayMap[serviceName]
+			if !isService && !isGateway {
 				orphans = append(orphans, container.Name)
 			}
 		}
