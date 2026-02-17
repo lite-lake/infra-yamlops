@@ -8,7 +8,7 @@ import (
 )
 
 func runTUI() {
-	if err := tui.Run(); err != nil {
+	if err := tui.Run(Env, ConfigDir); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

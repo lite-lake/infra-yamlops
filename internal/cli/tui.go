@@ -7,7 +7,13 @@ import (
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/litelake/yamlops/internal/application/handler"
+	"github.com/litelake/yamlops/internal/application/usecase"
+	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/litelake/yamlops/internal/infrastructure/persistence"
+	"github.com/litelake/yamlops/internal/plan"
+	"github.com/litelake/yamlops/internal/ssh"
 )
 
 type Environment string
@@ -114,22 +120,63 @@ type Model struct {
 	ApplyProgress   int
 	ApplyTotal      int
 	ApplyComplete   bool
+	ApplyResults    []*handler.Result
 	Width           int
 	Height          int
 	ErrorMessage    string
 	ConfirmSelected int
+	ConfigDir       string
+	PlanScope       *valueobject.Scope
+	Config          *entity.Config
+	StatusInfo      *StatusInfo
+	EnvSyncComplete bool
+	EnvSyncResults  []string
+	ApplyInProgress bool
 }
 
-func NewModel() Model {
+type StatusInfo struct {
+	Servers   []ServerStatus
+	Services  []ServiceStatus
+	LoadError string
+}
+
+type ServerStatus struct {
+	Name       string
+	Running    bool
+	Containers []string
+	Error      string
+}
+
+type ServiceStatus struct {
+	Name    string
+	Server  string
+	Healthy bool
+	Error   string
+}
+
+func NewModel(env string, configDir string) Model {
+	environment := EnvDev
+	switch env {
+	case "prod":
+		environment = EnvProd
+	case "staging":
+		environment = EnvStaging
+	case "dev":
+		environment = EnvDev
+	default:
+		environment = Environment(env)
+	}
 	return Model{
 		ViewState:     ViewStateMain,
 		MenuIndex:     0,
-		Environment:   EnvDev,
+		Environment:   environment,
 		PlanResult:    valueobject.NewPlan(),
 		ApplyProgress: 0,
 		ApplyTotal:    100,
 		Width:         80,
 		Height:        24,
+		ConfigDir:     configDir,
+		PlanScope:     &valueobject.Scope{},
 	}
 }
 
@@ -145,12 +192,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case applyProgressMsg:
 		if m.ViewState == ViewStateApplyProgress && !m.ApplyComplete {
-			m.ApplyProgress++
-			if m.ApplyProgress >= m.ApplyTotal {
-				m.ApplyComplete = true
-				return m, nil
+			if m.ApplyInProgress {
+				m.ApplyProgress++
+				if m.ApplyProgress >= m.ApplyTotal {
+					m.executeApply()
+					m.ApplyInProgress = false
+					return m, nil
+				}
+				return m, tickApply()
 			}
-			return m, tickApply()
 		}
 		return m, nil
 	case tea.KeyMsg:
@@ -243,25 +293,38 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		m.ViewState = item.View
 		m.MenuIndex = 0
 		if m.ViewState == ViewStatePlanResult {
-			m.generateSamplePlan()
+			m.generatePlan()
+		} else if m.ViewState == ViewStateViewStatus {
+			m.checkEnvStatus()
+		} else if m.ViewState == ViewStateManageEntities {
+			m.loadConfig()
 		}
 		return m, nil
 	case ViewStatePlanSubMenu:
 		item := planSubMenuItems[m.MenuIndex]
 		m.ViewState = item.View
 		m.MenuIndex = 0
-		m.generateSamplePlan()
+		m.generatePlan()
 		return m, nil
 	case ViewStateEnvSubMenu:
 		item := envSubMenuItems[m.MenuIndex]
 		m.ViewState = item.View
 		m.MenuIndex = 0
+		if m.ViewState == ViewStateViewStatus {
+			m.checkEnvStatus()
+		} else if m.ViewState == ViewStateApplyProgress {
+			m.EnvSyncComplete = false
+			m.EnvSyncResults = []string{}
+			m.syncEnv()
+		}
 		return m, nil
 	case ViewStateApplyConfirm:
 		if m.MenuIndex == 0 {
 			m.ViewState = ViewStateApplyProgress
 			m.ApplyProgress = 0
 			m.ApplyComplete = false
+			m.ApplyResults = nil
+			m.ApplyInProgress = true
 			return m, tickApply()
 		}
 		m.ViewState = ViewStatePlanResult
@@ -270,6 +333,9 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 	case ViewStatePlanResult:
 		m.ViewState = ViewStateApplyConfirm
 		m.MenuIndex = 0
+		return m, nil
+	case ViewStateViewStatus:
+		m.checkEnvStatus()
 		return m, nil
 	}
 	return m, nil
@@ -299,27 +365,159 @@ func (m Model) nextEnvironment() Environment {
 	return EnvDev
 }
 
-func (m *Model) generateSamplePlan() {
+func (m *Model) generatePlan() {
 	m.PlanResult = valueobject.NewPlan()
-	m.PlanResult.AddChange(&valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "Server",
-		Name:   "web-server-01",
-	})
-	m.PlanResult.AddChange(&valueobject.Change{
-		Type:   valueobject.ChangeTypeUpdate,
-		Entity: "Service",
-		Name:   "api-service",
-	})
-	m.PlanResult.AddChange(&valueobject.Change{
-		Type:   valueobject.ChangeTypeNoop,
-		Entity: "Gateway",
-		Name:   "main-gateway",
-	})
-	m.ApplyTotal = len(m.PlanResult.Changes)
+	m.ErrorMessage = ""
+
+	m.loadConfig()
+	if m.ErrorMessage != "" {
+		return
+	}
+
+	planner := plan.NewPlanner(m.Config, string(m.Environment))
+	executionPlan, err := planner.Plan(m.PlanScope)
+	if err != nil {
+		m.ErrorMessage = fmt.Sprintf("Failed to generate plan: %v", err)
+		return
+	}
+
+	m.PlanResult = executionPlan
+	m.ApplyTotal = len(executionPlan.Changes)
 	if m.ApplyTotal == 0 {
 		m.ApplyTotal = 1
 	}
+}
+
+func (m *Model) loadConfig() {
+	if m.Config != nil {
+		return
+	}
+	loader := persistence.NewConfigLoader(m.ConfigDir)
+	cfg, err := loader.Load(nil, string(m.Environment))
+	if err != nil {
+		m.ErrorMessage = fmt.Sprintf("Failed to load config: %v", err)
+		return
+	}
+	if err := loader.Validate(cfg); err != nil {
+		m.ErrorMessage = fmt.Sprintf("Validation error: %v", err)
+		return
+	}
+	m.Config = cfg
+}
+
+func (m *Model) checkEnvStatus() {
+	m.loadConfig()
+	if m.Config == nil {
+		return
+	}
+
+	m.StatusInfo = &StatusInfo{}
+	secrets := m.Config.GetSecretsMap()
+
+	for _, srv := range m.Config.Servers {
+		status := ServerStatus{Name: srv.Name}
+
+		password, err := srv.SSH.Password.Resolve(secrets)
+		if err != nil {
+			status.Error = fmt.Sprintf("Cannot resolve password: %v", err)
+			m.StatusInfo.Servers = append(m.StatusInfo.Servers, status)
+			continue
+		}
+
+		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		if err != nil {
+			status.Error = fmt.Sprintf("Connection failed: %v", err)
+			m.StatusInfo.Servers = append(m.StatusInfo.Servers, status)
+			continue
+		}
+
+		stdout, _, err := client.Run("sudo docker ps --format '{{.Names}}'")
+		client.Close()
+
+		if err != nil {
+			status.Error = fmt.Sprintf("Check failed: %v", err)
+		} else {
+			status.Running = true
+			containers := strings.TrimSpace(stdout)
+			if containers != "" {
+				status.Containers = strings.Split(containers, "\n")
+			}
+		}
+		m.StatusInfo.Servers = append(m.StatusInfo.Servers, status)
+	}
+}
+
+func (m *Model) syncEnv() {
+	m.loadConfig()
+	if m.Config == nil {
+		return
+	}
+
+	m.EnvSyncResults = []string{}
+	m.EnvSyncComplete = false
+	secrets := m.Config.GetSecretsMap()
+
+	for _, srv := range m.Config.Servers {
+		password, err := srv.SSH.Password.Resolve(secrets)
+		if err != nil {
+			m.EnvSyncResults = append(m.EnvSyncResults, fmt.Sprintf("[%s] Cannot resolve password: %v", srv.Name, err))
+			continue
+		}
+
+		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		if err != nil {
+			m.EnvSyncResults = append(m.EnvSyncResults, fmt.Sprintf("[%s] Connection failed: %v", srv.Name, err))
+			continue
+		}
+
+		_, stderr, err := client.Run("sudo docker network create yamlops-" + string(m.Environment) + " 2>/dev/null || true")
+		client.Close()
+
+		if err != nil {
+			m.EnvSyncResults = append(m.EnvSyncResults, fmt.Sprintf("[%s] Sync failed: %v\n%s", srv.Name, err, stderr))
+		} else {
+			m.EnvSyncResults = append(m.EnvSyncResults, fmt.Sprintf("[%s] Network yamlops-%s ready", srv.Name, m.Environment))
+		}
+	}
+	m.EnvSyncComplete = true
+}
+
+func (m *Model) executeApply() {
+	if m.PlanResult == nil || !m.PlanResult.HasChanges() {
+		m.ApplyComplete = true
+		return
+	}
+
+	m.loadConfig()
+	if m.Config == nil {
+		m.ApplyComplete = true
+		return
+	}
+
+	planner := plan.NewPlanner(m.Config, string(m.Environment))
+	if err := planner.GenerateDeployments(); err != nil {
+		m.ErrorMessage = fmt.Sprintf("Failed to generate deployments: %v", err)
+		m.ApplyComplete = true
+		return
+	}
+
+	executor := usecase.NewExecutor(m.PlanResult, string(m.Environment))
+	executor.SetSecrets(m.Config.GetSecretsMap())
+	executor.SetDomains(m.Config.GetDomainMap())
+	executor.SetISPs(m.Config.GetISPMap())
+	executor.SetWorkDir(m.ConfigDir)
+
+	secrets := m.Config.GetSecretsMap()
+	for _, srv := range m.Config.Servers {
+		password, err := srv.SSH.Password.Resolve(secrets)
+		if err != nil {
+			continue
+		}
+		executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+	}
+
+	m.ApplyResults = executor.Apply()
+	m.ApplyComplete = true
 }
 
 func tickApply() tea.Cmd {
@@ -391,6 +589,14 @@ func (m Model) renderPlanResult() string {
 	var content strings.Builder
 	content.WriteString(titleStyle.Render("Plan Result"))
 	content.WriteString("\n\n")
+
+	if m.ErrorMessage != "" {
+		content.WriteString(changeDeleteStyle.Render("Error: " + m.ErrorMessage))
+		content.WriteString("\n\n")
+		content.WriteString(helpStyle.Render("Press q to go back"))
+		return content.String()
+	}
+
 	if m.PlanResult == nil || len(m.PlanResult.Changes) == 0 {
 		content.WriteString("No changes detected.\n")
 	} else {
@@ -448,18 +654,49 @@ func (m Model) renderApplyConfirm() string {
 
 func (m Model) renderApplyProgress() string {
 	var content strings.Builder
-	content.WriteString(titleStyle.Render("Applying Changes"))
+
+	if len(m.EnvSyncResults) > 0 || m.EnvSyncComplete {
+		content.WriteString(titleStyle.Render("Environment Sync"))
+	} else {
+		content.WriteString(titleStyle.Render("Applying Changes"))
+	}
 	content.WriteString("\n\n")
-	progress := float64(m.ApplyProgress) / float64(m.ApplyTotal)
-	barWidth := 30
-	filled := int(progress * float64(barWidth))
-	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
-	content.WriteString(progressBarStyle.Render(bar))
-	content.WriteString(fmt.Sprintf(" %.0f%%\n", progress*100))
-	content.WriteString("\n")
-	if m.ApplyComplete {
-		content.WriteString(successStyle.Render("Apply complete!"))
+
+	if len(m.EnvSyncResults) > 0 || m.EnvSyncComplete {
+		for _, result := range m.EnvSyncResults {
+			if strings.Contains(result, "failed") || strings.Contains(result, "Error") {
+				content.WriteString(changeDeleteStyle.Render("✗ "+result) + "\n")
+			} else {
+				content.WriteString(changeCreateStyle.Render("✓ "+result) + "\n")
+			}
+		}
+		if m.EnvSyncComplete {
+			content.WriteString("\n")
+			content.WriteString(successStyle.Render("Sync complete!"))
+			content.WriteString("\n")
+		}
+	} else {
+		progress := float64(m.ApplyProgress) / float64(m.ApplyTotal)
+		barWidth := 30
+		filled := int(progress * float64(barWidth))
+		bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+		content.WriteString(progressBarStyle.Render(bar))
+		content.WriteString(fmt.Sprintf(" %.0f%%\n", progress*100))
 		content.WriteString("\n")
+
+		if m.ApplyComplete && m.ApplyResults != nil {
+			for _, result := range m.ApplyResults {
+				if result.Success {
+					content.WriteString(changeCreateStyle.Render(fmt.Sprintf("✓ %s: %s", result.Change.Entity, result.Change.Name)))
+				} else {
+					content.WriteString(changeDeleteStyle.Render(fmt.Sprintf("✗ %s: %s - %v", result.Change.Entity, result.Change.Name, result.Error)))
+				}
+				content.WriteString("\n")
+			}
+			content.WriteString("\n")
+			content.WriteString(successStyle.Render("Apply complete!"))
+			content.WriteString("\n")
+		}
 	}
 	return content.String()
 }
@@ -468,10 +705,25 @@ func (m Model) renderManageEntities() string {
 	var content strings.Builder
 	content.WriteString(titleStyle.Render("Manage Entities"))
 	content.WriteString("\n\n")
-	content.WriteString("Servers: 3\n")
-	content.WriteString("Services: 5\n")
-	content.WriteString("Gateways: 2\n")
-	content.WriteString("Domains: 4\n")
+
+	if m.Config == nil {
+		m.loadConfig()
+	}
+
+	if m.ErrorMessage != "" && m.ViewState == ViewStateManageEntities {
+		content.WriteString(changeDeleteStyle.Render("Error: " + m.ErrorMessage))
+		content.WriteString("\n\n")
+	} else if m.Config != nil {
+		content.WriteString(fmt.Sprintf("ISPs: %d\n", len(m.Config.ISPs)))
+		content.WriteString(fmt.Sprintf("Zones: %d\n", len(m.Config.Zones)))
+		content.WriteString(fmt.Sprintf("Servers: %d\n", len(m.Config.Servers)))
+		content.WriteString(fmt.Sprintf("Services: %d\n", len(m.Config.Services)))
+		content.WriteString(fmt.Sprintf("Gateways: %d\n", len(m.Config.Gateways)))
+		content.WriteString(fmt.Sprintf("Domains: %d\n", len(m.Config.Domains)))
+		content.WriteString(fmt.Sprintf("DNS Records: %d\n", len(m.Config.DNSRecords)))
+		content.WriteString(fmt.Sprintf("Certificates: %d\n", len(m.Config.Certificates)))
+		content.WriteString(fmt.Sprintf("Registries: %d\n", len(m.Config.Registries)))
+	}
 	content.WriteString("\n")
 	content.WriteString(helpStyle.Render("Press q to go back"))
 	return content.String()
@@ -483,13 +735,28 @@ func (m Model) renderViewStatus() string {
 	content.WriteString("\n\n")
 	content.WriteString(envStyle.Render("Environment: "))
 	content.WriteString(string(m.Environment) + "\n\n")
-	content.WriteString("Servers:\n")
-	content.WriteString("  • web-server-01: running\n")
-	content.WriteString("  • api-server-01: running\n")
-	content.WriteString("  • db-server-01: running\n\n")
-	content.WriteString("Services:\n")
-	content.WriteString("  • api-service: healthy\n")
-	content.WriteString("  • web-service: healthy\n")
+
+	if m.StatusInfo == nil {
+		content.WriteString(helpStyle.Render("Press Enter to check status"))
+		content.WriteString("\n")
+	} else if m.StatusInfo.LoadError != "" {
+		content.WriteString(changeDeleteStyle.Render("Error: " + m.StatusInfo.LoadError))
+		content.WriteString("\n")
+	} else {
+		content.WriteString("Servers:\n")
+		for _, srv := range m.StatusInfo.Servers {
+			if srv.Error != "" {
+				content.WriteString(fmt.Sprintf("  • %s: %s\n", srv.Name, changeDeleteStyle.Render(srv.Error)))
+			} else if srv.Running {
+				content.WriteString(fmt.Sprintf("  • %s: %s\n", srv.Name, changeCreateStyle.Render("running")))
+				for _, c := range srv.Containers {
+					content.WriteString(fmt.Sprintf("      - %s\n", c))
+				}
+			} else {
+				content.WriteString(fmt.Sprintf("  • %s: %s\n", srv.Name, changeNoopStyle.Render("unknown")))
+			}
+		}
+	}
 	content.WriteString("\n")
 	content.WriteString(helpStyle.Render("Press q to go back"))
 	return content.String()
@@ -499,9 +766,8 @@ func (m Model) renderSettings() string {
 	var content strings.Builder
 	content.WriteString(titleStyle.Render("Settings"))
 	content.WriteString("\n\n")
-	content.WriteString("Config Path: ./config\n")
-	content.WriteString("SSH Timeout: 30s\n")
-	content.WriteString("Max Retries: 3\n")
+	content.WriteString(fmt.Sprintf("Config Dir: %s\n", m.ConfigDir))
+	content.WriteString(fmt.Sprintf("Environment: %s\n", m.Environment))
 	content.WriteString("\n")
 	content.WriteString(helpStyle.Render("Press q to go back"))
 	return content.String()
@@ -511,8 +777,8 @@ func (m Model) renderHelp() string {
 	return helpStyle.Render("\n↑/↓ Navigate | Enter Select | q Quit")
 }
 
-func Run() error {
-	p := tea.NewProgram(NewModel(), tea.WithAltScreen())
+func Run(env string, configDir string) error {
+	p := tea.NewProgram(NewModel(env, configDir), tea.WithAltScreen())
 	_, err := p.Run()
 	return err
 }
