@@ -48,43 +48,92 @@
 ```
 yamlops/
 ├── cmd/
-│   └── yamlops/              # CLI 入口
+│   └── yamlops/              # CLI 入口 (minimal main.go)
 ├── internal/
-│   ├── cli/                  # BubbleTea TUI 界面
-│   ├── config/               # 配置加载与解析
-│   ├── plan/                 # 变更计划生成
-│   ├── apply/                # 变更执行
-│   ├── ssh/                  # SSH 远程执行
+│   ├── domain/               # 领域层 (无外部依赖)
+│   │   ├── entity/           # 实体定义 (Server, Service, etc.)
+│   │   ├── valueobject/      # 值对象 (SecretRef, Change, Scope, Plan)
+│   │   ├── repository/       # 仓储接口 (StateRepository, ConfigLoader)
+│   │   ├── service/          # 领域服务 (PlannerService)
+│   │   └── errors.go         # 领域错误
+│   ├── application/          # 应用层
+│   │   ├── handler/          # 变更处理器 (Strategy Pattern)
+│   │   │   ├── types.go      # Handler 接口、ApplyDeps、Result
+│   │   │   ├── registry.go   # Handler 注册表
+│   │   │   ├── dns_handler.go
+│   │   │   ├── service_handler.go
+│   │   │   ├── gateway_handler.go
+│   │   │   ├── server_handler.go
+│   │   │   ├── certificate_handler.go
+│   │   │   ├── registry_handler.go
+│   │   │   └── noop_handler.go
+│   │   └── usecase/          # 用例
+│   │       └── executor.go   # 协调各 Handler
+│   ├── infrastructure/       # 基础设施层
+│   │   └── persistence/      # 持久化实现
+│   │       └── config_loader.go  # ConfigLoader 实现 (泛型)
+│   ├── interfaces/           # 接口层
+│   │   └── cli/              # Cobra CLI 命令
+│   │       ├── root.go
+│   │       ├── plan.go
+│   │       ├── apply.go
+│   │       ├── validate.go
+│   │       ├── env.go
+│   │       ├── list.go
+│   │       ├── show.go
+│   │       ├── clean.go
+│   │       └── tui.go
+│   ├── plan/                 # 计划协调层
+│   │   ├── planner.go
+│   │   ├── generator_compose.go
+│   │   └── generator_gate.go
+│   ├── config/               # 配置工具
+│   │   └── secrets.go        # SecretResolver
 │   ├── providers/            # 各服务商 SDK 封装
 │   │   ├── dns/              # DNS 解析 (CF/阿里/腾讯)
 │   │   └── ssl/              # SSL 证书 (LE/ZeroSSL)
-│   ├── entities/             # 实体定义与校验
+│   ├── ssh/                  # SSH 远程执行
 │   ├── compose/              # docker-compose 生成
-│   └── gate/                 # infra-gate 配置生成
-├── pkg/
-│   └── schema/               # YAML Schema 定义
-└── userdata/                 # 用户配置目录
-    ├── prod/
-    │   ├── isps.yaml
-    │   ├── zones.yaml
-    │   ├── gateways.yaml
-    │   ├── servers.yaml
-    │   ├── registries.yaml
-    │   ├── services.yaml
-    │   ├── domains.yaml
-    │   ├── dns.yaml
-    │   ├── certificates.yaml
-    │   ├── secrets.yaml
-    │   └── volumes/          # 配置文件目录
-    │       ├── infra-gate/
-    │       │   └── server.yml
-    │       └── api-server/
-    │           └── config.yml
-    ├── staging/
-    │   └── ...
-    └── dev/
-        └── ...
+│   ├── gate/                 # infra-gate 配置生成
+│   └── cli/                  # BubbleTea TUI 界面
+├── userdata/                 # 用户配置目录
+│   ├── prod/
+│   │   ├── isps.yaml
+│   │   ├── zones.yaml
+│   │   ├── gateways.yaml
+│   │   ├── servers.yaml
+│   │   ├── registries.yaml
+│   │   ├── services.yaml
+│   │   ├── domains.yaml
+│   │   ├── dns.yaml
+│   │   ├── certificates.yaml
+│   │   ├── secrets.yaml
+│   │   └── volumes/          # 配置文件目录
+│   │       ├── infra-gate/
+│   │       │   └── server.yml
+│   │       └── api-server/
+│   │           └── config.yml
+│   ├── staging/
+│   └── dev/
+└── deployments/              # 生成的部署文件 (git-ignored)
 ```
+
+### 分层架构
+
+| 层级 | 包路径 | 职责 | 依赖方向 |
+|------|--------|------|----------|
+| 接口层 | interfaces/ | 接收请求，调用应用层 | → application |
+| 应用层 | application/ | 编排用例，协调领域对象 | → domain, infrastructure |
+| 领域层 | domain/ | 核心业务逻辑，实体，值对象 | 无外部依赖 |
+| 基础设施层 | infrastructure/ | 外部服务实现，持久化 | → domain (实现接口) |
+
+### 设计模式
+
+| 模式 | 应用场景 | 说明 |
+|------|----------|------|
+| Strategy Pattern | ChangeHandler | 每种实体类型一个 Handler，通过 Registry 注册 |
+| Repository Pattern | ConfigLoader, StateRepository | 解耦领域层与具体存储实现 |
+| Factory Pattern | DNS Provider | 根据 ISP 配置创建对应的 Provider |
 
 ---
 

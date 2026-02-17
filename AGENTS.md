@@ -17,11 +17,11 @@ go mod tidy && go mod download          # Download dependencies
 ## Test Commands
 
 ```bash
-go test ./...                           # Run all tests
-go test ./internal/config/...           # Run specific package tests
-go test ./internal/entities -run TestSecretRef  # Run single test
-go test -v ./...                        # Verbose output
-go test -cover ./...                    # With coverage
+go test ./...                                    # Run all tests
+go test ./internal/infrastructure/persistence/... # Run persistence tests
+go test ./internal/domain/entity -run TestSecretRef  # Run single test
+go test -v ./...                                 # Verbose output
+go test -cover ./...                             # With coverage
 ```
 
 ## Lint Commands
@@ -35,22 +35,66 @@ staticcheck ./...                       # Run staticcheck (if installed)
 ## Project Structure
 
 ```
-cmd/yamlops/            # CLI entry point
+cmd/yamlops/                        # CLI entry point (minimal main.go)
 internal/
-├── cli/                # BubbleTea TUI interface
-├── config/             # Config loading and validation
-├── entities/           # Entity definitions and schemas
-├── plan/               # Change planning logic
-├── apply/              # Change execution
-├── ssh/                # SSH client operations
-├── compose/            # Docker Compose generation
-├── gate/               # infra-gate config generation
-└── providers/          # External service providers
-    ├── dns/            # Cloudflare, Aliyun, Tencent DNS
-    └── ssl/            # Let's Encrypt, ZeroSSL
-userdata/{env}/         # User configuration files (prod/staging/dev)
-deployments/            # Generated deployment files (git-ignored)
+├── domain/                         # Domain layer (no external dependencies)
+│   ├── entity/                     # Entity definitions (Server, Service, etc.)
+│   ├── valueobject/                # Value objects (SecretRef, Change, Scope, Plan)
+│   ├── repository/                 # Repository interfaces (StateRepository, ConfigLoader)
+│   ├── service/                    # Domain services (PlannerService)
+│   └── errors.go                   # Domain errors
+├── application/                    # Application layer
+│   ├── handler/                    # Change handlers (Strategy Pattern)
+│   │   ├── types.go                # Handler interface, ApplyDeps, Result
+│   │   ├── registry.go             # Handler registry
+│   │   ├── dns_handler.go          # DNS record handler
+│   │   ├── service_handler.go      # Service deployment handler
+│   │   ├── gateway_handler.go      # Gateway config handler
+│   │   ├── server_handler.go       # Server handler
+│   │   ├── certificate_handler.go  # Certificate handler
+│   │   ├── registry_handler.go     # Docker registry handler
+│   │   └── noop_handler.go         # No-op handler for non-deployable entities
+│   └── usecase/                    # Use cases
+│       └── executor.go             # Orchestrates handlers
+├── infrastructure/                 # Infrastructure layer
+│   └── persistence/                # Persistence implementations
+│       └── config_loader.go        # Config loader (generic implementation)
+├── interfaces/                     # Interface layer
+│   └── cli/                        # CLI commands (Cobra)
+│       ├── root.go                 # Root command, global flags
+│       ├── plan.go                 # Plan command
+│       ├── apply.go                # Apply command
+│       ├── validate.go             # Validate command
+│       ├── env.go                  # Environment check/sync
+│       ├── list.go                 # List entities
+│       ├── show.go                 # Show entity details
+│       ├── clean.go                # Clean orphan services
+│       └── tui.go                  # TUI entry point
+├── plan/                           # Planning coordination layer
+│   ├── planner.go                  # Orchestrates planning
+│   ├── generator_compose.go        # Docker Compose generation
+│   └── generator_gate.go           # infra-gate config generation
+├── config/                         # Config utilities
+│   └── secrets.go                  # SecretResolver
+├── providers/                      # External service providers
+│   ├── dns/                        # Cloudflare, Aliyun, Tencent DNS
+│   └── ssl/                        # Let's Encrypt, ZeroSSL
+├── ssh/                            # SSH client operations
+├── compose/                        # Docker Compose utilities
+├── gate/                           # infra-gate utilities
+└── cli/                            # BubbleTea TUI interface
+userdata/{env}/                     # User configuration files (prod/staging/dev)
+deployments/                        # Generated deployment files (git-ignored)
 ```
+
+### Architecture Layers
+
+| Layer | Package | Responsibility | Dependencies |
+|-------|---------|----------------|--------------|
+| Interface | interfaces/ | Handle CLI requests | → application |
+| Application | application/ | Orchestrate use cases | → domain, infrastructure |
+| Domain | domain/ | Core business logic | No external deps |
+| Infrastructure | infrastructure/ | External services, persistence | → domain (implements interfaces) |
 
 ## Code Style
 
@@ -67,7 +111,7 @@ import (
     "github.com/spf13/cobra"
     "gopkg.in/yaml.v3"
 
-    "github.com/litelake/yamlops/internal/entities"
+    "github.com/litelake/yamlops/internal/domain/entity"
 )
 ```
 
@@ -169,7 +213,7 @@ func (s *SecretRef) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 ## Test Guidelines
 
-1. Place test files next to source: `internal/entities/entities_test.go`
+1. Place test files next to source: `internal/domain/entity/entity_test.go`
 2. Use table-driven tests for multiple cases
 3. Test both success and failure paths
 

@@ -1,13 +1,15 @@
-package config
+package persistence
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/litelake/yamlops/internal/entities"
+	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/domain/repository"
 	"gopkg.in/yaml.v3"
 )
 
@@ -20,327 +22,250 @@ var (
 	ErrDNSSubdomainConflict = errors.New("dns subdomain conflict")
 )
 
-type Loader struct {
-	env     string
+type ConfigLoaderImpl struct {
 	baseDir string
-	config  *entities.Config
 }
 
-func NewLoader(env, baseDir string) *Loader {
-	return &Loader{
-		env:     env,
-		baseDir: baseDir,
-		config:  &entities.Config{},
-	}
+func NewConfigLoader(baseDir string) *ConfigLoaderImpl {
+	return &ConfigLoaderImpl{baseDir: baseDir}
 }
 
-func (l *Loader) Load() (*entities.Config, error) {
-	configDir := filepath.Join(l.baseDir, "userdata", l.env)
+func (l *ConfigLoaderImpl) Load(ctx context.Context, env string) (*entity.Config, error) {
+	configDir := filepath.Join(l.baseDir, "userdata", env)
 
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		return nil, fmt.Errorf("config directory does not exist: %s", configDir)
 	}
 
-	l.config = &entities.Config{}
+	cfg := &entity.Config{}
 
-	files := []struct {
+	loaders := []struct {
 		filename string
-		loader   func(string) error
+		loader   func(string, *entity.Config) error
 	}{
-		{"secrets.yaml", l.loadSecrets},
-		{"isps.yaml", l.loadISPs},
-		{"zones.yaml", l.loadZones},
-		{"gateways.yaml", l.loadGateways},
-		{"servers.yaml", l.loadServers},
-		{"services.yaml", l.loadServices},
-		{"registries.yaml", l.loadRegistries},
-		{"domains.yaml", l.loadDomains},
-		{"dns.yaml", l.loadDNSRecords},
-		{"certificates.yaml", l.loadCertificates},
+		{"secrets.yaml", loadSecrets},
+		{"isps.yaml", loadISPs},
+		{"zones.yaml", loadZones},
+		{"gateways.yaml", loadGateways},
+		{"servers.yaml", loadServers},
+		{"services.yaml", loadServices},
+		{"registries.yaml", loadRegistries},
+		{"domains.yaml", loadDomains},
+		{"dns.yaml", loadDNSRecords},
+		{"certificates.yaml", loadCertificates},
 	}
 
-	for _, f := range files {
+	for _, f := range loaders {
 		filePath := filepath.Join(configDir, f.filename)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
 			continue
 		}
-		if err := f.loader(filePath); err != nil {
+		if err := f.loader(filePath, cfg); err != nil {
 			return nil, fmt.Errorf("failed to load %s: %w", f.filename, err)
 		}
 	}
 
-	return l.config, nil
+	return cfg, nil
 }
 
-func (l *Loader) loadSecrets(filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	type secretsFile struct {
-		Secrets []entities.Secret `yaml:"secrets"`
-	}
-
-	var sf secretsFile
-	if err := yaml.Unmarshal(data, &sf); err != nil {
-		return err
-	}
-
-	l.config.Secrets = sf.Secrets
-	return nil
-}
-
-func (l *Loader) loadISPs(filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	type ispsFile struct {
-		ISPs []entities.ISP `yaml:"isps"`
-	}
-
-	var sf ispsFile
-	if err := yaml.Unmarshal(data, &sf); err != nil {
-		return err
-	}
-
-	l.config.ISPs = sf.ISPs
-	return nil
-}
-
-func (l *Loader) loadZones(filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	type zonesFile struct {
-		Zones []entities.Zone `yaml:"zones"`
-	}
-
-	var sf zonesFile
-	if err := yaml.Unmarshal(data, &sf); err != nil {
-		return err
-	}
-
-	l.config.Zones = sf.Zones
-	return nil
-}
-
-func (l *Loader) loadGateways(filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	type gatewaysFile struct {
-		Gateways []entities.Gateway `yaml:"gateways"`
-	}
-
-	var sf gatewaysFile
-	if err := yaml.Unmarshal(data, &sf); err != nil {
-		return err
-	}
-
-	l.config.Gateways = sf.Gateways
-	return nil
-}
-
-func (l *Loader) loadServers(filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	type serversFile struct {
-		Servers []entities.Server `yaml:"servers"`
-	}
-
-	var sf serversFile
-	if err := yaml.Unmarshal(data, &sf); err != nil {
-		return err
-	}
-
-	l.config.Servers = sf.Servers
-	return nil
-}
-
-func (l *Loader) loadServices(filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	type servicesFile struct {
-		Services []entities.Service `yaml:"services"`
-	}
-
-	var sf servicesFile
-	if err := yaml.Unmarshal(data, &sf); err != nil {
-		return err
-	}
-
-	l.config.Services = sf.Services
-	return nil
-}
-
-func (l *Loader) loadRegistries(filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	type registriesFile struct {
-		Registries []entities.Registry `yaml:"registries"`
-	}
-
-	var sf registriesFile
-	if err := yaml.Unmarshal(data, &sf); err != nil {
-		return err
-	}
-
-	l.config.Registries = sf.Registries
-	return nil
-}
-
-func (l *Loader) loadDomains(filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	type domainsFile struct {
-		Domains []entities.Domain `yaml:"domains"`
-	}
-
-	var sf domainsFile
-	if err := yaml.Unmarshal(data, &sf); err != nil {
-		return err
-	}
-
-	l.config.Domains = sf.Domains
-	return nil
-}
-
-func (l *Loader) loadDNSRecords(filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	type dnsFile struct {
-		Records []entities.DNSRecord `yaml:"records"`
-	}
-
-	var sf dnsFile
-	if err := yaml.Unmarshal(data, &sf); err != nil {
-		return err
-	}
-
-	l.config.DNSRecords = sf.Records
-	return nil
-}
-
-func (l *Loader) loadCertificates(filePath string) error {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return err
-	}
-
-	type certificatesFile struct {
-		Certificates []entities.Certificate `yaml:"certificates"`
-	}
-
-	var sf certificatesFile
-	if err := yaml.Unmarshal(data, &sf); err != nil {
-		return err
-	}
-
-	l.config.Certificates = sf.Certificates
-	return nil
-}
-
-func (l *Loader) Validate() error {
-	if l.config == nil {
+func (l *ConfigLoaderImpl) Validate(cfg *entity.Config) error {
+	if cfg == nil {
 		return ErrConfigNotLoaded
 	}
 
-	if err := l.config.Validate(); err != nil {
+	if err := cfg.Validate(); err != nil {
 		return err
 	}
 
-	if err := l.validateReferences(); err != nil {
+	if err := validateReferences(cfg); err != nil {
 		return err
 	}
 
-	if err := l.validatePortConflicts(); err != nil {
+	if err := validatePortConflicts(cfg); err != nil {
 		return err
 	}
 
-	if err := l.validateDomainConflicts(); err != nil {
+	if err := validateDomainConflicts(cfg); err != nil {
 		return err
 	}
 
-	if err := l.validateHostnameConflicts(); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (l *Loader) validateReferences() error {
-	secrets := l.config.GetSecretsMap()
-	isps := l.config.GetISPMap()
-	zones := l.config.GetZoneMap()
-	servers := l.config.GetServerMap()
-	registries := l.config.GetRegistryMap()
-	domains := l.config.GetDomainMap()
-
-	if err := l.validateISPReferences(isps); err != nil {
-		return err
-	}
-
-	if err := l.validateZoneReferences(zones, isps); err != nil {
-		return err
-	}
-
-	if err := l.validateGatewayReferences(zones, servers); err != nil {
-		return err
-	}
-
-	if err := l.validateServerReferences(zones, isps, registries); err != nil {
-		return err
-	}
-
-	if err := l.validateServiceReferences(servers, secrets); err != nil {
-		return err
-	}
-
-	if err := l.validateDomainReferences(isps, domains); err != nil {
-		return err
-	}
-
-	if err := l.validateDNSReferences(domains); err != nil {
-		return err
-	}
-
-	if err := l.validateCertificateReferences(domains); err != nil {
+	if err := validateHostnameConflicts(cfg); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (l *Loader) validateISPReferences(isps map[string]*entities.ISP) error {
-	for _, isp := range l.config.ISPs {
+func loadEntity[T any](filePath, yamlKey string) ([]T, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var raw map[string]interface{}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, err
+	}
+
+	itemsRaw, ok := raw[yamlKey]
+	if !ok {
+		return nil, nil
+	}
+
+	itemsData, err := yaml.Marshal(itemsRaw)
+	if err != nil {
+		return nil, err
+	}
+
+	var items []T
+	if err := yaml.Unmarshal(itemsData, &items); err != nil {
+		return nil, err
+	}
+
+	return items, nil
+}
+
+func loadSecrets(filePath string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Secret](filePath, "secrets")
+	if err != nil {
+		return err
+	}
+	cfg.Secrets = items
+	return nil
+}
+
+func loadISPs(filePath string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.ISP](filePath, "isps")
+	if err != nil {
+		return err
+	}
+	cfg.ISPs = items
+	return nil
+}
+
+func loadZones(filePath string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Zone](filePath, "zones")
+	if err != nil {
+		return err
+	}
+	cfg.Zones = items
+	return nil
+}
+
+func loadGateways(filePath string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Gateway](filePath, "gateways")
+	if err != nil {
+		return err
+	}
+	cfg.Gateways = items
+	return nil
+}
+
+func loadServers(filePath string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Server](filePath, "servers")
+	if err != nil {
+		return err
+	}
+	cfg.Servers = items
+	return nil
+}
+
+func loadServices(filePath string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Service](filePath, "services")
+	if err != nil {
+		return err
+	}
+	cfg.Services = items
+	return nil
+}
+
+func loadRegistries(filePath string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Registry](filePath, "registries")
+	if err != nil {
+		return err
+	}
+	cfg.Registries = items
+	return nil
+}
+
+func loadDomains(filePath string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Domain](filePath, "domains")
+	if err != nil {
+		return err
+	}
+	cfg.Domains = items
+	return nil
+}
+
+func loadDNSRecords(filePath string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.DNSRecord](filePath, "records")
+	if err != nil {
+		return err
+	}
+	cfg.DNSRecords = items
+	return nil
+}
+
+func loadCertificates(filePath string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Certificate](filePath, "certificates")
+	if err != nil {
+		return err
+	}
+	cfg.Certificates = items
+	return nil
+}
+
+func validateReferences(cfg *entity.Config) error {
+	secrets := cfg.GetSecretsMap()
+	isps := cfg.GetISPMap()
+	zones := cfg.GetZoneMap()
+	servers := cfg.GetServerMap()
+	registries := cfg.GetRegistryMap()
+	domains := cfg.GetDomainMap()
+
+	if err := validateISPReferences(cfg, isps); err != nil {
+		return err
+	}
+
+	if err := validateZoneReferences(cfg, isps); err != nil {
+		return err
+	}
+
+	if err := validateGatewayReferences(cfg, zones, servers); err != nil {
+		return err
+	}
+
+	if err := validateServerReferences(cfg, zones, isps, registries); err != nil {
+		return err
+	}
+
+	if err := validateServiceReferences(cfg, servers, secrets); err != nil {
+		return err
+	}
+
+	if err := validateDomainReferences(cfg, isps, domains); err != nil {
+		return err
+	}
+
+	if err := validateDNSReferences(cfg, domains); err != nil {
+		return err
+	}
+
+	if err := validateCertificateReferences(cfg, domains); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func validateISPReferences(cfg *entity.Config, isps map[string]*entity.ISP) error {
+	for _, isp := range cfg.ISPs {
 		for _, ref := range isp.Credentials {
 			if ref.Secret != "" {
 				if _, ok := isps[ref.Secret]; ok {
 					continue
 				}
-				secrets := l.config.GetSecretsMap()
+				secrets := cfg.GetSecretsMap()
 				if _, ok := secrets[ref.Secret]; !ok {
 					return fmt.Errorf("%w: secret '%s' referenced by isp '%s' does not exist", ErrMissingReference, ref.Secret, isp.Name)
 				}
@@ -350,8 +275,8 @@ func (l *Loader) validateISPReferences(isps map[string]*entities.ISP) error {
 	return nil
 }
 
-func (l *Loader) validateZoneReferences(zones map[string]*entities.Zone, isps map[string]*entities.ISP) error {
-	for _, zone := range l.config.Zones {
+func validateZoneReferences(cfg *entity.Config, isps map[string]*entity.ISP) error {
+	for _, zone := range cfg.Zones {
 		if _, ok := isps[zone.ISP]; !ok {
 			return fmt.Errorf("%w: isp '%s' referenced by zone '%s' does not exist", ErrMissingReference, zone.ISP, zone.Name)
 		}
@@ -359,8 +284,8 @@ func (l *Loader) validateZoneReferences(zones map[string]*entities.Zone, isps ma
 	return nil
 }
 
-func (l *Loader) validateGatewayReferences(zones map[string]*entities.Zone, servers map[string]*entities.Server) error {
-	for _, gateway := range l.config.Gateways {
+func validateGatewayReferences(cfg *entity.Config, zones map[string]*entity.Zone, servers map[string]*entity.Server) error {
+	for _, gateway := range cfg.Gateways {
 		if _, ok := zones[gateway.Zone]; !ok {
 			return fmt.Errorf("%w: zone '%s' referenced by gateway '%s' does not exist", ErrMissingReference, gateway.Zone, gateway.Name)
 		}
@@ -371,8 +296,8 @@ func (l *Loader) validateGatewayReferences(zones map[string]*entities.Zone, serv
 	return nil
 }
 
-func (l *Loader) validateServerReferences(zones map[string]*entities.Zone, isps map[string]*entities.ISP, registries map[string]*entities.Registry) error {
-	for _, server := range l.config.Servers {
+func validateServerReferences(cfg *entity.Config, zones map[string]*entity.Zone, isps map[string]*entity.ISP, registries map[string]*entity.Registry) error {
+	for _, server := range cfg.Servers {
 		if _, ok := zones[server.Zone]; !ok {
 			return fmt.Errorf("%w: zone '%s' referenced by server '%s' does not exist", ErrMissingReference, server.Zone, server.Name)
 		}
@@ -384,7 +309,7 @@ func (l *Loader) validateServerReferences(zones map[string]*entities.Zone, isps 
 				return fmt.Errorf("%w: registry '%s' referenced by server '%s' does not exist", ErrMissingReference, regName, server.Name)
 			}
 		}
-		secrets := l.config.GetSecretsMap()
+		secrets := cfg.GetSecretsMap()
 		if server.SSH.Password.Secret != "" {
 			if _, ok := secrets[server.SSH.Password.Secret]; !ok {
 				return fmt.Errorf("%w: secret '%s' referenced by server '%s' ssh password does not exist", ErrMissingReference, server.SSH.Password.Secret, server.Name)
@@ -394,8 +319,8 @@ func (l *Loader) validateServerReferences(zones map[string]*entities.Zone, isps 
 	return nil
 }
 
-func (l *Loader) validateServiceReferences(servers map[string]*entities.Server, secrets map[string]string) error {
-	for _, service := range l.config.Services {
+func validateServiceReferences(cfg *entity.Config, servers map[string]*entity.Server, secrets map[string]string) error {
+	for _, service := range cfg.Services {
 		if _, ok := servers[service.Server]; !ok {
 			return fmt.Errorf("%w: server '%s' referenced by service '%s' does not exist", ErrMissingReference, service.Server, service.Name)
 		}
@@ -408,8 +333,8 @@ func (l *Loader) validateServiceReferences(servers map[string]*entities.Server, 
 	return nil
 }
 
-func (l *Loader) validateDomainReferences(isps map[string]*entities.ISP, domains map[string]*entities.Domain) error {
-	for _, domain := range l.config.Domains {
+func validateDomainReferences(cfg *entity.Config, isps map[string]*entity.ISP, domains map[string]*entity.Domain) error {
+	for _, domain := range cfg.Domains {
 		if _, ok := isps[domain.ISP]; !ok {
 			return fmt.Errorf("%w: isp '%s' referenced by domain '%s' does not exist", ErrMissingReference, domain.ISP, domain.Name)
 		}
@@ -422,8 +347,8 @@ func (l *Loader) validateDomainReferences(isps map[string]*entities.ISP, domains
 	return nil
 }
 
-func (l *Loader) validateDNSReferences(domains map[string]*entities.Domain) error {
-	for _, record := range l.config.DNSRecords {
+func validateDNSReferences(cfg *entity.Config, domains map[string]*entity.Domain) error {
+	for _, record := range cfg.DNSRecords {
 		if _, ok := domains[record.Domain]; !ok {
 			return fmt.Errorf("%w: domain '%s' referenced by dns record does not exist", ErrMissingReference, record.Domain)
 		}
@@ -431,8 +356,8 @@ func (l *Loader) validateDNSReferences(domains map[string]*entities.Domain) erro
 	return nil
 }
 
-func (l *Loader) validateCertificateReferences(domains map[string]*entities.Domain) error {
-	for _, cert := range l.config.Certificates {
+func validateCertificateReferences(cfg *entity.Config, domains map[string]*entity.Domain) error {
+	for _, cert := range cfg.Certificates {
 		for _, domainName := range cert.Domains {
 			if _, ok := domains[domainName]; !ok {
 				return fmt.Errorf("%w: domain '%s' referenced by certificate '%s' does not exist", ErrMissingReference, domainName, cert.Name)
@@ -442,10 +367,10 @@ func (l *Loader) validateCertificateReferences(domains map[string]*entities.Doma
 	return nil
 }
 
-func (l *Loader) validatePortConflicts() error {
+func validatePortConflicts(cfg *entity.Config) error {
 	serverPorts := make(map[string]map[int]string)
 
-	for _, gateway := range l.config.Gateways {
+	for _, gateway := range cfg.Gateways {
 		key := gateway.Server
 		if serverPorts[key] == nil {
 			serverPorts[key] = make(map[int]string)
@@ -461,7 +386,7 @@ func (l *Loader) validatePortConflicts() error {
 	}
 
 	servicePorts := make(map[string]map[int]string)
-	for _, service := range l.config.Services {
+	for _, service := range cfg.Services {
 		key := service.Server
 		if servicePorts[key] == nil {
 			servicePorts[key] = make(map[int]string)
@@ -477,9 +402,9 @@ func (l *Loader) validatePortConflicts() error {
 	return nil
 }
 
-func (l *Loader) validateDomainConflicts() error {
+func validateDomainConflicts(cfg *entity.Config) error {
 	domainNames := make(map[string]string)
-	for _, domain := range l.config.Domains {
+	for _, domain := range cfg.Domains {
 		if existing, ok := domainNames[domain.Name]; ok {
 			return fmt.Errorf("%w: domain '%s' is defined multiple times (first: '%s')", ErrDomainConflict, domain.Name, existing)
 		}
@@ -487,7 +412,7 @@ func (l *Loader) validateDomainConflicts() error {
 	}
 
 	dnsKeys := make(map[string]string)
-	for _, record := range l.config.DNSRecords {
+	for _, record := range cfg.DNSRecords {
 		key := fmt.Sprintf("%s:%s:%s", record.Domain, record.Type, record.Name)
 		if existing, ok := dnsKeys[key]; ok {
 			return fmt.Errorf("%w: dns record '%s' is defined multiple times (type: %s, name: %s)", ErrDNSSubdomainConflict, record.Domain, existing, record.Name)
@@ -498,9 +423,9 @@ func (l *Loader) validateDomainConflicts() error {
 	return nil
 }
 
-func (l *Loader) validateHostnameConflicts() error {
+func validateHostnameConflicts(cfg *entity.Config) error {
 	hostnames := make(map[string]string)
-	for _, service := range l.config.Services {
+	for _, service := range cfg.Services {
 		for _, route := range service.Gateways {
 			if route.HasGateway() && route.Hostname != "" {
 				hostname := strings.ToLower(route.Hostname)
@@ -514,6 +439,4 @@ func (l *Loader) validateHostnameConflicts() error {
 	return nil
 }
 
-func (l *Loader) GetConfig() *entities.Config {
-	return l.config
-}
+var _ repository.ConfigLoader = (*ConfigLoaderImpl)(nil)

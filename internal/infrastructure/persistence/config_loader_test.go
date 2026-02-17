@@ -1,0 +1,232 @@
+package persistence
+
+import (
+	"context"
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/domain/valueobject"
+)
+
+func TestConfigLoaderImpl_Load(t *testing.T) {
+	tmpDir := t.TempDir()
+	envDir := filepath.Join(tmpDir, "userdata", "test")
+	if err := os.MkdirAll(envDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	loader := NewConfigLoader(tmpDir)
+
+	t.Run("nonexistent directory", func(t *testing.T) {
+		_, err := loader.Load(context.Background(), "nonexistent")
+		if err == nil {
+			t.Error("expected error for nonexistent directory")
+		}
+	})
+
+	t.Run("empty directory", func(t *testing.T) {
+		cfg, err := loader.Load(context.Background(), "test")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if cfg == nil {
+			t.Fatal("expected config, got nil")
+		}
+	})
+}
+
+func TestConfigLoaderImpl_Validate(t *testing.T) {
+	loader := NewConfigLoader(".")
+
+	t.Run("nil config", func(t *testing.T) {
+		err := loader.Validate(nil)
+		if err != ErrConfigNotLoaded {
+			t.Errorf("expected ErrConfigNotLoaded, got %v", err)
+		}
+	})
+
+	t.Run("empty config", func(t *testing.T) {
+		cfg := &entity.Config{}
+		err := loader.Validate(cfg)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestLoadEntity(t *testing.T) {
+	tmpFile := filepath.Join(t.TempDir(), "test.yaml")
+
+	tests := []struct {
+		name    string
+		content string
+		yamlKey string
+		wantLen int
+		wantErr bool
+	}{
+		{
+			name: "valid secrets",
+			content: `secrets:
+  - name: test
+    value: secret123
+`,
+			yamlKey: "secrets",
+			wantLen: 1,
+			wantErr: false,
+		},
+		{
+			name: "valid isps",
+			content: `isps:
+  - name: isp1
+    services:
+      - server
+    credentials:
+      api_key: test
+`,
+			yamlKey: "isps",
+			wantLen: 1,
+			wantErr: false,
+		},
+		{
+			name: "valid zones",
+			content: `zones:
+  - name: zone1
+    isp: isp1
+`,
+			yamlKey: "zones",
+			wantLen: 1,
+			wantErr: false,
+		},
+		{
+			name: "valid servers",
+			content: `servers:
+  - name: server1
+    zone: zone1
+    isp: isp1
+`,
+			yamlKey: "servers",
+			wantLen: 1,
+			wantErr: false,
+		},
+		{
+			name:    "empty file",
+			content: ``,
+			yamlKey: "items",
+			wantLen: 0,
+			wantErr: false,
+		},
+		{
+			name: "missing key",
+			content: `other:
+  - name: test
+`,
+			yamlKey: "items",
+			wantLen: 0,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := os.WriteFile(tmpFile, []byte(tt.content), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			switch tt.yamlKey {
+			case "secrets":
+				items, err := loadEntity[entity.Secret](tmpFile, tt.yamlKey)
+				if (err != nil) != tt.wantErr {
+					t.Errorf("loadEntity() error = %v, wantErr %v", err, tt.wantErr)
+				}
+				if len(items) != tt.wantLen {
+					t.Errorf("loadEntity() got %d items, want %d", len(items), tt.wantLen)
+				}
+			case "isps":
+				items, err := loadEntity[entity.ISP](tmpFile, tt.yamlKey)
+				if (err != nil) != tt.wantErr {
+					t.Errorf("loadEntity() error = %v, wantErr %v", err, tt.wantErr)
+				}
+				if len(items) != tt.wantLen {
+					t.Errorf("loadEntity() got %d items, want %d", len(items), tt.wantLen)
+				}
+			case "zones":
+				items, err := loadEntity[entity.Zone](tmpFile, tt.yamlKey)
+				if (err != nil) != tt.wantErr {
+					t.Errorf("loadEntity() error = %v, wantErr %v", err, tt.wantErr)
+				}
+				if len(items) != tt.wantLen {
+					t.Errorf("loadEntity() got %d items, want %d", len(items), tt.wantLen)
+				}
+			case "servers":
+				items, err := loadEntity[entity.Server](tmpFile, tt.yamlKey)
+				if (err != nil) != tt.wantErr {
+					t.Errorf("loadEntity() error = %v, wantErr %v", err, tt.wantErr)
+				}
+				if len(items) != tt.wantLen {
+					t.Errorf("loadEntity() got %d items, want %d", len(items), tt.wantLen)
+				}
+			default:
+				items, err := loadEntity[struct{}](tmpFile, tt.yamlKey)
+				if (err != nil) != tt.wantErr {
+					t.Errorf("loadEntity() error = %v, wantErr %v", err, tt.wantErr)
+				}
+				if len(items) != tt.wantLen {
+					t.Errorf("loadEntity() got %d items, want %d", len(items), tt.wantLen)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateReferences(t *testing.T) {
+	t.Run("valid references", func(t *testing.T) {
+		cfg := &entity.Config{
+			Secrets: []entity.Secret{{Name: "secret1", Value: "value1"}},
+			ISPs:    []entity.ISP{{Name: "isp1", Services: []entity.ISPService{"server"}, Credentials: map[string]valueobject.SecretRef{"key": {Plain: "val"}}}},
+			Zones:   []entity.Zone{{Name: "zone1", ISP: "isp1"}},
+		}
+		err := validateReferences(cfg)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("missing isp reference", func(t *testing.T) {
+		cfg := &entity.Config{
+			Zones: []entity.Zone{{Name: "zone1", ISP: "nonexistent"}},
+		}
+		err := validateReferences(cfg)
+		if err == nil {
+			t.Error("expected error for missing isp reference")
+		}
+	})
+}
+
+func TestValidatePortConflicts(t *testing.T) {
+	t.Run("no conflict", func(t *testing.T) {
+		cfg := &entity.Config{
+			Gateways: []entity.Gateway{
+				{Name: "gw1", Server: "srv1", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}},
+			},
+		}
+		err := validatePortConflicts(cfg)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("port conflict", func(t *testing.T) {
+		cfg := &entity.Config{
+			Gateways: []entity.Gateway{
+				{Name: "gw1", Server: "srv1", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}},
+				{Name: "gw2", Server: "srv1", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}},
+			},
+		}
+		err := validatePortConflicts(cfg)
+		if err == nil {
+			t.Error("expected error for port conflict")
+		}
+	})
+}

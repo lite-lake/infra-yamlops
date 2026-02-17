@@ -3,14 +3,15 @@ package config
 import (
 	"fmt"
 
-	"github.com/litelake/yamlops/internal/entities"
+	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
 type SecretResolver struct {
 	secrets map[string]string
 }
 
-func NewSecretResolver(secrets []*entities.Secret) *SecretResolver {
+func NewSecretResolver(secrets []*entity.Secret) *SecretResolver {
 	s := &SecretResolver{
 		secrets: make(map[string]string),
 	}
@@ -20,18 +21,18 @@ func NewSecretResolver(secrets []*entities.Secret) *SecretResolver {
 	return s
 }
 
-func (r *SecretResolver) Resolve(ref entities.SecretRef) (string, error) {
+func (r *SecretResolver) Resolve(ref valueobject.SecretRef) (string, error) {
 	return ref.Resolve(r.secrets)
 }
 
-func (r *SecretResolver) ResolveAll(cfg *entities.Config) error {
+func (r *SecretResolver) ResolveAll(cfg *entity.Config) error {
 	for i := range cfg.ISPs {
 		for key, ref := range cfg.ISPs[i].Credentials {
 			val, err := r.Resolve(ref)
 			if err != nil {
 				return fmt.Errorf("isps[%s].credentials[%s]: %w", cfg.ISPs[i].Name, key, err)
 			}
-			cfg.ISPs[i].Credentials[key] = entities.SecretRef{Plain: val}
+			cfg.ISPs[i].Credentials[key] = valueobject.SecretRef{Plain: val}
 		}
 	}
 
@@ -40,7 +41,7 @@ func (r *SecretResolver) ResolveAll(cfg *entities.Config) error {
 		if err != nil {
 			return fmt.Errorf("servers[%s].ssh.password: %w", cfg.Servers[i].Name, err)
 		}
-		cfg.Servers[i].SSH.Password = entities.SecretRef{Plain: val}
+		cfg.Servers[i].SSH.Password = valueobject.SecretRef{Plain: val}
 	}
 
 	for i := range cfg.Registries {
@@ -52,8 +53,8 @@ func (r *SecretResolver) ResolveAll(cfg *entities.Config) error {
 		if err != nil {
 			return fmt.Errorf("registries[%s].credentials.password: %w", cfg.Registries[i].Name, err)
 		}
-		cfg.Registries[i].Credentials.Username = entities.SecretRef{Plain: username}
-		cfg.Registries[i].Credentials.Password = entities.SecretRef{Plain: password}
+		cfg.Registries[i].Credentials.Username = valueobject.SecretRef{Plain: username}
+		cfg.Registries[i].Credentials.Password = valueobject.SecretRef{Plain: password}
 	}
 
 	return nil

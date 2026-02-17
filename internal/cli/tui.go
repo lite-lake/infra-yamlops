@@ -7,7 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/litelake/yamlops/internal/plan"
+	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
 type Environment string
@@ -110,7 +110,7 @@ type Model struct {
 	MenuIndex       int
 	ParentIndex     int
 	Environment     Environment
-	PlanResult      *plan.Plan
+	PlanResult      *valueobject.Plan
 	ApplyProgress   int
 	ApplyTotal      int
 	ApplyComplete   bool
@@ -125,7 +125,7 @@ func NewModel() Model {
 		ViewState:     ViewStateMain,
 		MenuIndex:     0,
 		Environment:   EnvDev,
-		PlanResult:    plan.NewPlan(),
+		PlanResult:    valueobject.NewPlan(),
 		ApplyProgress: 0,
 		ApplyTotal:    100,
 		Width:         80,
@@ -300,19 +300,19 @@ func (m Model) nextEnvironment() Environment {
 }
 
 func (m *Model) generateSamplePlan() {
-	m.PlanResult = plan.NewPlan()
-	m.PlanResult.AddChange(&plan.Change{
-		Type:   plan.ChangeTypeCreate,
+	m.PlanResult = valueobject.NewPlan()
+	m.PlanResult.AddChange(&valueobject.Change{
+		Type:   valueobject.ChangeTypeCreate,
 		Entity: "Server",
 		Name:   "web-server-01",
 	})
-	m.PlanResult.AddChange(&plan.Change{
-		Type:   plan.ChangeTypeUpdate,
+	m.PlanResult.AddChange(&valueobject.Change{
+		Type:   valueobject.ChangeTypeUpdate,
 		Entity: "Service",
 		Name:   "api-service",
 	})
-	m.PlanResult.AddChange(&plan.Change{
-		Type:   plan.ChangeTypeNoop,
+	m.PlanResult.AddChange(&valueobject.Change{
+		Type:   valueobject.ChangeTypeNoop,
 		Entity: "Gateway",
 		Name:   "main-gateway",
 	})
@@ -398,13 +398,13 @@ func (m Model) renderPlanResult() string {
 			style := changeNoopStyle
 			prefix := "~"
 			switch ch.Type {
-			case plan.ChangeTypeCreate:
+			case valueobject.ChangeTypeCreate:
 				style = changeCreateStyle
 				prefix = "+"
-			case plan.ChangeTypeUpdate:
+			case valueobject.ChangeTypeUpdate:
 				style = changeUpdateStyle
 				prefix = "~"
-			case plan.ChangeTypeDelete:
+			case valueobject.ChangeTypeDelete:
 				style = changeDeleteStyle
 				prefix = "-"
 			}
@@ -427,7 +427,7 @@ func (m Model) renderApplyConfirm() string {
 	if m.PlanResult != nil {
 		nonNoopCount := 0
 		for _, ch := range m.PlanResult.Changes {
-			if ch.Type != plan.ChangeTypeNoop {
+			if ch.Type != valueobject.ChangeTypeNoop {
 				nonNoopCount++
 			}
 		}
