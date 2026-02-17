@@ -651,6 +651,12 @@ func (p *Planner) serviceEquals(a, b *entities.Service) bool {
 }
 
 func (p *Planner) GenerateDeployments() error {
+	if _, err := os.Stat(p.outputDir); err == nil {
+		if err := os.RemoveAll(p.outputDir); err != nil {
+			return fmt.Errorf("failed to clean output directory: %w", err)
+		}
+	}
+
 	if err := os.MkdirAll(p.outputDir, 0755); err != nil {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}

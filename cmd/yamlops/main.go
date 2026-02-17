@@ -278,6 +278,8 @@ func runApply(scope, domain, zone, server, service string) {
 
 	executor := apply.NewExecutor(executionPlan, env)
 	executor.SetSecrets(cfg.GetSecretsMap())
+	executor.SetDomains(cfg.GetDomainMap())
+	executor.SetISPs(cfg.GetISPMap())
 
 	for _, srv := range cfg.Servers {
 		if server != "" && srv.Name != server {

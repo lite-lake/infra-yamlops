@@ -4,8 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/litelake/yamlops/internal/entities"
 	"github.com/litelake/yamlops/internal/plan"
+	"github.com/litelake/yamlops/internal/providers/dns"
 	"github.com/litelake/yamlops/internal/ssh"
 )
 
@@ -15,6 +18,9 @@ type Executor struct {
 	secrets    map[string]string
 	servers    map[string]*serverInfo
 	env        string
+	domains    map[string]*entities.Domain
+	isps       map[string]*entities.ISP
+	dnsCache   map[string]dns.Provider
 }
 
 type serverInfo struct {
@@ -40,12 +46,23 @@ func NewExecutor(pl *plan.Plan, env string) *Executor {
 		sshClients: make(map[string]*ssh.Client),
 		secrets:    make(map[string]string),
 		servers:    make(map[string]*serverInfo),
+		domains:    make(map[string]*entities.Domain),
+		isps:       make(map[string]*entities.ISP),
+		dnsCache:   make(map[string]dns.Provider),
 		env:        env,
 	}
 }
 
 func (e *Executor) SetSecrets(secrets map[string]string) {
 	e.secrets = secrets
+}
+
+func (e *Executor) SetDomains(domains map[string]*entities.Domain) {
+	e.domains = domains
+}
+
+func (e *Executor) SetISPs(isps map[string]*entities.ISP) {
+	e.isps = isps
 }
 
 func (e *Executor) RegisterServer(name string, host string, port int, user, password string) {
@@ -92,7 +109,9 @@ func (e *Executor) applyCreate(ch *plan.Change) *Result {
 	}
 
 	switch ch.Entity {
-	case "isp", "zone", "domain", "dns_record", "certificate", "registry":
+	case "dns_record":
+		return e.applyDNSRecord(ch)
+	case "isp", "zone", "domain", "certificate", "registry":
 		result.Success = true
 		result.Output = "skipped (not a deployable entity)"
 		return result
@@ -185,7 +204,9 @@ func (e *Executor) applyUpdate(ch *plan.Change) *Result {
 	}
 
 	switch ch.Entity {
-	case "isp", "zone", "domain", "dns_record", "certificate", "registry":
+	case "dns_record":
+		return e.applyDNSRecord(ch)
+	case "isp", "zone", "domain", "certificate", "registry":
 		result.Success = true
 		result.Output = "skipped (not a deployable entity)"
 		return result
@@ -274,7 +295,9 @@ func (e *Executor) applyDelete(ch *plan.Change) *Result {
 	}
 
 	switch ch.Entity {
-	case "isp", "zone", "domain", "dns_record", "certificate", "registry":
+	case "dns_record":
+		return e.deleteDNSRecord(ch)
+	case "isp", "zone", "domain", "certificate", "registry":
 		result.Success = true
 		result.Output = "skipped (not a deployable entity)"
 		return result
@@ -422,6 +445,157 @@ func (e *Executor) syncConfigDir(client *ssh.Client, localDir, remoteDir string)
 
 		return client.UploadFileSudo(path, remotePath)
 	})
+}
+
+func (e *Executor) getDNSProvider(ispName string) (dns.Provider, error) {
+	if provider, ok := e.dnsCache[ispName]; ok {
+		return provider, nil
+	}
+
+	isp, ok := e.isps[ispName]
+	if !ok {
+		return nil, fmt.Errorf("ISP %s not found", ispName)
+	}
+
+	if !isp.HasService(entities.ISPServiceDNS) {
+		return nil, fmt.Errorf("ISP %s does not provide DNS service", ispName)
+	}
+
+	cred := isp.Credentials["access_key_id"]
+	accessKeyID, err := cred.Resolve(e.secrets)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve access_key_id: %w", err)
+	}
+	credSecret := isp.Credentials["access_key_secret"]
+	accessKeySecret, err := credSecret.Resolve(e.secrets)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve access_key_secret: %w", err)
+	}
+
+	provider := dns.NewAliyunProvider(accessKeyID, accessKeySecret)
+	e.dnsCache[ispName] = provider
+	return provider, nil
+}
+
+func (e *Executor) extractDNSRecordFromChange(ch *plan.Change) (*entities.DNSRecord, error) {
+	if ch.NewState != nil {
+		if record, ok := ch.NewState.(*entities.DNSRecord); ok {
+			return record, nil
+		}
+	}
+	if ch.OldState != nil {
+		if record, ok := ch.OldState.(*entities.DNSRecord); ok {
+			return record, nil
+		}
+	}
+	return nil, fmt.Errorf("cannot extract DNS record from change")
+}
+
+func (e *Executor) applyDNSRecord(ch *plan.Change) *Result {
+	result := &Result{
+		Change:  ch,
+		Success: false,
+	}
+
+	record, err := e.extractDNSRecordFromChange(ch)
+	if err != nil {
+		result.Error = err
+		return result
+	}
+
+	domain, ok := e.domains[record.Domain]
+	if !ok {
+		result.Error = fmt.Errorf("domain %s not found", record.Domain)
+		return result
+	}
+
+	provider, err := e.getDNSProvider(domain.ISP)
+	if err != nil {
+		result.Error = fmt.Errorf("failed to get DNS provider: %w", err)
+		return result
+	}
+
+	dnsRecord := &dns.DNSRecord{
+		Name:  record.Name,
+		Type:  string(record.Type),
+		Value: record.Value,
+		TTL:   record.TTL,
+	}
+
+	if ch.Type == plan.ChangeTypeUpdate {
+		existingRecords, err := provider.ListRecords(record.Domain)
+		if err != nil {
+			result.Error = fmt.Errorf("failed to list existing records: %w", err)
+			return result
+		}
+		for _, r := range existingRecords {
+			if r.Name == record.Name && r.Type == string(record.Type) {
+				if err := provider.UpdateRecord(record.Domain, r.ID, dnsRecord); err != nil {
+					result.Error = fmt.Errorf("failed to update record: %w", err)
+					return result
+				}
+				result.Success = true
+				result.Output = fmt.Sprintf("updated DNS record %s.%s", record.Name, record.Domain)
+				return result
+			}
+		}
+	}
+
+	if err := provider.CreateRecord(record.Domain, dnsRecord); err != nil {
+		result.Error = fmt.Errorf("failed to create record: %w", err)
+		return result
+	}
+
+	result.Success = true
+	result.Output = fmt.Sprintf("created DNS record %s.%s", record.Name, record.Domain)
+	return result
+}
+
+func (e *Executor) deleteDNSRecord(ch *plan.Change) *Result {
+	result := &Result{
+		Change:  ch,
+		Success: false,
+	}
+
+	record, err := e.extractDNSRecordFromChange(ch)
+	if err != nil {
+		result.Error = err
+		return result
+	}
+
+	domain, ok := e.domains[record.Domain]
+	if !ok {
+		result.Error = fmt.Errorf("domain %s not found", record.Domain)
+		return result
+	}
+
+	provider, err := e.getDNSProvider(domain.ISP)
+	if err != nil {
+		result.Error = fmt.Errorf("failed to get DNS provider: %w", err)
+		return result
+	}
+
+	existingRecords, err := provider.ListRecords(record.Domain)
+	if err != nil {
+		result.Error = fmt.Errorf("failed to list existing records: %w", err)
+		return result
+	}
+
+	for _, r := range existingRecords {
+		if r.Name == record.Name && strings.EqualFold(r.Type, string(record.Type)) {
+			if err := provider.DeleteRecord(record.Domain, r.ID); err != nil {
+				result.Error = fmt.Errorf("failed to delete record: %w", err)
+				return result
+			}
+			result.Success = true
+			result.Output = fmt.Sprintf("deleted DNS record %s.%s", record.Name, record.Domain)
+			return result
+		}
+	}
+
+	result.Success = true
+	result.Output = fmt.Sprintf("DNS record %s.%s not found, skipping", record.Name, record.Domain)
+	return result
 }
 
 func (e *Executor) closeClients() {
