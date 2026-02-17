@@ -1,0 +1,10 @@
+zones:
+  - name: cn-east
+    description: 华东区生产环境
+    isp: aliyun
+    region: cn-shanghai
+
+  - name: cn-south
+    description: 华南区生产环境
+    isp: tencent
+    region: ap-guangzhou

@@ -1,0 +1,17 @@
+certificates:
+  - name: example-com
+    domains:
+      - example.com
+      - "*.example.com"
+    provider: letsencrypt
+    dns_provider: aliyun
+    auto_renew: true
+    renew_before: 30d
+
+  - name: api-example-com
+    domains:
+      - api.example.com
+    provider: letsencrypt
+    dns_provider: cloudflare
+    auto_renew: true
+    renew_before: 30d

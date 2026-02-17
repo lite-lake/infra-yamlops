@@ -1,0 +1,38 @@
+servers:
+  - name: srv-east-01
+    zone: cn-east
+    isp: aliyun
+    os: ubuntu-22.04
+    ip:
+      public: 203.0.113.10
+      private: 10.0.1.10
+    ssh:
+      host: 203.0.113.10
+      port: 22
+      user: root
+      password:
+        secret: srv_east_01_password
+    environment:
+      apt_source: tuna
+      registries:
+        - registry-aliyun
+        - registry-dockerhub
+
+  - name: srv-south-01
+    zone: cn-south
+    isp: tencent
+    os: ubuntu-22.04
+    ip:
+      public: 203.0.113.20
+      private: 10.1.1.10
+    ssh:
+      host: 203.0.113.20
+      port: 22
+      user: root
+      password:
+        secret: srv_south_01_password
+    environment:
+      apt_source: tencent
+      registries:
+        - registry-aliyun
+        - registry-dockerhub

@@ -1,0 +1,14 @@
+registries:
+  - name: registry-aliyun
+    url: registry.cn-shanghai.aliyuncs.com
+    credentials:
+      username:
+        secret: aliyun_registry_user
+      password:
+        secret: aliyun_registry_password
+
+  - name: registry-dockerhub
+    url: registry.hub.docker.com
+    credentials:
+      username: "placeholder_dockerhub_user"
+      password: "placeholder_dockerhub_password"

@@ -1,0 +1,30 @@
+isps:
+  - name: aliyun
+    services:
+      - server
+      - domain
+      - dns
+      - certificate
+    credentials:
+      access_key_id:
+        secret: aliyun_access_key
+      access_key_secret:
+        secret: aliyun_access_secret
+
+  - name: cloudflare
+    services:
+      - dns
+      - certificate
+    credentials:
+      api_token:
+        secret: cloudflare_api_token
+
+  - name: tencent
+    services:
+      - server
+      - dns
+    credentials:
+      secret_id:
+        secret: tencent_secret_id
+      secret_key:
+        secret: tencent_secret_key

@@ -1,0 +1,10 @@
+/yamlops.exe
+/yamlops
+
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+deployments/

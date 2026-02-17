@@ -1,0 +1,54 @@
+services:
+  - name: api-server
+    server: srv-east-01
+    image: myapp/api:v1.0.0
+    port: 3000
+    env:
+      NODE_ENV: production
+      DATABASE_URL: postgres://db.example.com:5432/myapp
+      REDIS_URL: redis://yo-redis:6379
+    secrets:
+      - db_password
+      - jwt_secret
+    healthcheck:
+      path: /health
+      interval: 30s
+      timeout: 10s
+    resources:
+      cpu: "0.5"
+      memory: 256M
+    volumes:
+      - source: volumes://api-server/config
+        target: /app/config
+        sync: true
+      - ./data:/app/data
+    gateway:
+      enabled: true
+      hostname: api.example.com
+      path: /
+      ssl: true
+
+  - name: web-frontend
+    server: srv-east-01
+    image: myapp/web:v1.0.0
+    port: 8080
+    env:
+      API_URL: https://api.example.com
+    volumes:
+      - ./html:/usr/share/nginx/html
+    gateway:
+      enabled: true
+      hostname: www.example.com
+      path: /
+      ssl: true
+
+  - name: redis
+    server: srv-east-01
+    image: redis:7-alpine
+    port: 6379
+    env:
+      REDIS_PASSWORD:
+        secret: redis_password
+    volumes:
+      - redis-data:/data
+    internal: true

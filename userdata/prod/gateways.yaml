@@ -1,0 +1,40 @@
+gateways:
+  - name: gw-east-1
+    zone: cn-east
+    server: srv-east-01
+    image: infra-gate:latest
+    ports:
+      http: 80
+      https: 443
+    config:
+      source: volumes://infra-gate
+      sync: true
+    ssl:
+      mode: remote
+      endpoint: http://infra-ssl.example.com:38567
+    waf:
+      enabled: true
+      whitelist:
+        - 10.0.0.0/8
+        - 192.168.0.0/16
+    log_level: 1
+
+  - name: gw-south-1
+    zone: cn-south
+    server: srv-south-01
+    image: infra-gate:latest
+    ports:
+      http: 80
+      https: 443
+    config:
+      source: volumes://infra-gate
+      sync: true
+    ssl:
+      mode: remote
+      endpoint: http://infra-ssl.example.com:38567
+    waf:
+      enabled: true
+      whitelist:
+        - 10.0.0.0/8
+        - 172.16.0.0/12
+    log_level: 1
