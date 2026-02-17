@@ -90,6 +90,33 @@ func (h *GatewayHandler) deployGateway(change *valueobject.Change, deps *Deps, s
 		return result, nil
 	}
 
+	composeFile := h.getComposeFilePath(change, deps)
+	if composeFile != "" {
+		if _, err := os.Stat(composeFile); err == nil {
+			composeContent, err := os.ReadFile(composeFile)
+			if err != nil {
+				result.Error = fmt.Errorf("failed to read compose file: %w", err)
+				return result, nil
+			}
+			if err := h.syncContent(deps.SSHClient, string(composeContent), remoteDir+"/docker-compose.yml"); err != nil {
+				result.Error = fmt.Errorf("failed to sync compose file: %w", err)
+				return result, nil
+			}
+
+			networkCmd := fmt.Sprintf("sudo docker network create yamlops-%s 2>/dev/null || true", deps.Env)
+			_, _, _ = deps.SSHClient.Run(networkCmd)
+
+			containerName := fmt.Sprintf("yo-%s-%s", deps.Env, change.Name)
+			cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d && sudo docker restart %s", remoteDir, containerName)
+			stdout, stderr, err := deps.SSHClient.Run(cmd)
+			if err != nil {
+				result.Error = fmt.Errorf("failed to run docker compose: %w, stderr: %s", err, stderr)
+				result.Output = stdout + "\n" + stderr
+				return result, nil
+			}
+		}
+	}
+
 	result.Success = true
 	result.Output = fmt.Sprintf("deployed gateway %s", change.Name)
 	return result, nil
@@ -122,6 +149,14 @@ func (h *GatewayHandler) getGatewayFilePath(ch *valueobject.Change, deps *Deps) 
 		return ""
 	}
 	return filepath.Join(deps.WorkDir, "deployments", serverName, ch.Name+".gate.yaml")
+}
+
+func (h *GatewayHandler) getComposeFilePath(ch *valueobject.Change, deps *Deps) string {
+	serverName := h.extractServerFromChange(ch)
+	if serverName == "" {
+		return ""
+	}
+	return filepath.Join(deps.WorkDir, "deployments", serverName, ch.Name+".compose.yaml")
 }
 
 func (h *GatewayHandler) syncContent(client SSHClient, content, remotePath string) error {

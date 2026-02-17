@@ -59,7 +59,7 @@ func (g *deploymentGenerator) generateGatewayConfig(serverDir string, gw *entity
 			if server, ok := serverMap[svc.Server]; ok && server.IP.Private != "" {
 				backendIP = server.IP.Private
 			} else {
-				backendIP = "127.0.0.1"
+				backendIP = "host.docker.internal"
 			}
 
 			hostPort := route.ContainerPort
@@ -73,8 +73,8 @@ func (g *deploymentGenerator) generateGatewayConfig(serverDir string, gw *entity
 				hostname = svc.Name
 			}
 
-			healthPath := "/health"
-			if svc.Healthcheck != nil {
+			healthPath := "/"
+			if svc.Healthcheck != nil && svc.Healthcheck.Path != "" {
 				healthPath = svc.Healthcheck.Path
 			}
 
@@ -155,6 +155,8 @@ func (g *deploymentGenerator) generateGatewayCompose(gw *entity.Gateway) (string
     volumes:
       - ./gateway.yml:/app/configs/server.yml:ro
       - ./cache:/app/cache
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - %s
 
