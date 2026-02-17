@@ -98,7 +98,19 @@ func (c *Client) MkdirAllSudo(path string) error {
 	return nil
 }
 
+func (c *Client) MkdirAllSudoWithPerm(path, perm string) error {
+	_, stderr, err := c.Run(fmt.Sprintf("sudo mkdir -p %s && sudo chmod %s %s", path, perm, path))
+	if err != nil {
+		return fmt.Errorf("sudo mkdir failed: %w, stderr: %s", err, stderr)
+	}
+	return nil
+}
+
 func (c *Client) UploadFileSudo(localPath, remotePath string) error {
+	return c.UploadFileSudoWithPerm(localPath, remotePath, "640")
+}
+
+func (c *Client) UploadFileSudoWithPerm(localPath, remotePath, perm string) error {
 	sftpClient, err := c.newSFTPClient()
 	if err != nil {
 		return err
@@ -123,7 +135,7 @@ func (c *Client) UploadFileSudo(localPath, remotePath string) error {
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
 
-	_, stderr, err := c.Run(fmt.Sprintf("sudo mv %s %s", tmpPath, remotePath))
+	_, stderr, err := c.Run(fmt.Sprintf("sudo mv %s %s && sudo chmod %s %s", tmpPath, remotePath, perm, remotePath))
 	if err != nil {
 		return fmt.Errorf("sudo mv failed: %w, stderr: %s", err, stderr)
 	}

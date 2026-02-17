@@ -134,7 +134,7 @@ func (e *Executor) applyCreate(ch *plan.Change) *Result {
 	}
 
 	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s-%s", e.env, ch.Name)
-	if err := client.MkdirAllSudo(remoteDir); err != nil {
+	if err := client.MkdirAllSudoWithPerm(remoteDir, "750"); err != nil {
 		result.Error = fmt.Errorf("failed to create remote directory: %w", err)
 		return result
 	}
@@ -440,7 +440,11 @@ func (e *Executor) syncConfigDir(client *ssh.Client, localDir, remoteDir string)
 		remotePath := filepath.Join(remoteDir, relPath)
 
 		if info.IsDir() {
-			return client.MkdirAllSudo(remotePath)
+			perm := "750"
+			if filepath.Base(path) == "volumes" {
+				perm = "770"
+			}
+			return client.MkdirAllSudoWithPerm(remotePath, perm)
 		}
 
 		return client.UploadFileSudo(path, remotePath)
