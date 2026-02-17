@@ -79,7 +79,7 @@ func (h *ServiceHandler) deployService(change *valueobject.Change, client SSHCli
 			networkCmd := fmt.Sprintf("sudo docker network create yamlops-%s 2>/dev/null || true", deps.Env)
 			_, _, _ = client.Run(networkCmd)
 
-			cmd := fmt.Sprintf("cd %s && sudo docker compose up -d", remoteDir)
+			cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d", remoteDir)
 			stdout, stderr, err := client.Run(cmd)
 			if err != nil {
 				result.Error = fmt.Errorf("failed to run docker compose: %w, stderr: %s", err, stderr)
@@ -97,7 +97,7 @@ func (h *ServiceHandler) deployService(change *valueobject.Change, client SSHCli
 func (h *ServiceHandler) deleteService(change *valueobject.Change, client SSHClient, remoteDir string, deps *Deps) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
-	cmd := fmt.Sprintf("cd %s && sudo docker compose down -v 2>/dev/null || true", remoteDir)
+	cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml down -v 2>/dev/null || true", remoteDir)
 	stdout, stderr, _ := client.Run(cmd)
 
 	rmCmd := fmt.Sprintf("sudo rm -rf %s", remoteDir)

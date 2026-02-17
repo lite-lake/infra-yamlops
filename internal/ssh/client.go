@@ -11,6 +11,7 @@ import (
 
 type Client struct {
 	client *ssh.Client
+	user   string
 }
 
 func NewClient(host string, port int, user, password string) (*Client, error) {
@@ -28,7 +29,7 @@ func NewClient(host string, port int, user, password string) (*Client, error) {
 		return nil, fmt.Errorf("failed to dial: %w", err)
 	}
 
-	return &Client{client: client}, nil
+	return &Client{client: client, user: user}, nil
 }
 
 func (c *Client) Close() error {
@@ -99,7 +100,8 @@ func (c *Client) MkdirAllSudo(path string) error {
 }
 
 func (c *Client) MkdirAllSudoWithPerm(path, perm string) error {
-	_, stderr, err := c.Run(fmt.Sprintf("sudo mkdir -p %s && sudo chmod %s %s", path, perm, path))
+	cmd := fmt.Sprintf("sudo mkdir -p %s && sudo chown %s:%s %s && sudo chmod %s %s", path, c.user, c.user, path, perm, path)
+	_, stderr, err := c.Run(cmd)
 	if err != nil {
 		return fmt.Errorf("sudo mkdir failed: %w, stderr: %s", err, stderr)
 	}
@@ -135,7 +137,8 @@ func (c *Client) UploadFileSudoWithPerm(localPath, remotePath, perm string) erro
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
 
-	_, stderr, err := c.Run(fmt.Sprintf("sudo mv %s %s && sudo chmod %s %s", tmpPath, remotePath, perm, remotePath))
+	cmd := fmt.Sprintf("sudo mv %s %s && sudo chown %s:%s %s && sudo chmod %s %s", tmpPath, remotePath, c.user, c.user, remotePath, perm, remotePath)
+	_, stderr, err := c.Run(cmd)
 	if err != nil {
 		return fmt.Errorf("sudo mv failed: %w, stderr: %s", err, stderr)
 	}

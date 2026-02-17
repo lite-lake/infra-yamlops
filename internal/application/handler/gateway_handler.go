@@ -44,6 +44,16 @@ func (h *GatewayHandler) extractServerFromChange(ch *valueobject.Change) string 
 func (h *GatewayHandler) deployGateway(change *valueobject.Change, deps *Deps, serverName, remoteDir string) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
+	if deps.SSHClient == nil {
+		result.Error = fmt.Errorf("SSH client not available")
+		return result, nil
+	}
+
+	if err := deps.SSHClient.MkdirAllSudoWithPerm(remoteDir, "750"); err != nil {
+		result.Error = fmt.Errorf("failed to create remote directory: %w", err)
+		return result, nil
+	}
+
 	gatewayFile := h.getGatewayFilePath(change, deps)
 	if gatewayFile == "" {
 		result.Success = true
