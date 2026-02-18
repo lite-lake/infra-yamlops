@@ -55,7 +55,7 @@ type ServerEnvironment struct {
 type Server struct {
 	Name        string            `yaml:"name"`
 	Zone        string            `yaml:"zone"`
-	ISP         string            `yaml:"isp"`
+	ISP         string            `yaml:"isp,omitempty"`
 	OS          string            `yaml:"os"`
 	IP          ServerIP          `yaml:"ip"`
 	SSH         ServerSSH         `yaml:"ssh"`
@@ -68,9 +68,6 @@ func (s *Server) Validate() error {
 	}
 	if s.Zone == "" {
 		return errors.New("zone is required")
-	}
-	if s.ISP == "" {
-		return errors.New("isp is required")
 	}
 	if err := s.IP.Validate(); err != nil {
 		return err

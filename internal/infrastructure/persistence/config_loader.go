@@ -46,6 +46,7 @@ func (l *ConfigLoaderImpl) Load(ctx context.Context, env string) (*entity.Config
 		{"secrets.yaml", loadSecrets},
 		{"isps.yaml", loadISPs},
 		{"zones.yaml", loadZones},
+		{"infra_services.yaml", loadInfraServices},
 		{"gateways.yaml", loadGateways},
 		{"servers.yaml", loadServers},
 		{"services.yaml", loadServices},
@@ -152,6 +153,15 @@ func loadZones(filePath string, cfg *entity.Config) error {
 	return nil
 }
 
+func loadInfraServices(filePath string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.InfraService](filePath, "infra_services")
+	if err != nil {
+		return err
+	}
+	cfg.InfraServices = items
+	return nil
+}
+
 func loadGateways(filePath string, cfg *entity.Config) error {
 	items, err := loadEntity[entity.Gateway](filePath, "gateways")
 	if err != nil {
@@ -171,7 +181,7 @@ func loadServers(filePath string, cfg *entity.Config) error {
 }
 
 func loadServices(filePath string, cfg *entity.Config) error {
-	items, err := loadEntity[entity.Service](filePath, "services")
+	items, err := loadEntity[entity.BizService](filePath, "services")
 	if err != nil {
 		return err
 	}
@@ -231,6 +241,10 @@ func validateReferences(cfg *entity.Config) error {
 		return err
 	}
 
+	if err := validateInfraServiceReferences(cfg, servers); err != nil {
+		return err
+	}
+
 	if err := validateGatewayReferences(cfg, zones, servers); err != nil {
 		return err
 	}
@@ -277,8 +291,19 @@ func validateISPReferences(cfg *entity.Config, isps map[string]*entity.ISP) erro
 
 func validateZoneReferences(cfg *entity.Config, isps map[string]*entity.ISP) error {
 	for _, zone := range cfg.Zones {
-		if _, ok := isps[zone.ISP]; !ok {
-			return fmt.Errorf("%w: isp '%s' referenced by zone '%s' does not exist", ErrMissingReference, zone.ISP, zone.Name)
+		if zone.ISP != "" {
+			if _, ok := isps[zone.ISP]; !ok {
+				return fmt.Errorf("%w: isp '%s' referenced by zone '%s' does not exist", ErrMissingReference, zone.ISP, zone.Name)
+			}
+		}
+	}
+	return nil
+}
+
+func validateInfraServiceReferences(cfg *entity.Config, servers map[string]*entity.Server) error {
+	for _, infra := range cfg.InfraServices {
+		if _, ok := servers[infra.Server]; !ok {
+			return fmt.Errorf("%w: server '%s' referenced by infra_service '%s' does not exist", ErrMissingReference, infra.Server, infra.Name)
 		}
 	}
 	return nil
@@ -301,8 +326,10 @@ func validateServerReferences(cfg *entity.Config, zones map[string]*entity.Zone,
 		if _, ok := zones[server.Zone]; !ok {
 			return fmt.Errorf("%w: zone '%s' referenced by server '%s' does not exist", ErrMissingReference, server.Zone, server.Name)
 		}
-		if _, ok := isps[server.ISP]; !ok {
-			return fmt.Errorf("%w: isp '%s' referenced by server '%s' does not exist", ErrMissingReference, server.ISP, server.Name)
+		if server.ISP != "" {
+			if _, ok := isps[server.ISP]; !ok {
+				return fmt.Errorf("%w: isp '%s' referenced by server '%s' does not exist", ErrMissingReference, server.ISP, server.Name)
+			}
 		}
 		for _, regName := range server.Environment.Registries {
 			if _, ok := registries[regName]; !ok {
@@ -335,8 +362,15 @@ func validateServiceReferences(cfg *entity.Config, servers map[string]*entity.Se
 
 func validateDomainReferences(cfg *entity.Config, isps map[string]*entity.ISP, domains map[string]*entity.Domain) error {
 	for _, domain := range cfg.Domains {
-		if _, ok := isps[domain.ISP]; !ok {
-			return fmt.Errorf("%w: isp '%s' referenced by domain '%s' does not exist", ErrMissingReference, domain.ISP, domain.Name)
+		if domain.ISP != "" {
+			if _, ok := isps[domain.ISP]; !ok {
+				return fmt.Errorf("%w: isp '%s' referenced by domain '%s' does not exist", ErrMissingReference, domain.ISP, domain.Name)
+			}
+		}
+		if domain.DNSISP != "" {
+			if _, ok := isps[domain.DNSISP]; !ok {
+				return fmt.Errorf("%w: dns_isp '%s' referenced by domain '%s' does not exist", ErrMissingReference, domain.DNSISP, domain.Name)
+			}
 		}
 		if domain.Parent != "" {
 			if _, ok := domains[domain.Parent]; !ok {
@@ -383,6 +417,19 @@ func validatePortConflicts(cfg *entity.Config) error {
 			return fmt.Errorf("%w: https port %d on server '%s' is used by both '%s' and '%s'", ErrPortConflict, gateway.Ports.HTTPS, gateway.Server, existing, gateway.Name)
 		}
 		serverPorts[key][gateway.Ports.HTTPS] = gateway.Name
+	}
+
+	for _, infra := range cfg.InfraServices {
+		key := infra.Server
+		if serverPorts[key] == nil {
+			serverPorts[key] = make(map[int]string)
+		}
+		if infra.SSLConfig != nil && infra.SSLConfig.Ports.API > 0 {
+			if existing, ok := serverPorts[key][infra.SSLConfig.Ports.API]; ok {
+				return fmt.Errorf("%w: api port %d on server '%s' is used by both '%s' and '%s'", ErrPortConflict, infra.SSLConfig.Ports.API, infra.Server, existing, infra.Name)
+			}
+			serverPorts[key][infra.SSLConfig.Ports.API] = infra.Name
+		}
 	}
 
 	servicePorts := make(map[string]map[int]string)

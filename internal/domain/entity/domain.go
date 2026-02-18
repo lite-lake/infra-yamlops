@@ -11,7 +11,8 @@ import (
 
 type Domain struct {
 	Name      string `yaml:"name"`
-	ISP       string `yaml:"isp"`
+	ISP       string `yaml:"isp,omitempty"`
+	DNSISP    string `yaml:"dns_isp"`
 	Parent    string `yaml:"parent,omitempty"`
 	AutoRenew bool   `yaml:"auto_renew,omitempty"`
 }
@@ -29,8 +30,8 @@ func (d *Domain) Validate() error {
 	if !domainRegex.MatchString(name) {
 		return fmt.Errorf("%w: invalid domain format %s", domain.ErrInvalidDomain, d.Name)
 	}
-	if d.ISP == "" {
-		return errors.New("isp is required")
+	if d.DNSISP == "" {
+		return errors.New("dns_isp is required")
 	}
 	return nil
 }

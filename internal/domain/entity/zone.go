@@ -10,16 +10,13 @@ import (
 type Zone struct {
 	Name        string `yaml:"name"`
 	Description string `yaml:"description,omitempty"`
-	ISP         string `yaml:"isp"`
+	ISP         string `yaml:"isp,omitempty"`
 	Region      string `yaml:"region"`
 }
 
 func (z *Zone) Validate() error {
 	if z.Name == "" {
 		return fmt.Errorf("%w: zone name is required", domain.ErrInvalidName)
-	}
-	if z.ISP == "" {
-		return errors.New("isp is required")
 	}
 	if z.Region == "" {
 		return errors.New("region is required")

@@ -50,7 +50,7 @@ func (g *deploymentGenerator) generate(config *entity.Config) error {
 }
 
 func (g *deploymentGenerator) generateServiceComposes(config *entity.Config) error {
-	serverServices := make(map[string][]*entity.Service)
+	serverServices := make(map[string][]*entity.BizService)
 	for i := range config.Services {
 		svc := &config.Services[i]
 		serverServices[svc.Server] = append(serverServices[svc.Server], svc)
@@ -72,7 +72,7 @@ func (g *deploymentGenerator) generateServiceComposes(config *entity.Config) err
 	return nil
 }
 
-func (g *deploymentGenerator) generateServiceCompose(serverDir string, svc *entity.Service, secrets map[string]string) error {
+func (g *deploymentGenerator) generateServiceCompose(serverDir string, svc *entity.BizService, secrets map[string]string) error {
 	ports := []string{}
 	for _, port := range svc.Ports {
 		ports = append(ports, fmt.Sprintf("%d:%d", port.Host, port.Container))

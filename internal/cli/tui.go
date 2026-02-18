@@ -13,7 +13,6 @@ import (
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 	"github.com/litelake/yamlops/internal/plan"
-	"github.com/litelake/yamlops/internal/ssh"
 )
 
 type Environment string
@@ -27,64 +26,159 @@ const (
 type ViewState int
 
 const (
-	ViewStateMain ViewState = iota
-	ViewStatePlanSubMenu
-	ViewStateEnvSubMenu
-	ViewStatePlanResult
+	ViewStateTree ViewState = iota
+	ViewStatePlan
 	ViewStateApplyConfirm
 	ViewStateApplyProgress
-	ViewStateManageEntities
-	ViewStateViewStatus
-	ViewStateSettings
+	ViewStateApplyComplete
 )
 
-type MenuItem struct {
-	Label string
-	View  ViewState
+type ViewMode int
+
+const (
+	ViewModeApp ViewMode = iota
+	ViewModeDNS
+)
+
+type NodeType string
+
+const (
+	NodeTypeZone      NodeType = "zone"
+	NodeTypeServer    NodeType = "server"
+	NodeTypeInfra     NodeType = "infra"
+	NodeTypeBiz       NodeType = "biz"
+	NodeTypeDomain    NodeType = "domain"
+	NodeTypeDNSRecord NodeType = "record"
+)
+
+type NodeStatus string
+
+const (
+	StatusRunning     NodeStatus = "running"
+	StatusStopped     NodeStatus = "stopped"
+	StatusNeedsUpdate NodeStatus = "needs_update"
+	StatusError       NodeStatus = "error"
+	StatusSynced      NodeStatus = "synced"
+)
+
+type TreeNode struct {
+	ID       string
+	Type     NodeType
+	Name     string
+	Selected bool
+	Expanded bool
+	Children []*TreeNode
+	Parent   *TreeNode
+	Status   NodeStatus
+	Info     string
 }
 
-var mainMenuItems = []MenuItem{
-	{Label: "Plan & Apply", View: ViewStatePlanSubMenu},
-	{Label: "Environment", View: ViewStateEnvSubMenu},
-	{Label: "Manage Entities", View: ViewStateManageEntities},
-	{Label: "View Status", View: ViewStateViewStatus},
-	{Label: "Settings", View: ViewStateSettings},
+func (n *TreeNode) IsPartiallySelected() bool {
+	if len(n.Children) == 0 {
+		return false
+	}
+	hasSelected := false
+	hasUnselected := false
+	for _, child := range n.Children {
+		if child.Selected || child.IsPartiallySelected() {
+			hasSelected = true
+		}
+		if !child.Selected {
+			hasUnselected = true
+		}
+	}
+	return hasSelected && hasUnselected
 }
 
-var planSubMenuItems = []MenuItem{
-	{Label: "Infrastructure", View: ViewStatePlanResult},
-	{Label: "Global Resources", View: ViewStatePlanResult},
+func (n *TreeNode) SelectRecursive(selected bool) {
+	n.Selected = selected
+	for _, child := range n.Children {
+		child.SelectRecursive(selected)
+	}
 }
 
-var envSubMenuItems = []MenuItem{
-	{Label: "Check", View: ViewStateViewStatus},
-	{Label: "Sync", View: ViewStateApplyProgress},
+func (n *TreeNode) UpdateParentSelection() {
+	if n.Parent == nil {
+		return
+	}
+	allSelected := true
+	for _, child := range n.Parent.Children {
+		if !child.Selected {
+			allSelected = false
+			break
+		}
+	}
+	n.Parent.Selected = allSelected
+	n.Parent.UpdateParentSelection()
 }
 
-var baseStyle = lipgloss.NewStyle().
-	Padding(1, 2)
+func (n *TreeNode) CountSelected() int {
+	count := 0
+	if len(n.Children) == 0 {
+		if n.Selected {
+			return 1
+		}
+		return 0
+	}
+	for _, child := range n.Children {
+		count += child.CountSelected()
+	}
+	return count
+}
+
+func (n *TreeNode) CountTotal() int {
+	count := 0
+	if len(n.Children) == 0 {
+		return 1
+	}
+	for _, child := range n.Children {
+		count += child.CountTotal()
+	}
+	return count
+}
+
+func (n *TreeNode) GetVisibleNodes() []*TreeNode {
+	var nodes []*TreeNode
+	nodes = append(nodes, n)
+	if n.Expanded {
+		for _, child := range n.Children {
+			nodes = append(nodes, child.GetVisibleNodes()...)
+		}
+	}
+	return nodes
+}
+
+func (n *TreeNode) GetSelectedLeaves() []*TreeNode {
+	var leaves []*TreeNode
+	if len(n.Children) == 0 {
+		if n.Selected {
+			leaves = append(leaves, n)
+		}
+		return leaves
+	}
+	for _, child := range n.Children {
+		leaves = append(leaves, child.GetSelectedLeaves()...)
+	}
+	return leaves
+}
+
+var baseStyle = lipgloss.NewStyle().Padding(1, 2)
 
 var titleStyle = lipgloss.NewStyle().
 	Bold(true).
 	Foreground(lipgloss.Color("#7C3AED")).
-	Padding(0, 1).
-	MarginBottom(1)
-
-var menuItemStyle = lipgloss.NewStyle().
-	Padding(0, 2)
-
-var selectedStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#7C3AED")).
-	Bold(true).
-	Padding(0, 2)
+	Padding(0, 1)
 
 var envStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#10B981")).
 	Bold(true)
 
+var selectedStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("#7C3AED")).
+	Bold(true)
+
 var helpStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#6B7280")).
-	MarginTop(1)
+	Foreground(lipgloss.Color("#6B7280"))
 
 var changeCreateStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#10B981"))
@@ -101,57 +195,38 @@ var changeNoopStyle = lipgloss.NewStyle().
 var progressBarStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#7C3AED"))
 
-var progressBarBgStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#374151"))
-
-var confirmStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#F59E0B")).
-	Bold(true)
-
 var successStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#10B981"))
 
+var tabActiveStyle = lipgloss.NewStyle().
+	Bold(true).
+	Foreground(lipgloss.Color("#7C3AED")).
+	Underline(true)
+
+var tabInactiveStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("#6B7280"))
+
 type Model struct {
 	ViewState       ViewState
-	MenuIndex       int
-	ParentIndex     int
+	ViewMode        ViewMode
 	Environment     Environment
+	ConfigDir       string
+	Config          *entity.Config
+	TreeNodes       []*TreeNode
+	DNSTreeNodes    []*TreeNode
+	CursorIndex     int
+	Width           int
+	Height          int
+	ErrorMessage    string
 	PlanResult      *valueobject.Plan
 	ApplyProgress   int
 	ApplyTotal      int
 	ApplyComplete   bool
 	ApplyResults    []*handler.Result
-	Width           int
-	Height          int
-	ErrorMessage    string
-	ConfirmSelected int
-	ConfigDir       string
-	PlanScope       *valueobject.Scope
-	Config          *entity.Config
-	StatusInfo      *StatusInfo
-	EnvSyncComplete bool
-	EnvSyncResults  []string
 	ApplyInProgress bool
-}
-
-type StatusInfo struct {
-	Servers   []ServerStatus
-	Services  []ServiceStatus
-	LoadError string
-}
-
-type ServerStatus struct {
-	Name       string
-	Running    bool
-	Containers []string
-	Error      string
-}
-
-type ServiceStatus struct {
-	Name    string
-	Server  string
-	Healthy bool
-	Error   string
+	ConfirmSelected int
+	PlanScope       *valueobject.Scope
+	ConfirmView     bool
 }
 
 func NewModel(env string, configDir string) Model {
@@ -166,18 +241,17 @@ func NewModel(env string, configDir string) Model {
 	default:
 		environment = Environment(env)
 	}
-	return Model{
-		ViewState:     ViewStateMain,
-		MenuIndex:     0,
-		Environment:   environment,
-		PlanResult:    valueobject.NewPlan(),
-		ApplyProgress: 0,
-		ApplyTotal:    100,
-		Width:         80,
-		Height:        24,
-		ConfigDir:     configDir,
-		PlanScope:     &valueobject.Scope{},
+	m := Model{
+		ViewState:   ViewStateTree,
+		ViewMode:    ViewModeApp,
+		Environment: environment,
+		ConfigDir:   configDir,
+		PlanScope:   &valueobject.Scope{},
+		Width:       80,
+		Height:      24,
 	}
+	m.loadConfig()
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
@@ -197,6 +271,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.ApplyProgress >= m.ApplyTotal {
 					m.executeApply()
 					m.ApplyInProgress = false
+					m.ViewState = ViewStateApplyComplete
 					return m, nil
 				}
 				return m, tickApply()
@@ -206,34 +281,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
-			if m.ViewState == ViewStateMain {
+			if m.ViewState == ViewStateTree {
 				return m, tea.Quit
 			}
-			m.ViewState = ViewStateMain
-			m.MenuIndex = 0
+			m.ViewState = ViewStateTree
 			m.ErrorMessage = ""
 			return m, nil
 		case "up", "k":
 			return m.handleUp(), nil
 		case "down", "j":
 			return m.handleDown(), nil
-		case "enter", " ":
+		case " ":
+			return m.handleSpace(), nil
+		case "enter":
 			return m.handleEnter()
+		case "tab":
+			return m.handleTab(), nil
+		case "a":
+			return m.handleSelectCurrent(true), nil
+		case "n":
+			return m.handleSelectCurrent(false), nil
+		case "A":
+			return m.handleSelectAll(true), nil
+		case "N":
+			return m.handleSelectAll(false), nil
+		case "p":
+			return m.handlePlan()
+		case "r":
+			return m.handleRefresh(), nil
 		case "esc":
-			if m.ViewState != ViewStateMain {
-				m.ViewState = ViewStateMain
-				m.MenuIndex = 0
+			if m.ViewState != ViewStateTree {
+				m.ViewState = ViewStateTree
 				m.ErrorMessage = ""
-			}
-			return m, nil
-		case "left", "h":
-			if m.ViewState == ViewStateEnvSubMenu {
-				m.Environment = m.prevEnvironment()
-			}
-			return m, nil
-		case "right", "l":
-			if m.ViewState == ViewStateEnvSubMenu {
-				m.Environment = m.nextEnvironment()
 			}
 			return m, nil
 		}
@@ -242,84 +321,58 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleUp() Model {
-	var maxItems int
 	switch m.ViewState {
-	case ViewStateMain:
-		maxItems = len(mainMenuItems)
-	case ViewStatePlanSubMenu:
-		maxItems = len(planSubMenuItems)
-	case ViewStateEnvSubMenu:
-		maxItems = len(envSubMenuItems)
+	case ViewStateTree:
+		if m.CursorIndex > 0 {
+			m.CursorIndex--
+		}
 	case ViewStateApplyConfirm:
-		maxItems = 2
-	default:
-		return m
-	}
-	if m.MenuIndex > 0 {
-		m.MenuIndex--
-	} else {
-		m.MenuIndex = maxItems - 1
+		if m.ConfirmSelected > 0 {
+			m.ConfirmSelected--
+		}
 	}
 	return m
 }
 
 func (m Model) handleDown() Model {
-	var maxItems int
 	switch m.ViewState {
-	case ViewStateMain:
-		maxItems = len(mainMenuItems)
-	case ViewStatePlanSubMenu:
-		maxItems = len(planSubMenuItems)
-	case ViewStateEnvSubMenu:
-		maxItems = len(envSubMenuItems)
+	case ViewStateTree:
+		totalNodes := m.countVisibleNodes()
+		if m.CursorIndex < totalNodes-1 {
+			m.CursorIndex++
+		}
 	case ViewStateApplyConfirm:
-		maxItems = 2
-	default:
+		if m.ConfirmSelected < 1 {
+			m.ConfirmSelected++
+		}
+	}
+	return m
+}
+
+func (m Model) handleSpace() Model {
+	if m.ViewState != ViewStateTree {
 		return m
 	}
-	if m.MenuIndex < maxItems-1 {
-		m.MenuIndex++
-	} else {
-		m.MenuIndex = 0
+	node := m.getNodeAtIndex(m.CursorIndex)
+	if node == nil || len(node.Children) > 0 {
+		return m
 	}
+	node.Selected = !node.Selected
+	node.UpdateParentSelection()
 	return m
 }
 
 func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.ViewState {
-	case ViewStateMain:
-		item := mainMenuItems[m.MenuIndex]
-		m.ParentIndex = m.MenuIndex
-		m.ViewState = item.View
-		m.MenuIndex = 0
-		if m.ViewState == ViewStatePlanResult {
-			m.generatePlan()
-		} else if m.ViewState == ViewStateViewStatus {
-			m.checkEnvStatus()
-		} else if m.ViewState == ViewStateManageEntities {
-			m.loadConfig()
+	case ViewStateTree:
+		node := m.getNodeAtIndex(m.CursorIndex)
+		if node == nil {
+			return m, nil
 		}
-		return m, nil
-	case ViewStatePlanSubMenu:
-		item := planSubMenuItems[m.MenuIndex]
-		m.ViewState = item.View
-		m.MenuIndex = 0
-		m.generatePlan()
-		return m, nil
-	case ViewStateEnvSubMenu:
-		item := envSubMenuItems[m.MenuIndex]
-		m.ViewState = item.View
-		m.MenuIndex = 0
-		if m.ViewState == ViewStateViewStatus {
-			m.checkEnvStatus()
-		} else if m.ViewState == ViewStateApplyProgress {
-			m.EnvSyncComplete = false
-			m.EnvSyncResults = []string{}
-			m.syncEnv()
-		}
+		node.Expanded = !node.Expanded
 		return m, nil
 	case ViewStateApplyConfirm:
-		if m.MenuIndex == 0 {
+		if m.ConfirmSelected == 0 {
 			m.ViewState = ViewStateApplyProgress
 			m.ApplyProgress = 0
 			m.ApplyComplete = false
@@ -327,65 +380,72 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 			m.ApplyInProgress = true
 			return m, tickApply()
 		}
-		m.ViewState = ViewStatePlanResult
-		m.MenuIndex = 0
+		m.ViewState = ViewStatePlan
 		return m, nil
-	case ViewStatePlanResult:
+	case ViewStatePlan:
 		m.ViewState = ViewStateApplyConfirm
-		m.MenuIndex = 0
+		m.ConfirmSelected = 0
 		return m, nil
-	case ViewStateViewStatus:
-		m.checkEnvStatus()
+	case ViewStateApplyComplete:
+		m.ViewState = ViewStateTree
 		return m, nil
 	}
 	return m, nil
 }
 
-func (m Model) prevEnvironment() Environment {
-	switch m.Environment {
-	case EnvProd:
-		return EnvDev
-	case EnvStaging:
-		return EnvProd
-	case EnvDev:
-		return EnvStaging
+func (m Model) handleTab() Model {
+	if m.ViewState != ViewStateTree {
+		return m
 	}
-	return EnvDev
+	if m.ViewMode == ViewModeApp {
+		m.ViewMode = ViewModeDNS
+	} else {
+		m.ViewMode = ViewModeApp
+	}
+	m.CursorIndex = 0
+	return m
 }
 
-func (m Model) nextEnvironment() Environment {
-	switch m.Environment {
-	case EnvProd:
-		return EnvStaging
-	case EnvStaging:
-		return EnvDev
-	case EnvDev:
-		return EnvProd
+func (m Model) handleSelectCurrent(selected bool) Model {
+	if m.ViewState != ViewStateTree {
+		return m
 	}
-	return EnvDev
+	node := m.getNodeAtIndex(m.CursorIndex)
+	if node == nil {
+		return m
+	}
+	node.SelectRecursive(selected)
+	node.UpdateParentSelection()
+	return m
 }
 
-func (m *Model) generatePlan() {
-	m.PlanResult = valueobject.NewPlan()
-	m.ErrorMessage = ""
+func (m Model) handleSelectAll(selected bool) Model {
+	if m.ViewState != ViewStateTree {
+		return m
+	}
+	nodes := m.getCurrentTree()
+	for _, node := range nodes {
+		node.SelectRecursive(selected)
+	}
+	return m
+}
 
+func (m Model) handlePlan() (tea.Model, tea.Cmd) {
+	if m.ViewState != ViewStateTree {
+		return m, nil
+	}
+	m.generatePlan()
+	if m.ErrorMessage == "" {
+		m.ViewState = ViewStatePlan
+	}
+	return m, nil
+}
+
+func (m Model) handleRefresh() Model {
+	m.Config = nil
 	m.loadConfig()
-	if m.ErrorMessage != "" {
-		return
-	}
-
-	planner := plan.NewPlanner(m.Config, string(m.Environment))
-	executionPlan, err := planner.Plan(m.PlanScope)
-	if err != nil {
-		m.ErrorMessage = fmt.Sprintf("Failed to generate plan: %v", err)
-		return
-	}
-
-	m.PlanResult = executionPlan
-	m.ApplyTotal = len(executionPlan.Changes)
-	if m.ApplyTotal == 0 {
-		m.ApplyTotal = 1
-	}
+	m.buildTrees()
+	return m
 }
 
 func (m *Model) loadConfig() {
@@ -403,83 +463,194 @@ func (m *Model) loadConfig() {
 		return
 	}
 	m.Config = cfg
+	m.buildTrees()
 }
 
-func (m *Model) checkEnvStatus() {
-	m.loadConfig()
+func (m *Model) buildTrees() {
 	if m.Config == nil {
 		return
 	}
+	m.TreeNodes = m.buildAppTree()
+	m.DNSTreeNodes = m.buildDNSTree()
+}
 
-	m.StatusInfo = &StatusInfo{}
-	secrets := m.Config.GetSecretsMap()
-
+func (m *Model) buildAppTree() []*TreeNode {
+	if m.Config == nil {
+		return nil
+	}
+	zoneMap := make(map[string]*TreeNode)
+	serverByZone := make(map[string][]*TreeNode)
+	serviceByServer := make(map[string][]*TreeNode)
+	for _, z := range m.Config.Zones {
+		zoneNode := &TreeNode{
+			ID:       fmt.Sprintf("zone:%s", z.Name),
+			Type:     NodeTypeZone,
+			Name:     z.Name,
+			Info:     z.Description,
+			Expanded: true,
+		}
+		zoneMap[z.Name] = zoneNode
+	}
 	for _, srv := range m.Config.Servers {
-		status := ServerStatus{Name: srv.Name}
-
-		password, err := srv.SSH.Password.Resolve(secrets)
-		if err != nil {
-			status.Error = fmt.Sprintf("Cannot resolve password: %v", err)
-			m.StatusInfo.Servers = append(m.StatusInfo.Servers, status)
-			continue
+		serverNode := &TreeNode{
+			ID:       fmt.Sprintf("server:%s", srv.Name),
+			Type:     NodeTypeServer,
+			Name:     srv.Name,
+			Info:     srv.IP.Public,
+			Expanded: true,
 		}
-
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
-		if err != nil {
-			status.Error = fmt.Sprintf("Connection failed: %v", err)
-			m.StatusInfo.Servers = append(m.StatusInfo.Servers, status)
-			continue
+		if zNode, ok := zoneMap[srv.Zone]; ok {
+			serverNode.Parent = zNode
+			zNode.Children = append(zNode.Children, serverNode)
 		}
-
-		stdout, _, err := client.Run("sudo docker ps --format '{{.Names}}'")
-		client.Close()
-
-		if err != nil {
-			status.Error = fmt.Sprintf("Check failed: %v", err)
-		} else {
-			status.Running = true
-			containers := strings.TrimSpace(stdout)
-			if containers != "" {
-				status.Containers = strings.Split(containers, "\n")
+		serverByZone[srv.Zone] = append(serverByZone[srv.Zone], serverNode)
+		serviceByServer[srv.Name] = []*TreeNode{}
+	}
+	for _, infra := range m.Config.InfraServices {
+		infraNode := &TreeNode{
+			ID:   fmt.Sprintf("infra:%s", infra.Name),
+			Type: NodeTypeInfra,
+			Name: infra.Name,
+			Info: m.getServicePortsInfo(infra.Server),
+		}
+		for _, sn := range serverByZone {
+			for _, s := range sn {
+				if s.Name == infra.Server {
+					infraNode.Parent = s
+					s.Children = append(s.Children, infraNode)
+				}
 			}
 		}
-		m.StatusInfo.Servers = append(m.StatusInfo.Servers, status)
+	}
+	for _, svc := range m.Config.Services {
+		svcNode := &TreeNode{
+			ID:   fmt.Sprintf("biz:%s", svc.Name),
+			Type: NodeTypeBiz,
+			Name: svc.Name,
+			Info: m.getBizServicePortsInfo(svc),
+		}
+		for _, z := range m.Config.Zones {
+			for _, srv := range m.Config.Servers {
+				if srv.Name == svc.Server && srv.Zone == z.Name {
+					if zNode, ok := zoneMap[z.Name]; ok {
+						for _, sNode := range zNode.Children {
+							if sNode.Name == srv.Name {
+								svcNode.Parent = sNode
+								sNode.Children = append(sNode.Children, svcNode)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	var roots []*TreeNode
+	for _, z := range m.Config.Zones {
+		if zNode, ok := zoneMap[z.Name]; ok {
+			roots = append(roots, zNode)
+		}
+	}
+	return roots
+}
+
+func (m *Model) getServicePortsInfo(serverName string) string {
+	for _, srv := range m.Config.Servers {
+		if srv.Name == serverName {
+			return ""
+		}
+	}
+	return ""
+}
+
+func (m *Model) getBizServicePortsInfo(svc entity.BizService) string {
+	if len(svc.Ports) == 0 {
+		return ""
+	}
+	var ports []string
+	for _, p := range svc.Ports {
+		ports = append(ports, fmt.Sprintf(":%d", p.Host))
+	}
+	return strings.Join(ports, ",")
+}
+
+func (m *Model) buildDNSTree() []*TreeNode {
+	if m.Config == nil {
+		return nil
+	}
+	domainMap := make(map[string]*TreeNode)
+	for _, d := range m.Config.Domains {
+		domainNode := &TreeNode{
+			ID:       fmt.Sprintf("domain:%s", d.Name),
+			Type:     NodeTypeDomain,
+			Name:     d.Name,
+			Info:     d.DNSISP,
+			Expanded: true,
+		}
+		domainMap[d.Name] = domainNode
+	}
+	for _, r := range m.Config.DNSRecords {
+		recordNode := &TreeNode{
+			ID:   fmt.Sprintf("record:%s:%s:%s", r.Domain, r.Type, r.Name),
+			Type: NodeTypeDNSRecord,
+			Name: fmt.Sprintf("%-6s %s", r.Type, r.Name),
+			Info: r.Value,
+		}
+		if dNode, ok := domainMap[r.Domain]; ok {
+			recordNode.Parent = dNode
+			dNode.Children = append(dNode.Children, recordNode)
+		}
+	}
+	var roots []*TreeNode
+	for _, d := range m.Config.Domains {
+		if dNode, ok := domainMap[d.Name]; ok {
+			roots = append(roots, dNode)
+		}
+	}
+	return roots
+}
+
+func (m *Model) generatePlan() {
+	m.PlanResult = valueobject.NewPlan()
+	m.ErrorMessage = ""
+	m.loadConfig()
+	if m.ErrorMessage != "" {
+		return
+	}
+	m.buildScopeFromSelection()
+	planner := plan.NewPlanner(m.Config, string(m.Environment))
+	executionPlan, err := planner.Plan(m.PlanScope)
+	if err != nil {
+		m.ErrorMessage = fmt.Sprintf("Failed to generate plan: %v", err)
+		return
+	}
+	m.PlanResult = executionPlan
+	m.ApplyTotal = len(executionPlan.Changes)
+	if m.ApplyTotal == 0 {
+		m.ApplyTotal = 1
 	}
 }
 
-func (m *Model) syncEnv() {
-	m.loadConfig()
-	if m.Config == nil {
-		return
-	}
-
-	m.EnvSyncResults = []string{}
-	m.EnvSyncComplete = false
-	secrets := m.Config.GetSecretsMap()
-
-	for _, srv := range m.Config.Servers {
-		password, err := srv.SSH.Password.Resolve(secrets)
-		if err != nil {
-			m.EnvSyncResults = append(m.EnvSyncResults, fmt.Sprintf("[%s] Cannot resolve password: %v", srv.Name, err))
-			continue
-		}
-
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
-		if err != nil {
-			m.EnvSyncResults = append(m.EnvSyncResults, fmt.Sprintf("[%s] Connection failed: %v", srv.Name, err))
-			continue
-		}
-
-		_, stderr, err := client.Run("sudo docker network create yamlops-" + string(m.Environment) + " 2>/dev/null || true")
-		client.Close()
-
-		if err != nil {
-			m.EnvSyncResults = append(m.EnvSyncResults, fmt.Sprintf("[%s] Sync failed: %v\n%s", srv.Name, err, stderr))
-		} else {
-			m.EnvSyncResults = append(m.EnvSyncResults, fmt.Sprintf("[%s] Network yamlops-%s ready", srv.Name, m.Environment))
+func (m *Model) buildScopeFromSelection() {
+	m.PlanScope = &valueobject.Scope{}
+	currentTree := m.getCurrentTree()
+	for _, node := range currentTree {
+		leaves := node.GetSelectedLeaves()
+		for _, leaf := range leaves {
+			switch leaf.Type {
+			case NodeTypeInfra, NodeTypeBiz:
+				if m.PlanScope.Service == "" {
+					m.PlanScope.Service = leaf.Name
+				}
+			case NodeTypeDNSRecord:
+				if m.PlanScope.Domain == "" {
+					parts := strings.Split(leaf.ID, ":")
+					if len(parts) >= 2 {
+						m.PlanScope.Domain = parts[1]
+					}
+				}
+			}
 		}
 	}
-	m.EnvSyncComplete = true
 }
 
 func (m *Model) executeApply() {
@@ -487,26 +658,22 @@ func (m *Model) executeApply() {
 		m.ApplyComplete = true
 		return
 	}
-
 	m.loadConfig()
 	if m.Config == nil {
 		m.ApplyComplete = true
 		return
 	}
-
 	planner := plan.NewPlanner(m.Config, string(m.Environment))
 	if err := planner.GenerateDeployments(); err != nil {
 		m.ErrorMessage = fmt.Sprintf("Failed to generate deployments: %v", err)
 		m.ApplyComplete = true
 		return
 	}
-
 	executor := usecase.NewExecutor(m.PlanResult, string(m.Environment))
 	executor.SetSecrets(m.Config.GetSecretsMap())
 	executor.SetDomains(m.Config.GetDomainMap())
 	executor.SetISPs(m.Config.GetISPMap())
 	executor.SetWorkDir(m.ConfigDir)
-
 	secrets := m.Config.GetSecretsMap()
 	for _, srv := range m.Config.Servers {
 		password, err := srv.SSH.Password.Resolve(secrets)
@@ -515,7 +682,6 @@ func (m *Model) executeApply() {
 		}
 		executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
 	}
-
 	m.ApplyResults = executor.Apply()
 	m.ApplyComplete = true
 }
@@ -528,28 +694,47 @@ func tickApply() tea.Cmd {
 
 type applyProgressMsg struct{}
 
+func (m Model) getCurrentTree() []*TreeNode {
+	if m.ViewMode == ViewModeDNS {
+		return m.DNSTreeNodes
+	}
+	return m.TreeNodes
+}
+
+func (m Model) countVisibleNodes() int {
+	count := 0
+	for _, node := range m.getCurrentTree() {
+		count += len(node.GetVisibleNodes())
+	}
+	return count
+}
+
+func (m Model) getNodeAtIndex(index int) *TreeNode {
+	count := 0
+	for _, node := range m.getCurrentTree() {
+		visible := node.GetVisibleNodes()
+		if index < count+len(visible) {
+			return visible[index-count]
+		}
+		count += len(visible)
+	}
+	return nil
+}
+
 func (m Model) View() string {
 	var content strings.Builder
 	content.WriteString(m.renderHeader())
 	switch m.ViewState {
-	case ViewStateMain:
-		content.WriteString(m.renderMenu(mainMenuItems))
-	case ViewStatePlanSubMenu:
-		content.WriteString(m.renderMenu(planSubMenuItems))
-	case ViewStateEnvSubMenu:
-		content.WriteString(m.renderEnvSubMenu())
-	case ViewStatePlanResult:
-		content.WriteString(m.renderPlanResult())
+	case ViewStateTree:
+		content.WriteString(m.renderTree())
+	case ViewStatePlan:
+		content.WriteString(m.renderPlan())
 	case ViewStateApplyConfirm:
 		content.WriteString(m.renderApplyConfirm())
 	case ViewStateApplyProgress:
 		content.WriteString(m.renderApplyProgress())
-	case ViewStateManageEntities:
-		content.WriteString(m.renderManageEntities())
-	case ViewStateViewStatus:
-		content.WriteString(m.renderViewStatus())
-	case ViewStateSettings:
-		content.WriteString(m.renderSettings())
+	case ViewStateApplyComplete:
+		content.WriteString(m.renderApplyComplete())
 	}
 	content.WriteString(m.renderHelp())
 	return baseStyle.Render(content.String())
@@ -557,46 +742,180 @@ func (m Model) View() string {
 
 func (m Model) renderHeader() string {
 	var header strings.Builder
-	header.WriteString(titleStyle.Render("YAMLops"))
+	header.WriteString(titleStyle.Render("YAMLOps"))
 	header.WriteString(" ")
 	header.WriteString(envStyle.Render(fmt.Sprintf("[%s]", strings.ToUpper(string(m.Environment)))))
+	selected := m.countSelected()
+	total := m.countTotal()
+	header.WriteString(fmt.Sprintf("    选中: %d/%d", selected, total))
 	header.WriteString("\n")
 	return header.String()
 }
 
-func (m Model) renderMenu(items []MenuItem) string {
-	var menu strings.Builder
-	for i, item := range items {
-		if i == m.MenuIndex {
-			menu.WriteString(selectedStyle.Render("▸ " + item.Label))
-		} else {
-			menu.WriteString(menuItemStyle.Render("  " + item.Label))
-		}
-		menu.WriteString("\n")
+func (m Model) countSelected() int {
+	count := 0
+	for _, node := range m.getCurrentTree() {
+		count += node.CountSelected()
 	}
-	return menu.String()
+	return count
 }
 
-func (m Model) renderEnvSubMenu() string {
+func (m Model) countTotal() int {
+	count := 0
+	for _, node := range m.getCurrentTree() {
+		count += node.CountTotal()
+	}
+	return count
+}
+
+func (m Model) renderTree() string {
 	var content strings.Builder
-	content.WriteString(titleStyle.Render("Environment: " + string(m.Environment)))
+	content.WriteString(m.renderTabs())
 	content.WriteString("\n\n")
-	content.WriteString(m.renderMenu(envSubMenuItems))
+	if m.ErrorMessage != "" {
+		content.WriteString(changeDeleteStyle.Render("Error: " + m.ErrorMessage))
+		content.WriteString("\n\n")
+	}
+	idx := 0
+	for _, node := range m.getCurrentTree() {
+		content.WriteString(m.renderNode(node, 0, &idx))
+	}
 	return content.String()
 }
 
-func (m Model) renderPlanResult() string {
-	var content strings.Builder
-	content.WriteString(titleStyle.Render("Plan Result"))
-	content.WriteString("\n\n")
+func (m Model) renderTabs() string {
+	var tabs strings.Builder
+	if m.ViewMode == ViewModeApp {
+		tabs.WriteString(tabActiveStyle.Render("Applications"))
+		tabs.WriteString("    ")
+		tabs.WriteString(tabInactiveStyle.Render("DNS"))
+	} else {
+		tabs.WriteString(tabInactiveStyle.Render("Applications"))
+		tabs.WriteString("    ")
+		tabs.WriteString(tabActiveStyle.Render("DNS"))
+	}
+	return tabs.String()
+}
 
+func (m Model) renderNode(node *TreeNode, depth int, idx *int) string {
+	var content strings.Builder
+	indent := strings.Repeat("  ", depth)
+	prefix := indent
+	if depth > 0 {
+		prefix = indent[:len(indent)-2] + "├─"
+	}
+	cursor := "  "
+	if *idx == m.CursorIndex {
+		cursor = "> "
+	}
+	selectIcon := "○"
+	if node.Selected {
+		selectIcon = "◉"
+	} else if node.IsPartiallySelected() {
+		selectIcon = "◐"
+	}
+	expandIcon := " "
+	if len(node.Children) > 0 {
+		if node.Expanded {
+			expandIcon = "▾"
+		} else {
+			expandIcon = "▸"
+		}
+	}
+	typePrefix := ""
+	switch node.Type {
+	case NodeTypeInfra:
+		typePrefix = "[infra] "
+	case NodeTypeBiz:
+		typePrefix = "[biz] "
+	case NodeTypeDNSRecord:
+	}
+	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
+	if node.Info != "" {
+		line = fmt.Sprintf("%-50s %s", line, node.Info)
+	}
+	if *idx == m.CursorIndex {
+		line = selectedStyle.Render(line)
+	}
+	content.WriteString(line)
+	content.WriteString("\n")
+	*idx++
+	if node.Expanded {
+		for i, child := range node.Children {
+			if i == len(node.Children)-1 {
+				content.WriteString(m.renderNodeLastChild(child, depth+1, idx))
+			} else {
+				content.WriteString(m.renderNode(child, depth+1, idx))
+			}
+		}
+	}
+	return content.String()
+}
+
+func (m Model) renderNodeLastChild(node *TreeNode, depth int, idx *int) string {
+	var content strings.Builder
+	indent := strings.Repeat("  ", depth)
+	prefix := indent
+	if depth > 0 {
+		prefix = indent[:len(indent)-2] + "└─"
+	}
+	cursor := "  "
+	if *idx == m.CursorIndex {
+		cursor = "> "
+	}
+	selectIcon := "○"
+	if node.Selected {
+		selectIcon = "◉"
+	} else if node.IsPartiallySelected() {
+		selectIcon = "◐"
+	}
+	expandIcon := " "
+	if len(node.Children) > 0 {
+		if node.Expanded {
+			expandIcon = "▾"
+		} else {
+			expandIcon = "▸"
+		}
+	}
+	typePrefix := ""
+	switch node.Type {
+	case NodeTypeInfra:
+		typePrefix = "[infra] "
+	case NodeTypeBiz:
+		typePrefix = "[biz] "
+	}
+	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
+	if node.Info != "" {
+		line = fmt.Sprintf("%-50s %s", line, node.Info)
+	}
+	if *idx == m.CursorIndex {
+		line = selectedStyle.Render(line)
+	}
+	content.WriteString(line)
+	content.WriteString("\n")
+	*idx++
+	if node.Expanded {
+		for i, child := range node.Children {
+			if i == len(node.Children)-1 {
+				content.WriteString(m.renderNodeLastChild(child, depth+1, idx))
+			} else {
+				content.WriteString(m.renderNode(child, depth+1, idx))
+			}
+		}
+	}
+	return content.String()
+}
+
+func (m Model) renderPlan() string {
+	var content strings.Builder
+	content.WriteString(titleStyle.Render("执行计划"))
+	content.WriteString("\n\n")
 	if m.ErrorMessage != "" {
 		content.WriteString(changeDeleteStyle.Render("Error: " + m.ErrorMessage))
 		content.WriteString("\n\n")
 		content.WriteString(helpStyle.Render("Press q to go back"))
 		return content.String()
 	}
-
 	if m.PlanResult == nil || len(m.PlanResult.Changes) == 0 {
 		content.WriteString("No changes detected.\n")
 	} else {
@@ -620,16 +939,16 @@ func (m Model) renderPlanResult() string {
 		}
 	}
 	content.WriteString("\n")
-	content.WriteString(confirmStyle.Render("Press Enter to apply changes"))
+	content.WriteString(changeCreateStyle.Render("Press Enter to apply changes"))
 	content.WriteString("\n")
 	return content.String()
 }
 
 func (m Model) renderApplyConfirm() string {
 	var content strings.Builder
-	content.WriteString(titleStyle.Render("Confirm Apply"))
+	content.WriteString(titleStyle.Render("确认执行"))
 	content.WriteString("\n\n")
-	content.WriteString("Apply the following changes?\n\n")
+	content.WriteString("是否执行以下变更?\n\n")
 	if m.PlanResult != nil {
 		nonNoopCount := 0
 		for _, ch := range m.PlanResult.Changes {
@@ -637,15 +956,15 @@ func (m Model) renderApplyConfirm() string {
 				nonNoopCount++
 			}
 		}
-		content.WriteString(fmt.Sprintf("Changes to apply: %d\n", nonNoopCount))
+		content.WriteString(fmt.Sprintf("变更项数: %d\n", nonNoopCount))
 	}
 	content.WriteString("\n")
-	options := []string{"Yes, Apply", "No, Cancel"}
+	options := []string{"确认执行", "取消"}
 	for i, opt := range options {
-		if i == m.MenuIndex {
+		if i == m.ConfirmSelected {
 			content.WriteString(selectedStyle.Render("▸ " + opt))
 		} else {
-			content.WriteString(menuItemStyle.Render("  " + opt))
+			content.WriteString("  " + opt)
 		}
 		content.WriteString("\n")
 	}
@@ -654,127 +973,50 @@ func (m Model) renderApplyConfirm() string {
 
 func (m Model) renderApplyProgress() string {
 	var content strings.Builder
-
-	if len(m.EnvSyncResults) > 0 || m.EnvSyncComplete {
-		content.WriteString(titleStyle.Render("Environment Sync"))
-	} else {
-		content.WriteString(titleStyle.Render("Applying Changes"))
-	}
+	content.WriteString(titleStyle.Render("执行中..."))
 	content.WriteString("\n\n")
+	progress := float64(m.ApplyProgress) / float64(m.ApplyTotal)
+	barWidth := 30
+	filled := int(progress * float64(barWidth))
+	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
+	content.WriteString(progressBarStyle.Render(bar))
+	content.WriteString(fmt.Sprintf(" %.0f%%\n", progress*100))
+	return content.String()
+}
 
-	if len(m.EnvSyncResults) > 0 || m.EnvSyncComplete {
-		for _, result := range m.EnvSyncResults {
-			if strings.Contains(result, "failed") || strings.Contains(result, "Error") {
-				content.WriteString(changeDeleteStyle.Render("✗ "+result) + "\n")
+func (m Model) renderApplyComplete() string {
+	var content strings.Builder
+	content.WriteString(titleStyle.Render("执行完成"))
+	content.WriteString("\n\n")
+	if m.ApplyResults != nil {
+		successCount := 0
+		failCount := 0
+		for _, result := range m.ApplyResults {
+			if result.Success {
+				successCount++
+				content.WriteString(changeCreateStyle.Render(fmt.Sprintf("✓ %s: %s", result.Change.Entity, result.Change.Name)))
 			} else {
-				content.WriteString(changeCreateStyle.Render("✓ "+result) + "\n")
-			}
-		}
-		if m.EnvSyncComplete {
-			content.WriteString("\n")
-			content.WriteString(successStyle.Render("Sync complete!"))
-			content.WriteString("\n")
-		}
-	} else {
-		progress := float64(m.ApplyProgress) / float64(m.ApplyTotal)
-		barWidth := 30
-		filled := int(progress * float64(barWidth))
-		bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
-		content.WriteString(progressBarStyle.Render(bar))
-		content.WriteString(fmt.Sprintf(" %.0f%%\n", progress*100))
-		content.WriteString("\n")
-
-		if m.ApplyComplete && m.ApplyResults != nil {
-			for _, result := range m.ApplyResults {
-				if result.Success {
-					content.WriteString(changeCreateStyle.Render(fmt.Sprintf("✓ %s: %s", result.Change.Entity, result.Change.Name)))
-				} else {
-					content.WriteString(changeDeleteStyle.Render(fmt.Sprintf("✗ %s: %s - %v", result.Change.Entity, result.Change.Name, result.Error)))
-				}
-				content.WriteString("\n")
+				failCount++
+				content.WriteString(changeDeleteStyle.Render(fmt.Sprintf("✗ %s: %s - %v", result.Change.Entity, result.Change.Name, result.Error)))
 			}
 			content.WriteString("\n")
-			content.WriteString(successStyle.Render("Apply complete!"))
-			content.WriteString("\n")
 		}
-	}
-	return content.String()
-}
-
-func (m Model) renderManageEntities() string {
-	var content strings.Builder
-	content.WriteString(titleStyle.Render("Manage Entities"))
-	content.WriteString("\n\n")
-
-	if m.Config == nil {
-		m.loadConfig()
-	}
-
-	if m.ErrorMessage != "" && m.ViewState == ViewStateManageEntities {
-		content.WriteString(changeDeleteStyle.Render("Error: " + m.ErrorMessage))
-		content.WriteString("\n\n")
-	} else if m.Config != nil {
-		content.WriteString(fmt.Sprintf("ISPs: %d\n", len(m.Config.ISPs)))
-		content.WriteString(fmt.Sprintf("Zones: %d\n", len(m.Config.Zones)))
-		content.WriteString(fmt.Sprintf("Servers: %d\n", len(m.Config.Servers)))
-		content.WriteString(fmt.Sprintf("Services: %d\n", len(m.Config.Services)))
-		content.WriteString(fmt.Sprintf("Gateways: %d\n", len(m.Config.Gateways)))
-		content.WriteString(fmt.Sprintf("Domains: %d\n", len(m.Config.Domains)))
-		content.WriteString(fmt.Sprintf("DNS Records: %d\n", len(m.Config.DNSRecords)))
-		content.WriteString(fmt.Sprintf("Certificates: %d\n", len(m.Config.Certificates)))
-		content.WriteString(fmt.Sprintf("Registries: %d\n", len(m.Config.Registries)))
-	}
-	content.WriteString("\n")
-	content.WriteString(helpStyle.Render("Press q to go back"))
-	return content.String()
-}
-
-func (m Model) renderViewStatus() string {
-	var content strings.Builder
-	content.WriteString(titleStyle.Render("Status Overview"))
-	content.WriteString("\n\n")
-	content.WriteString(envStyle.Render("Environment: "))
-	content.WriteString(string(m.Environment) + "\n\n")
-
-	if m.StatusInfo == nil {
-		content.WriteString(helpStyle.Render("Press Enter to check status"))
 		content.WriteString("\n")
-	} else if m.StatusInfo.LoadError != "" {
-		content.WriteString(changeDeleteStyle.Render("Error: " + m.StatusInfo.LoadError))
-		content.WriteString("\n")
-	} else {
-		content.WriteString("Servers:\n")
-		for _, srv := range m.StatusInfo.Servers {
-			if srv.Error != "" {
-				content.WriteString(fmt.Sprintf("  • %s: %s\n", srv.Name, changeDeleteStyle.Render(srv.Error)))
-			} else if srv.Running {
-				content.WriteString(fmt.Sprintf("  • %s: %s\n", srv.Name, changeCreateStyle.Render("running")))
-				for _, c := range srv.Containers {
-					content.WriteString(fmt.Sprintf("      - %s\n", c))
-				}
-			} else {
-				content.WriteString(fmt.Sprintf("  • %s: %s\n", srv.Name, changeNoopStyle.Render("unknown")))
-			}
-		}
+		content.WriteString(fmt.Sprintf("成功: %d  失败: %d\n", successCount, failCount))
 	}
 	content.WriteString("\n")
-	content.WriteString(helpStyle.Render("Press q to go back"))
-	return content.String()
-}
-
-func (m Model) renderSettings() string {
-	var content strings.Builder
-	content.WriteString(titleStyle.Render("Settings"))
-	content.WriteString("\n\n")
-	content.WriteString(fmt.Sprintf("Config Dir: %s\n", m.ConfigDir))
-	content.WriteString(fmt.Sprintf("Environment: %s\n", m.Environment))
-	content.WriteString("\n")
-	content.WriteString(helpStyle.Render("Press q to go back"))
+	content.WriteString(helpStyle.Render("Press Enter to return"))
 	return content.String()
 }
 
 func (m Model) renderHelp() string {
-	return helpStyle.Render("\n↑/↓ Navigate | Enter Select | q Quit")
+	if m.ViewState == ViewStateTree {
+		return helpStyle.Render("\n[Space] 选择  [Enter] 展开/折叠  [a] 全选当前  [n] 取消当前  [p] Plan\n[A] 全部选中  [N] 全部取消  [Tab] 切换 App/DNS  [r] 刷新  [q] 退出")
+	}
+	if m.ViewState == ViewStateApplyProgress {
+		return ""
+	}
+	return helpStyle.Render("\n[q] 返回  [Esc] 返回主界面")
 }
 
 func Run(env string, configDir string) error {

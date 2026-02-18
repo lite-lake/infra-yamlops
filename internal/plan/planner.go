@@ -137,7 +137,7 @@ func (p *Planner) LoadStateFromFile(path string) error {
 func (p *Planner) SaveStateToFile(path string) error {
 	state := p.plannerService.GetState()
 	cfg := &entity.Config{
-		Services:     make([]entity.Service, 0, len(state.Services)),
+		Services:     make([]entity.BizService, 0, len(state.Services)),
 		Gateways:     make([]entity.Gateway, 0, len(state.Gateways)),
 		Servers:      make([]entity.Server, 0, len(state.Servers)),
 		Zones:        make([]entity.Zone, 0, len(state.Zones)),

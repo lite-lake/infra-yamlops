@@ -8,16 +8,17 @@ import (
 )
 
 type Config struct {
-	Secrets      []Secret      `yaml:"secrets,omitempty"`
-	ISPs         []ISP         `yaml:"isps,omitempty"`
-	Zones        []Zone        `yaml:"zones,omitempty"`
-	Gateways     []Gateway     `yaml:"gateways,omitempty"`
-	Servers      []Server      `yaml:"servers,omitempty"`
-	Services     []Service     `yaml:"services,omitempty"`
-	Registries   []Registry    `yaml:"registries,omitempty"`
-	Domains      []Domain      `yaml:"domains,omitempty"`
-	DNSRecords   []DNSRecord   `yaml:"records,omitempty"`
-	Certificates []Certificate `yaml:"certificates,omitempty"`
+	Secrets       []Secret       `yaml:"secrets,omitempty"`
+	ISPs          []ISP          `yaml:"isps,omitempty"`
+	Registries    []Registry     `yaml:"registries,omitempty"`
+	Zones         []Zone         `yaml:"zones,omitempty"`
+	Servers       []Server       `yaml:"servers,omitempty"`
+	InfraServices []InfraService `yaml:"infra_services,omitempty"`
+	Gateways      []Gateway      `yaml:"gateways,omitempty"`
+	Services      []BizService   `yaml:"services,omitempty"`
+	Domains       []Domain       `yaml:"domains,omitempty"`
+	DNSRecords    []DNSRecord    `yaml:"records,omitempty"`
+	Certificates  []Certificate  `yaml:"certificates,omitempty"`
 }
 
 func (c *Config) Validate() error {
@@ -31,14 +32,14 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("isps[%d]: %w", i, err)
 		}
 	}
+	for i, r := range c.Registries {
+		if err := r.Validate(); err != nil {
+			return fmt.Errorf("registries[%d]: %w", i, err)
+		}
+	}
 	for i, z := range c.Zones {
 		if err := z.Validate(); err != nil {
 			return fmt.Errorf("zones[%d]: %w", i, err)
-		}
-	}
-	for i, g := range c.Gateways {
-		if err := g.Validate(); err != nil {
-			return fmt.Errorf("gateways[%d]: %w", i, err)
 		}
 	}
 	for i, s := range c.Servers {
@@ -46,14 +47,19 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("servers[%d]: %w", i, err)
 		}
 	}
+	for i, infra := range c.InfraServices {
+		if err := infra.Validate(); err != nil {
+			return fmt.Errorf("infra_services[%d]: %w", i, err)
+		}
+	}
+	for i, g := range c.Gateways {
+		if err := g.Validate(); err != nil {
+			return fmt.Errorf("gateways[%d]: %w", i, err)
+		}
+	}
 	for i, s := range c.Services {
 		if err := s.Validate(); err != nil {
 			return fmt.Errorf("services[%d]: %w", i, err)
-		}
-	}
-	for i, r := range c.Registries {
-		if err := r.Validate(); err != nil {
-			return fmt.Errorf("registries[%d]: %w", i, err)
 		}
 	}
 	for i, d := range c.Domains {
@@ -98,6 +104,14 @@ func (c *Config) GetZoneMap() map[string]*Zone {
 	return m
 }
 
+func (c *Config) GetInfraServiceMap() map[string]*InfraService {
+	m := make(map[string]*InfraService)
+	for i := range c.InfraServices {
+		m[c.InfraServices[i].Name] = &c.InfraServices[i]
+	}
+	return m
+}
+
 func (c *Config) GetGatewayMap() map[string]*Gateway {
 	m := make(map[string]*Gateway)
 	for i := range c.Gateways {
@@ -114,8 +128,8 @@ func (c *Config) GetServerMap() map[string]*Server {
 	return m
 }
 
-func (c *Config) GetServiceMap() map[string]*Service {
-	m := make(map[string]*Service)
+func (c *Config) GetServiceMap() map[string]*BizService {
+	m := make(map[string]*BizService)
 	for i := range c.Services {
 		m[c.Services[i].Name] = &c.Services[i]
 	}

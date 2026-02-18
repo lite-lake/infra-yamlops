@@ -183,7 +183,7 @@ func RegistryEquals(a, b *entity.Registry) bool {
 
 func NewDeploymentState() *repository.DeploymentState {
 	return &repository.DeploymentState{
-		Services:   make(map[string]*entity.Service),
+		Services:   make(map[string]*entity.BizService),
 		Gateways:   make(map[string]*entity.Gateway),
 		Servers:    make(map[string]*entity.Server),
 		Zones:      make(map[string]*entity.Zone),

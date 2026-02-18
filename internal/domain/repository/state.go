@@ -12,7 +12,7 @@ type StateRepository interface {
 }
 
 type DeploymentState struct {
-	Services   map[string]*entity.Service
+	Services   map[string]*entity.BizService
 	Gateways   map[string]*entity.Gateway
 	Servers    map[string]*entity.Server
 	Zones      map[string]*entity.Zone

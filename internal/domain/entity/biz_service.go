@@ -110,7 +110,7 @@ func (r *ServiceGatewayRoute) HasGateway() bool {
 	return r.HTTP || r.HTTPS
 }
 
-type Service struct {
+type BizService struct {
 	Name        string                           `yaml:"name"`
 	Server      string                           `yaml:"server"`
 	Image       string                           `yaml:"image"`
@@ -124,11 +124,11 @@ type Service struct {
 	Internal    bool                             `yaml:"internal,omitempty"`
 }
 
-func (s *Service) GetServer() string {
+func (s *BizService) GetServer() string {
 	return s.Server
 }
 
-func (s *Service) Validate() error {
+func (s *BizService) Validate() error {
 	if s.Name == "" {
 		return fmt.Errorf("%w: service name is required", domain.ErrInvalidName)
 	}

@@ -127,7 +127,7 @@ func GatewayEquals(a, b *entity.Gateway) bool {
 		a.Image == b.Image && a.Ports.HTTP == b.Ports.HTTP && a.Ports.HTTPS == b.Ports.HTTPS
 }
 
-func (s *PlannerService) PlanServices(plan *valueobject.Plan, cfgMap map[string]*entity.Service, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
+func (s *PlannerService) PlanServices(plan *valueobject.Plan, cfgMap map[string]*entity.BizService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
 	for name, state := range s.state.Services {
 		if _, exists := cfgMap[name]; !exists {
 			serverName := state.Server
@@ -182,7 +182,7 @@ func (s *PlannerService) PlanServices(plan *valueobject.Plan, cfgMap map[string]
 	}
 }
 
-func ServiceEquals(a, b *entity.Service) bool {
+func ServiceEquals(a, b *entity.BizService) bool {
 	if a.Name != b.Name || a.Server != b.Server || a.Image != b.Image {
 		return false
 	}
