@@ -12,31 +12,34 @@ import (
 	"github.com/litelake/yamlops/internal/plan"
 )
 
-var applyCmd = &cobra.Command{
-	Use:   "apply [scope]",
-	Short: "Apply changes",
-	Long:  "Apply infrastructure changes for the specified scope.",
-	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		scope := ""
-		if len(args) > 0 {
-			scope = args[0]
-		}
-		runApply(scope, DomainFilter, ZoneFilter, ServerFilter, ServiceFilter)
-	},
+func newApplyCommand(ctx *Context) *cobra.Command {
+	var filters Filters
+
+	cmd := &cobra.Command{
+		Use:   "apply [scope]",
+		Short: "Apply changes",
+		Long:  "Apply infrastructure changes for the specified scope.",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			scope := ""
+			if len(args) > 0 {
+				scope = args[0]
+			}
+			runApply(ctx, scope, filters)
+		},
+	}
+
+	cmd.Flags().StringVar(&filters.Domain, "domain", "", "Filter by domain")
+	cmd.Flags().StringVar(&filters.Zone, "zone", "", "Filter by zone")
+	cmd.Flags().StringVar(&filters.Server, "server", "", "Filter by server")
+	cmd.Flags().StringVar(&filters.Service, "service", "", "Filter by service")
+
+	return cmd
 }
 
-func init() {
-	rootCmd.AddCommand(applyCmd)
-	applyCmd.Flags().StringVar(&DomainFilter, "domain", "", "Filter by domain")
-	applyCmd.Flags().StringVar(&ZoneFilter, "zone", "", "Filter by zone")
-	applyCmd.Flags().StringVar(&ServerFilter, "server", "", "Filter by server")
-	applyCmd.Flags().StringVar(&ServiceFilter, "service", "", "Filter by service")
-}
-
-func runApply(scope, domain, zone, server, service string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runApply(ctx *Context, scope string, filters Filters) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -47,12 +50,12 @@ func runApply(scope, domain, zone, server, service string) {
 		os.Exit(1)
 	}
 
-	planner := plan.NewPlanner(cfg, Env)
+	planner := plan.NewPlanner(cfg, ctx.Env)
 	planScope := &valueobject.Scope{
-		Domain:  domain,
-		Zone:    zone,
-		Server:  server,
-		Service: service,
+		Domain:  filters.Domain,
+		Zone:    filters.Zone,
+		Server:  filters.Server,
+		Service: filters.Service,
 	}
 
 	executionPlan, err := planner.Plan(planScope)
@@ -71,17 +74,17 @@ func runApply(scope, domain, zone, server, service string) {
 		os.Exit(1)
 	}
 
-	executor := usecase.NewExecutor(executionPlan, Env)
+	executor := usecase.NewExecutor(executionPlan, ctx.Env)
 	executor.SetSecrets(cfg.GetSecretsMap())
 	executor.SetDomains(cfg.GetDomainMap())
 	executor.SetISPs(cfg.GetISPMap())
-	executor.SetWorkDir(ConfigDir)
+	executor.SetWorkDir(ctx.ConfigDir)
 
 	for _, srv := range cfg.Servers {
-		if server != "" && srv.Name != server {
+		if filters.Server != "" && srv.Name != filters.Server {
 			continue
 		}
-		if zone != "" && srv.Zone != zone {
+		if filters.Zone != "" && srv.Zone != filters.Zone {
 			continue
 		}
 		password, err := srv.SSH.Password.Resolve(cfg.GetSecretsMap())

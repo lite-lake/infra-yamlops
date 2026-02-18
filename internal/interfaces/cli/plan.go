@@ -11,31 +11,34 @@ import (
 	"github.com/litelake/yamlops/internal/plan"
 )
 
-var planCmd = &cobra.Command{
-	Use:   "plan [scope]",
-	Short: "Generate execution plan",
-	Long:  "Generate an execution plan for the specified scope.",
-	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		scope := ""
-		if len(args) > 0 {
-			scope = args[0]
-		}
-		runPlan(scope, DomainFilter, ZoneFilter, ServerFilter, ServiceFilter)
-	},
+func newPlanCommand(ctx *Context) *cobra.Command {
+	var filters Filters
+
+	cmd := &cobra.Command{
+		Use:   "plan [scope]",
+		Short: "Generate execution plan",
+		Long:  "Generate an execution plan for the specified scope.",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			scope := ""
+			if len(args) > 0 {
+				scope = args[0]
+			}
+			runPlan(ctx, scope, filters)
+		},
+	}
+
+	cmd.Flags().StringVar(&filters.Domain, "domain", "", "Filter by domain")
+	cmd.Flags().StringVar(&filters.Zone, "zone", "", "Filter by zone")
+	cmd.Flags().StringVar(&filters.Server, "server", "", "Filter by server")
+	cmd.Flags().StringVar(&filters.Service, "service", "", "Filter by service")
+
+	return cmd
 }
 
-func init() {
-	rootCmd.AddCommand(planCmd)
-	planCmd.Flags().StringVar(&DomainFilter, "domain", "", "Filter by domain")
-	planCmd.Flags().StringVar(&ZoneFilter, "zone", "", "Filter by zone")
-	planCmd.Flags().StringVar(&ServerFilter, "server", "", "Filter by server")
-	planCmd.Flags().StringVar(&ServiceFilter, "service", "", "Filter by service")
-}
-
-func runPlan(scope, domain, zone, server, service string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runPlan(ctx *Context, scope string, filters Filters) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -46,12 +49,12 @@ func runPlan(scope, domain, zone, server, service string) {
 		os.Exit(1)
 	}
 
-	planner := plan.NewPlanner(cfg, Env)
+	planner := plan.NewPlanner(cfg, ctx.Env)
 	planScope := &valueobject.Scope{
-		Domain:  domain,
-		Zone:    zone,
-		Server:  server,
-		Service: service,
+		Domain:  filters.Domain,
+		Zone:    filters.Zone,
+		Server:  filters.Server,
+		Service: filters.Service,
 	}
 
 	executionPlan, err := planner.Plan(planScope)

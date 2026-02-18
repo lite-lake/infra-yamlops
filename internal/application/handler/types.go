@@ -17,6 +17,7 @@ type Handler interface {
 type Deps struct {
 	SSHClient   SSHClient
 	DNSProvider DNSProvider
+	DNSFactory  *dns.Factory
 	Secrets     map[string]string
 	Domains     map[string]*entity.Domain
 	ISPs        map[string]*entity.ISP

@@ -12,47 +12,48 @@ import (
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 )
 
-var configCmd = &cobra.Command{
-	Use:   "config",
-	Short: "Manage configuration items",
-	Long:  "View and manage base configuration items like secrets, ISPs, and registries.",
-}
+func newConfigCommand(ctx *Context) *cobra.Command {
+	configCmd := &cobra.Command{
+		Use:   "config",
+		Short: "Manage configuration items",
+		Long:  "View and manage base configuration items like secrets, ISPs, and registries.",
+	}
 
-var configListCmd = &cobra.Command{
-	Use:   "list [secrets|isps|registries]",
-	Short: "List configuration items",
-	Long:  "List configuration items. If no type specified, lists all.",
-	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		cfgType := ""
-		if len(args) > 0 {
-			cfgType = strings.ToLower(args[0])
-		}
-		runConfigList(cfgType)
-	},
-}
+	configListCmd := &cobra.Command{
+		Use:   "list [secrets|isps|registries]",
+		Short: "List configuration items",
+		Long:  "List configuration items. If no type specified, lists all.",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			cfgType := ""
+			if len(args) > 0 {
+				cfgType = strings.ToLower(args[0])
+			}
+			runConfigList(ctx, cfgType)
+		},
+	}
 
-var configShowCmd = &cobra.Command{
-	Use:   "show <type> <name>",
-	Short: "Show configuration details",
-	Long:  "Show detailed configuration for the specified item.",
-	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		cfgType := strings.ToLower(args[0])
-		name := args[1]
-		runConfigShow(cfgType, name)
-	},
-}
+	configShowCmd := &cobra.Command{
+		Use:   "show <type> <name>",
+		Short: "Show configuration details",
+		Long:  "Show detailed configuration for the specified item.",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			cfgType := strings.ToLower(args[0])
+			name := args[1]
+			runConfigShow(ctx, cfgType, name)
+		},
+	}
 
-func init() {
-	rootCmd.AddCommand(configCmd)
 	configCmd.AddCommand(configListCmd)
 	configCmd.AddCommand(configShowCmd)
+
+	return configCmd
 }
 
-func runConfigList(cfgType string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runConfigList(ctx *Context, cfgType string) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -103,9 +104,9 @@ func runConfigList(cfgType string) {
 	}
 }
 
-func runConfigShow(cfgType, name string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runConfigShow(ctx *Context, cfgType, name string) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)

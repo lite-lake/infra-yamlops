@@ -15,81 +15,83 @@ import (
 	"github.com/litelake/yamlops/internal/plan"
 )
 
-var (
-	dnsDomainFilter string
-	dnsRecordFilter string
-	dnsAutoApprove  bool
-)
+func newDNSCommand(ctx *Context) *cobra.Command {
+	var (
+		dnsDomainFilter string
+		dnsRecordFilter string
+		dnsAutoApprove  bool
+	)
 
-var dnsCmd = &cobra.Command{
-	Use:   "dns",
-	Short: "DNS management commands",
-	Long:  "Manage domains and DNS records.",
-}
+	dnsCmd := &cobra.Command{
+		Use:   "dns",
+		Short: "DNS management commands",
+		Long:  "Manage domains and DNS records.",
+	}
 
-var dnsPlanCmd = &cobra.Command{
-	Use:   "plan",
-	Short: "Generate DNS change plan",
-	Long:  "Generate a plan for DNS changes.",
-	Run: func(cmd *cobra.Command, args []string) {
-		runDNSPlan(dnsDomainFilter, dnsRecordFilter)
-	},
-}
+	dnsPlanCmd := &cobra.Command{
+		Use:   "plan",
+		Short: "Generate DNS change plan",
+		Long:  "Generate a plan for DNS changes.",
+		Run: func(cmd *cobra.Command, args []string) {
+			runDNSPlan(ctx, dnsDomainFilter, dnsRecordFilter)
+		},
+	}
 
-var dnsApplyCmd = &cobra.Command{
-	Use:   "apply",
-	Short: "Apply DNS changes",
-	Long:  "Apply DNS changes to providers.",
-	Run: func(cmd *cobra.Command, args []string) {
-		runDNSApply(dnsDomainFilter, dnsRecordFilter, dnsAutoApprove)
-	},
-}
+	dnsApplyCmd := &cobra.Command{
+		Use:   "apply",
+		Short: "Apply DNS changes",
+		Long:  "Apply DNS changes to providers.",
+		Run: func(cmd *cobra.Command, args []string) {
+			runDNSApply(ctx, dnsDomainFilter, dnsRecordFilter, dnsAutoApprove)
+		},
+	}
 
-var dnsListCmd = &cobra.Command{
-	Use:   "list [resource]",
-	Short: "List DNS resources",
-	Long:  "List domains and DNS records.",
-	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		resource := ""
-		if len(args) > 0 {
-			resource = args[0]
-		}
-		runDNSList(resource)
-	},
-}
+	dnsListCmd := &cobra.Command{
+		Use:   "list [resource]",
+		Short: "List DNS resources",
+		Long:  "List domains and DNS records.",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			resource := ""
+			if len(args) > 0 {
+				resource = args[0]
+			}
+			runDNSList(ctx, resource)
+		},
+	}
 
-var dnsShowCmd = &cobra.Command{
-	Use:   "show <resource> <name>",
-	Short: "Show DNS resource details",
-	Long:  "Show detailed information for a domain or DNS record.",
-	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		resource := args[0]
-		name := args[1]
-		runDNSShow(resource, name)
-	},
-}
+	dnsShowCmd := &cobra.Command{
+		Use:   "show <resource> <name>",
+		Short: "Show DNS resource details",
+		Long:  "Show detailed information for a domain or DNS record.",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			resource := args[0]
+			name := args[1]
+			runDNSShow(ctx, resource, name)
+		},
+	}
 
-func init() {
-	rootCmd.AddCommand(dnsCmd)
-
-	dnsCmd.AddCommand(dnsPlanCmd)
 	dnsPlanCmd.Flags().StringVarP(&dnsDomainFilter, "domain", "d", "", "Filter by domain")
 	dnsPlanCmd.Flags().StringVarP(&dnsRecordFilter, "record", "r", "", "Filter by record (format: name.domain)")
 
-	dnsCmd.AddCommand(dnsApplyCmd)
 	dnsApplyCmd.Flags().StringVarP(&dnsDomainFilter, "domain", "d", "", "Filter by domain")
 	dnsApplyCmd.Flags().StringVarP(&dnsRecordFilter, "record", "r", "", "Filter by record (format: name.domain)")
 	dnsApplyCmd.Flags().BoolVar(&dnsAutoApprove, "auto-approve", false, "Skip confirmation prompt")
 
+	dnsCmd.AddCommand(dnsPlanCmd)
+	dnsCmd.AddCommand(dnsApplyCmd)
 	dnsCmd.AddCommand(dnsListCmd)
 	dnsCmd.AddCommand(dnsShowCmd)
+
+	dnsCmd.AddCommand(newDNSPullCommand(ctx))
+
+	return dnsCmd
 }
 
-func runDNSPlan(domain, record string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runDNSPlan(ctx *Context, domain, record string) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -100,7 +102,7 @@ func runDNSPlan(domain, record string) {
 		os.Exit(1)
 	}
 
-	planner := plan.NewPlanner(cfg, Env)
+	planner := plan.NewPlanner(cfg, ctx.Env)
 	planScope := &valueobject.Scope{
 		Domain: domain,
 	}
@@ -138,9 +140,9 @@ func runDNSPlan(domain, record string) {
 	}
 }
 
-func runDNSApply(domain, record string, autoApprove bool) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runDNSApply(ctx *Context, domain, record string, autoApprove bool) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -151,7 +153,7 @@ func runDNSApply(domain, record string, autoApprove bool) {
 		os.Exit(1)
 	}
 
-	planner := plan.NewPlanner(cfg, Env)
+	planner := plan.NewPlanner(cfg, ctx.Env)
 	planScope := &valueobject.Scope{
 		Domain: domain,
 	}
@@ -200,11 +202,11 @@ func runDNSApply(domain, record string, autoApprove bool) {
 		os.Exit(1)
 	}
 
-	executor := usecase.NewExecutor(filteredPlan, Env)
+	executor := usecase.NewExecutor(filteredPlan, ctx.Env)
 	executor.SetSecrets(cfg.GetSecretsMap())
 	executor.SetDomains(cfg.GetDomainMap())
 	executor.SetISPs(cfg.GetISPMap())
-	executor.SetWorkDir(ConfigDir)
+	executor.SetWorkDir(ctx.ConfigDir)
 
 	results := executor.Apply()
 
@@ -223,9 +225,9 @@ func runDNSApply(domain, record string, autoApprove bool) {
 	}
 }
 
-func runDNSList(resource string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runDNSList(ctx *Context, resource string) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -283,9 +285,9 @@ func printDNSRecords(cfg *entity.Config) {
 	}
 }
 
-func runDNSShow(resource, name string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runDNSShow(ctx *Context, resource, name string) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)

@@ -75,51 +75,10 @@ func (h *DNSHandler) getDNSProvider(ispName string, deps *Deps) (DNSProvider, er
 		return nil, fmt.Errorf("ISP %s does not provide DNS service", ispName)
 	}
 
-	var provider dns.Provider
-
-	switch isp.Type {
-	case entity.ISPTypeAliyun:
-		cred := isp.Credentials["access_key_id"]
-		accessKeyID, err := cred.Resolve(deps.Secrets)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve access_key_id: %w", err)
-		}
-		credSecret := isp.Credentials["access_key_secret"]
-		accessKeySecret, err := credSecret.Resolve(deps.Secrets)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve access_key_secret: %w", err)
-		}
-		provider = dns.NewAliyunProvider(accessKeyID, accessKeySecret)
-	case entity.ISPTypeCloudflare:
-		cred := isp.Credentials["api_token"]
-		apiToken, err := cred.Resolve(deps.Secrets)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve api_token: %w", err)
-		}
-		accountID := ""
-		if accountIDRef, ok := isp.Credentials["account_id"]; ok {
-			accountID, err = accountIDRef.Resolve(deps.Secrets)
-			if err != nil {
-				return nil, fmt.Errorf("failed to resolve account_id: %w", err)
-			}
-		}
-		provider = dns.NewCloudflareProvider(apiToken, accountID)
-	case entity.ISPTypeTencent:
-		cred := isp.Credentials["secret_id"]
-		secretID, err := cred.Resolve(deps.Secrets)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve secret_id: %w", err)
-		}
-		credSecret := isp.Credentials["secret_key"]
-		secretKey, err := credSecret.Resolve(deps.Secrets)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve secret_key: %w", err)
-		}
-		provider = dns.NewTencentProvider(secretID, secretKey)
-	default:
-		return nil, fmt.Errorf("unsupported DNS provider type: %s (ISP name: %s)", isp.Type, ispName)
+	provider, err := deps.DNSFactory.Create(isp, deps.Secrets)
+	if err != nil {
+		return nil, err
 	}
-
 	return WrapDNSProvider(provider), nil
 }
 

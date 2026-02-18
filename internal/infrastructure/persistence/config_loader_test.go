@@ -4,9 +4,12 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/domain/service"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
@@ -42,7 +45,7 @@ func TestConfigLoader_Validate(t *testing.T) {
 
 	t.Run("nil config", func(t *testing.T) {
 		err := loader.Validate(nil)
-		if err != ErrConfigNotLoaded {
+		if err != domain.ErrConfigNotLoaded {
 			t.Errorf("expected ErrConfigNotLoaded, got %v", err)
 		}
 	})
@@ -94,6 +97,7 @@ func TestLoadEntity(t *testing.T) {
 			content: `zones:
   - name: zone1
     isp: isp1
+    region: us-east-1
 `,
 			yamlKey: "zones",
 			wantLen: 1,
@@ -180,14 +184,15 @@ func TestLoadEntity(t *testing.T) {
 	}
 }
 
-func TestValidateReferences(t *testing.T) {
+func TestValidator_References(t *testing.T) {
 	t.Run("valid references", func(t *testing.T) {
 		cfg := &entity.Config{
 			Secrets: []entity.Secret{{Name: "secret1", Value: "value1"}},
 			ISPs:    []entity.ISP{{Name: "isp1", Services: []entity.ISPService{"server"}, Credentials: map[string]valueobject.SecretRef{"key": {Plain: "val"}}}},
-			Zones:   []entity.Zone{{Name: "zone1", ISP: "isp1"}},
+			Zones:   []entity.Zone{{Name: "zone1", ISP: "isp1", Region: "us-east-1"}},
 		}
-		err := validateReferences(cfg)
+		validator := service.NewValidator(cfg)
+		err := validator.Validate()
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -195,23 +200,31 @@ func TestValidateReferences(t *testing.T) {
 
 	t.Run("missing isp reference", func(t *testing.T) {
 		cfg := &entity.Config{
-			Zones: []entity.Zone{{Name: "zone1", ISP: "nonexistent"}},
+			Zones: []entity.Zone{{Name: "zone1", ISP: "nonexistent", Region: "us-east-1"}},
 		}
-		err := validateReferences(cfg)
-		if err == nil {
-			t.Error("expected error for missing isp reference")
+		validator := service.NewValidator(cfg)
+		err := validator.Validate()
+		if err == nil || !strings.Contains(err.Error(), "isp 'nonexistent' referenced by zone") {
+			t.Errorf("expected missing isp error, got %v", err)
 		}
 	})
 }
 
-func TestValidatePortConflicts(t *testing.T) {
+func TestValidator_PortConflicts(t *testing.T) {
 	t.Run("no conflict", func(t *testing.T) {
 		cfg := &entity.Config{
+			Zones: []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
+			Servers: []entity.Server{{
+				Name: "srv1",
+				Zone: "zone1",
+				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
+			}},
 			Gateways: []entity.Gateway{
-				{Name: "gw1", Server: "srv1", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}},
+				{Name: "gw1", Zone: "zone1", Server: "srv1", Image: "nginx", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}, SSL: entity.GatewaySSLConfig{Mode: "local"}},
 			},
 		}
-		err := validatePortConflicts(cfg)
+		validator := service.NewValidator(cfg)
+		err := validator.Validate()
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 		}
@@ -219,14 +232,21 @@ func TestValidatePortConflicts(t *testing.T) {
 
 	t.Run("port conflict", func(t *testing.T) {
 		cfg := &entity.Config{
+			Zones: []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
+			Servers: []entity.Server{{
+				Name: "srv1",
+				Zone: "zone1",
+				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
+			}},
 			Gateways: []entity.Gateway{
-				{Name: "gw1", Server: "srv1", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}},
-				{Name: "gw2", Server: "srv1", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}},
+				{Name: "gw1", Zone: "zone1", Server: "srv1", Image: "nginx", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}, SSL: entity.GatewaySSLConfig{Mode: "local"}},
+				{Name: "gw2", Zone: "zone1", Server: "srv1", Image: "nginx", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}, SSL: entity.GatewaySSLConfig{Mode: "local"}},
 			},
 		}
-		err := validatePortConflicts(cfg)
-		if err == nil {
-			t.Error("expected error for port conflict")
+		validator := service.NewValidator(cfg)
+		err := validator.Validate()
+		if err == nil || !strings.Contains(err.Error(), "port conflict") {
+			t.Errorf("expected error for port conflict, got %v", err)
 		}
 	})
 }

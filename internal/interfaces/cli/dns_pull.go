@@ -18,46 +18,47 @@ import (
 	"github.com/litelake/yamlops/internal/providers/dns"
 )
 
-var (
-	pullISP         string
-	pullDomain      string
-	pullAutoApprove bool
-)
+func newDNSPullCommand(ctx *Context) *cobra.Command {
+	var (
+		pullISP         string
+		pullDomain      string
+		pullAutoApprove bool
+	)
 
-var dnsPullCmd = &cobra.Command{
-	Use:   "pull",
-	Short: "Pull DNS resources from providers",
-	Long:  "Pull domains and DNS records from remote providers to local configuration.",
-}
+	dnsPullCmd := &cobra.Command{
+		Use:   "pull",
+		Short: "Pull DNS resources from providers",
+		Long:  "Pull domains and DNS records from remote providers to local configuration.",
+	}
 
-var dnsPullDomainsCmd = &cobra.Command{
-	Use:   "domains",
-	Short: "Pull domains from ISP",
-	Long:  "Pull domain list from specified ISP and compare with local configuration.",
-	Run: func(cmd *cobra.Command, args []string) {
-		runDNSPullDomains(pullISP, pullAutoApprove)
-	},
-}
+	dnsPullDomainsCmd := &cobra.Command{
+		Use:   "domains",
+		Short: "Pull domains from ISP",
+		Long:  "Pull domain list from specified ISP and compare with local configuration.",
+		Run: func(cmd *cobra.Command, args []string) {
+			runDNSPullDomains(ctx, pullISP, pullAutoApprove)
+		},
+	}
 
-var dnsPullRecordsCmd = &cobra.Command{
-	Use:   "records",
-	Short: "Pull DNS records from domain",
-	Long:  "Pull DNS records from specified domain and compare with local configuration.",
-	Run: func(cmd *cobra.Command, args []string) {
-		runDNSPullRecords(pullDomain, pullAutoApprove)
-	},
-}
-
-func init() {
-	dnsCmd.AddCommand(dnsPullCmd)
-	dnsPullCmd.AddCommand(dnsPullDomainsCmd)
-	dnsPullCmd.AddCommand(dnsPullRecordsCmd)
+	dnsPullRecordsCmd := &cobra.Command{
+		Use:   "records",
+		Short: "Pull DNS records from domain",
+		Long:  "Pull DNS records from specified domain and compare with local configuration.",
+		Run: func(cmd *cobra.Command, args []string) {
+			runDNSPullRecords(ctx, pullDomain, pullAutoApprove)
+		},
+	}
 
 	dnsPullDomainsCmd.Flags().StringVarP(&pullISP, "isp", "i", "", "ISP name (e.g., aliyun, cloudflare, tencent)")
 	dnsPullDomainsCmd.Flags().BoolVar(&pullAutoApprove, "auto-approve", false, "Auto approve all changes")
 
 	dnsPullRecordsCmd.Flags().StringVarP(&pullDomain, "domain", "d", "", "Domain name to pull records from")
 	dnsPullRecordsCmd.Flags().BoolVar(&pullAutoApprove, "auto-approve", false, "Auto approve all changes")
+
+	dnsPullCmd.AddCommand(dnsPullDomainsCmd)
+	dnsPullCmd.AddCommand(dnsPullRecordsCmd)
+
+	return dnsPullCmd
 }
 
 type DomainDiff struct {
@@ -78,9 +79,9 @@ type RecordDiff struct {
 	ChangeType valueobject.ChangeType
 }
 
-func runDNSPullDomains(ispName string, autoApprove bool) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runDNSPullDomains(ctx *Context, ispName string, autoApprove bool) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -175,7 +176,7 @@ func runDNSPullDomains(ispName string, autoApprove bool) {
 	}
 
 	if autoApprove {
-		if err := saveDomainDiffs(diffs, cfg); err != nil {
+		if err := saveDomainDiffs(ctx, diffs, cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Error saving domains: %v\n", err)
 			os.Exit(1)
 		}
@@ -183,15 +184,15 @@ func runDNSPullDomains(ispName string, autoApprove bool) {
 		return
 	}
 
-	if err := runDomainPullTUI(diffs, cfg); err != nil {
+	if err := runDomainPullTUI(ctx, diffs, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func runDNSPullRecords(domainName string, autoApprove bool) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runDNSPullRecords(ctx *Context, domainName string, autoApprove bool) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -324,7 +325,7 @@ func runDNSPullRecords(domainName string, autoApprove bool) {
 	}
 
 	if autoApprove {
-		if err := saveRecordDiffs(diffs, cfg); err != nil {
+		if err := saveRecordDiffs(ctx, diffs, cfg); err != nil {
 			fmt.Fprintf(os.Stderr, "Error saving records: %v\n", err)
 			os.Exit(1)
 		}
@@ -332,7 +333,7 @@ func runDNSPullRecords(domainName string, autoApprove bool) {
 		return
 	}
 
-	if err := runRecordPullTUI(diffs, cfg); err != nil {
+	if err := runRecordPullTUI(ctx, diffs, cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
@@ -383,8 +384,8 @@ func createDNSProvider(isp *entity.ISP, secrets map[string]string) (dns.Provider
 	}
 }
 
-func saveDomainDiffs(diffs []DomainDiff, cfg *entity.Config) error {
-	configDir := filepath.Join(ConfigDir, "userdata", Env)
+func saveDomainDiffs(ctx *Context, diffs []DomainDiff, cfg *entity.Config) error {
+	configDir := filepath.Join(ctx.ConfigDir, "userdata", ctx.Env)
 	dnsPath := filepath.Join(configDir, "dns.yaml")
 
 	newDomains := make([]entity.Domain, 0)
@@ -418,8 +419,8 @@ func saveDomainDiffs(diffs []DomainDiff, cfg *entity.Config) error {
 	return saveYAMLFile(dnsPath, "domains", newDomains)
 }
 
-func saveRecordDiffs(diffs []RecordDiff, cfg *entity.Config) error {
-	configDir := filepath.Join(ConfigDir, "userdata", Env)
+func saveRecordDiffs(ctx *Context, diffs []RecordDiff, cfg *entity.Config) error {
+	configDir := filepath.Join(ctx.ConfigDir, "userdata", ctx.Env)
 	dnsPath := filepath.Join(configDir, "dns.yaml")
 
 	newDomains := make([]entity.Domain, 0)
@@ -641,7 +642,7 @@ func (m PullModel) View() string {
 	return b.String()
 }
 
-func runDomainPullTUI(diffs []DomainDiff, cfg *entity.Config) error {
+func runDomainPullTUI(ctx *Context, diffs []DomainDiff, cfg *entity.Config) error {
 	selected := make(map[int]bool)
 	for i := range diffs {
 		if diffs[i].ChangeType == valueobject.ChangeTypeCreate {
@@ -671,7 +672,7 @@ func runDomainPullTUI(diffs []DomainDiff, cfg *entity.Config) error {
 		}
 
 		if len(selectedDiffs) > 0 {
-			if err := saveDomainDiffs(selectedDiffs, cfg); err != nil {
+			if err := saveDomainDiffs(ctx, selectedDiffs, cfg); err != nil {
 				return err
 			}
 			fmt.Println("Domains synced to local configuration.")
@@ -683,7 +684,7 @@ func runDomainPullTUI(diffs []DomainDiff, cfg *entity.Config) error {
 	return nil
 }
 
-func runRecordPullTUI(diffs []RecordDiff, cfg *entity.Config) error {
+func runRecordPullTUI(ctx *Context, diffs []RecordDiff, cfg *entity.Config) error {
 	selected := make(map[int]bool)
 	for i := range diffs {
 		if diffs[i].ChangeType == valueobject.ChangeTypeCreate || diffs[i].ChangeType == valueobject.ChangeTypeUpdate {
@@ -714,7 +715,7 @@ func runRecordPullTUI(diffs []RecordDiff, cfg *entity.Config) error {
 		}
 
 		if len(selectedDiffs) > 0 {
-			if err := saveRecordDiffs(selectedDiffs, cfg); err != nil {
+			if err := saveRecordDiffs(ctx, selectedDiffs, cfg); err != nil {
 				return err
 			}
 			fmt.Println("DNS records synced to local configuration.")

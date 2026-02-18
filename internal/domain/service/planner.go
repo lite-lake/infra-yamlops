@@ -1,8 +1,6 @@
 package service
 
 import (
-	"fmt"
-
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/repository"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
@@ -42,48 +40,8 @@ func (s *PlannerService) SetState(state *repository.DeploymentState) {
 }
 
 func (s *PlannerService) PlanISPs(plan *valueobject.Plan, cfgMap map[string]*entity.ISP, scope *valueobject.Scope) {
-	for name, state := range s.state.ISPs {
-		if _, exists := cfgMap[name]; !exists {
-			if scope.Matches("", "", "", "") {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeDelete,
-					Entity:   "isp",
-					Name:     name,
-					OldState: state,
-					NewState: nil,
-					Actions:  []string{fmt.Sprintf("delete isp %s", name)},
-				})
-			}
-		}
-	}
-
-	for name, cfg := range cfgMap {
-		if state, exists := s.state.ISPs[name]; exists {
-			if !ISPEquals(state, cfg) {
-				if scope.Matches("", "", "", "") {
-					plan.AddChange(&valueobject.Change{
-						Type:     valueobject.ChangeTypeUpdate,
-						Entity:   "isp",
-						Name:     name,
-						OldState: state,
-						NewState: cfg,
-						Actions:  []string{fmt.Sprintf("update isp %s", name)},
-					})
-				}
-			}
-		} else {
-			if scope.Matches("", "", "", "") {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeCreate,
-					Entity:   "isp",
-					Name:     name,
-					OldState: nil,
-					NewState: cfg,
-					Actions:  []string{fmt.Sprintf("create isp %s", name)},
-				})
-			}
-		}
-	}
+	planSimpleEntity(plan, cfgMap, s.state.ISPs, ISPEquals, "isp",
+		func(_ string) bool { return scope.Matches("", "", "", "") })
 }
 
 func ISPEquals(a, b *entity.ISP) bool {
@@ -102,48 +60,8 @@ func ISPEquals(a, b *entity.ISP) bool {
 }
 
 func (s *PlannerService) PlanZones(plan *valueobject.Plan, cfgMap map[string]*entity.Zone, scope *valueobject.Scope) {
-	for name, state := range s.state.Zones {
-		if _, exists := cfgMap[name]; !exists {
-			if scope.Matches(name, "", "", "") {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeDelete,
-					Entity:   "zone",
-					Name:     name,
-					OldState: state,
-					NewState: nil,
-					Actions:  []string{fmt.Sprintf("delete zone %s", name)},
-				})
-			}
-		}
-	}
-
-	for name, cfg := range cfgMap {
-		if state, exists := s.state.Zones[name]; exists {
-			if !ZoneEquals(state, cfg) {
-				if scope.Matches(name, "", "", "") {
-					plan.AddChange(&valueobject.Change{
-						Type:     valueobject.ChangeTypeUpdate,
-						Entity:   "zone",
-						Name:     name,
-						OldState: state,
-						NewState: cfg,
-						Actions:  []string{fmt.Sprintf("update zone %s", name)},
-					})
-				}
-			}
-		} else {
-			if scope.Matches(name, "", "", "") {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeCreate,
-					Entity:   "zone",
-					Name:     name,
-					OldState: nil,
-					NewState: cfg,
-					Actions:  []string{fmt.Sprintf("create zone %s", name)},
-				})
-			}
-		}
-	}
+	planSimpleEntity(plan, cfgMap, s.state.Zones, ZoneEquals, "zone",
+		func(name string) bool { return scope.Matches(name, "", "", "") })
 }
 
 func ZoneEquals(a, b *entity.Zone) bool {
@@ -151,50 +69,39 @@ func ZoneEquals(a, b *entity.Zone) bool {
 }
 
 func (s *PlannerService) PlanDomains(plan *valueobject.Plan, cfgMap map[string]*entity.Domain, scope *valueobject.Scope) {
-	for name, state := range s.state.Domains {
-		if _, exists := cfgMap[name]; !exists {
-			if scope.Matches("", "", "", name) {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeDelete,
-					Entity:   "domain",
-					Name:     name,
-					OldState: state,
-					NewState: nil,
-					Actions:  []string{fmt.Sprintf("delete domain %s", name)},
-				})
-			}
-		}
-	}
-
-	for name, cfg := range cfgMap {
-		if state, exists := s.state.Domains[name]; exists {
-			if !DomainEquals(state, cfg) {
-				if scope.Matches("", "", "", name) {
-					plan.AddChange(&valueobject.Change{
-						Type:     valueobject.ChangeTypeUpdate,
-						Entity:   "domain",
-						Name:     name,
-						OldState: state,
-						NewState: cfg,
-						Actions:  []string{fmt.Sprintf("update domain %s", name)},
-					})
-				}
-			}
-		} else {
-			if scope.Matches("", "", "", name) {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeCreate,
-					Entity:   "domain",
-					Name:     name,
-					OldState: nil,
-					NewState: cfg,
-					Actions:  []string{fmt.Sprintf("create domain %s", name)},
-				})
-			}
-		}
-	}
+	planSimpleEntity(plan, cfgMap, s.state.Domains, DomainEquals, "domain",
+		func(_ string) bool { return scope.Matches("", "", "", "") })
 }
 
 func DomainEquals(a, b *entity.Domain) bool {
 	return a.Name == b.Name && a.ISP == b.ISP && a.Parent == b.Parent
+}
+
+func (s *PlannerService) PlanCertificates(plan *valueobject.Plan, cfgMap map[string]*entity.Certificate, scope *valueobject.Scope) {
+	planSimpleEntity(plan, cfgMap, s.state.Certs, CertificateEquals, "certificate",
+		func(_ string) bool { return scope.Matches("", "", "", "") })
+}
+
+func CertificateEquals(a, b *entity.Certificate) bool {
+	if a.Name != b.Name || a.Provider != b.Provider || a.DNSProvider != b.DNSProvider {
+		return false
+	}
+	if len(a.Domains) != len(b.Domains) {
+		return false
+	}
+	for i, d := range a.Domains {
+		if i >= len(b.Domains) || d != b.Domains[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *PlannerService) PlanRegistries(plan *valueobject.Plan, cfgMap map[string]*entity.Registry, scope *valueobject.Scope) {
+	planSimpleEntity(plan, cfgMap, s.state.Registries, RegistryEquals, "registry",
+		func(_ string) bool { return scope.Matches("", "", "", "") })
+}
+
+func RegistryEquals(a, b *entity.Registry) bool {
+	return a.Name == b.Name && a.URL == b.URL
 }

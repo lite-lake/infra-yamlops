@@ -12,63 +12,66 @@ import (
 	"github.com/litelake/yamlops/internal/ssh"
 )
 
-var serverCmd = &cobra.Command{
-	Use:   "server",
-	Short: "Server operations",
-	Long:  "Manage server environment setup and configuration.",
-}
+func newServerCommand(ctx *Context) *cobra.Command {
+	var filters Filters
 
-var serverSetupCmd = &cobra.Command{
-	Use:   "setup",
-	Short: "Setup server environment",
-	Long:  "Check and sync server environment configuration.",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		checkOnly, _ := cmd.Flags().GetBool("check-only")
-		syncOnly, _ := cmd.Flags().GetBool("sync-only")
-		runServerSetup(ServerFilter, ZoneFilter, checkOnly, syncOnly)
-	},
-}
+	serverCmd := &cobra.Command{
+		Use:   "server",
+		Short: "Server operations",
+		Long:  "Manage server environment setup and configuration.",
+	}
 
-var serverCheckCmd = &cobra.Command{
-	Use:   "check",
-	Short: "Check server environment",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		runServerCheck(ServerFilter, ZoneFilter)
-	},
-}
+	serverSetupCmd := &cobra.Command{
+		Use:   "setup",
+		Short: "Setup server environment",
+		Long:  "Check and sync server environment configuration.",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			checkOnly, _ := cmd.Flags().GetBool("check-only")
+			syncOnly, _ := cmd.Flags().GetBool("sync-only")
+			runServerSetup(ctx, filters.Server, filters.Zone, checkOnly, syncOnly)
+		},
+	}
 
-var serverSyncCmd = &cobra.Command{
-	Use:   "sync",
-	Short: "Sync server environment",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		runServerSync(ServerFilter, ZoneFilter)
-	},
-}
+	serverCheckCmd := &cobra.Command{
+		Use:   "check",
+		Short: "Check server environment",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			runServerCheck(ctx, filters.Server, filters.Zone)
+		},
+	}
 
-func init() {
-	rootCmd.AddCommand(serverCmd)
+	serverSyncCmd := &cobra.Command{
+		Use:   "sync",
+		Short: "Sync server environment",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			runServerSync(ctx, filters.Server, filters.Zone)
+		},
+	}
+
+	serverSetupCmd.Flags().StringVar(&filters.Server, "server", "", "Filter by server")
+	serverSetupCmd.Flags().StringVar(&filters.Zone, "zone", "", "Filter by zone")
+	serverSetupCmd.Flags().Bool("check-only", false, "Only check, do not sync")
+	serverSetupCmd.Flags().Bool("sync-only", false, "Only sync, do not check")
+
+	serverCheckCmd.Flags().StringVar(&filters.Server, "server", "", "Filter by server")
+	serverCheckCmd.Flags().StringVar(&filters.Zone, "zone", "", "Filter by zone")
+
+	serverSyncCmd.Flags().StringVar(&filters.Server, "server", "", "Filter by server")
+	serverSyncCmd.Flags().StringVar(&filters.Zone, "zone", "", "Filter by zone")
+
 	serverCmd.AddCommand(serverSetupCmd)
 	serverCmd.AddCommand(serverCheckCmd)
 	serverCmd.AddCommand(serverSyncCmd)
 
-	serverSetupCmd.Flags().StringVar(&ServerFilter, "server", "", "Filter by server")
-	serverSetupCmd.Flags().StringVar(&ZoneFilter, "zone", "", "Filter by zone")
-	serverSetupCmd.Flags().Bool("check-only", false, "Only check, do not sync")
-	serverSetupCmd.Flags().Bool("sync-only", false, "Only sync, do not check")
-
-	serverCheckCmd.Flags().StringVar(&ServerFilter, "server", "", "Filter by server")
-	serverCheckCmd.Flags().StringVar(&ZoneFilter, "zone", "", "Filter by zone")
-
-	serverSyncCmd.Flags().StringVar(&ServerFilter, "server", "", "Filter by server")
-	serverSyncCmd.Flags().StringVar(&ZoneFilter, "zone", "", "Filter by zone")
+	return serverCmd
 }
 
-func runServerSetup(serverName, zone string, checkOnly, syncOnly bool) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runServerSetup(ctx *Context, serverName, zone string, checkOnly, syncOnly bool) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -105,7 +108,7 @@ func runServerSetup(serverName, zone string, checkOnly, syncOnly bool) {
 		}
 
 		if !checkOnly {
-			syncer := server.NewSyncer(client, srv, Env, registries, secrets)
+			syncer := server.NewSyncer(client, srv, ctx.Env, registries, secrets)
 			results := syncer.SyncAll()
 			printSyncResults(srv.Name, results)
 		}
@@ -122,12 +125,12 @@ func convertRegistries(registries []entity.Registry) []*entity.Registry {
 	return result
 }
 
-func runServerCheck(serverName, zone string) {
-	runServerSetup(serverName, zone, true, false)
+func runServerCheck(ctx *Context, serverName, zone string) {
+	runServerSetup(ctx, serverName, zone, true, false)
 }
 
-func runServerSync(serverName, zone string) {
-	runServerSetup(serverName, zone, false, true)
+func runServerSync(ctx *Context, serverName, zone string) {
+	runServerSetup(ctx, serverName, zone, false, true)
 }
 
 func printSyncResults(serverName string, results []server.SyncResult) {

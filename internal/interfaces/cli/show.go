@@ -11,25 +11,25 @@ import (
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 )
 
-var showCmd = &cobra.Command{
-	Use:   "show <entity> <name>",
-	Short: "Show entity details",
-	Long:  "Show detailed information for the specified entity.",
-	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		entity := args[0]
-		name := args[1]
-		runShow(entity, name)
-	},
+func newShowCommand(ctx *Context) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "show <entity> <name>",
+		Short: "Show entity details",
+		Long:  "Show detailed information for the specified entity.",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			entity := args[0]
+			name := args[1]
+			runShow(ctx, entity, name)
+		},
+	}
+
+	return cmd
 }
 
-func init() {
-	rootCmd.AddCommand(showCmd)
-}
-
-func runShow(entity, name string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runShow(ctx *Context, entity, name string) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)

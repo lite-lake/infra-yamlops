@@ -11,47 +11,50 @@ import (
 	"github.com/litelake/yamlops/internal/ssh"
 )
 
-var envCmd = &cobra.Command{
-	Use:   "env",
-	Short: "Environment operations",
-	Long:  "Manage environment configurations and synchronization.",
-}
+func newEnvCommand(ctx *Context) *cobra.Command {
+	var filters Filters
 
-var envCheckCmd = &cobra.Command{
-	Use:   "check",
-	Short: "Check environment status",
-	Long:  "Check the current status of the specified environment.",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		runEnvCheck(ServerFilter, ZoneFilter)
-	},
-}
+	envCmd := &cobra.Command{
+		Use:   "env",
+		Short: "Environment operations",
+		Long:  "Manage environment configurations and synchronization.",
+	}
 
-var envSyncCmd = &cobra.Command{
-	Use:   "sync",
-	Short: "Synchronize environment",
-	Long:  "Synchronize the specified environment.",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		runEnvSync(ServerFilter, ZoneFilter)
-	},
-}
+	envCheckCmd := &cobra.Command{
+		Use:   "check",
+		Short: "Check environment status",
+		Long:  "Check the current status of the specified environment.",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			runEnvCheck(ctx, filters.Server, filters.Zone)
+		},
+	}
 
-func init() {
-	rootCmd.AddCommand(envCmd)
+	envSyncCmd := &cobra.Command{
+		Use:   "sync",
+		Short: "Synchronize environment",
+		Long:  "Synchronize the specified environment.",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			runEnvSync(ctx, filters.Server, filters.Zone)
+		},
+	}
+
+	envCheckCmd.Flags().StringVar(&filters.Server, "server", "", "Filter by server")
+	envCheckCmd.Flags().StringVar(&filters.Zone, "zone", "", "Filter by zone")
+
+	envSyncCmd.Flags().StringVar(&filters.Server, "server", "", "Filter by server")
+	envSyncCmd.Flags().StringVar(&filters.Zone, "zone", "", "Filter by zone")
+
 	envCmd.AddCommand(envCheckCmd)
 	envCmd.AddCommand(envSyncCmd)
 
-	envCheckCmd.Flags().StringVar(&ServerFilter, "server", "", "Filter by server")
-	envCheckCmd.Flags().StringVar(&ZoneFilter, "zone", "", "Filter by zone")
-
-	envSyncCmd.Flags().StringVar(&ServerFilter, "server", "", "Filter by server")
-	envSyncCmd.Flags().StringVar(&ZoneFilter, "zone", "", "Filter by zone")
+	return envCmd
 }
 
-func runEnvCheck(server, zone string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runEnvCheck(ctx *Context, server, zone string) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -89,9 +92,9 @@ func runEnvCheck(server, zone string) {
 	}
 }
 
-func runEnvSync(server, zone string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runEnvSync(ctx *Context, server, zone string) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -121,7 +124,7 @@ func runEnvSync(server, zone string) {
 			continue
 		}
 
-		syncer := serverpkg.NewSyncer(client, srv, Env, registries, secrets)
+		syncer := serverpkg.NewSyncer(client, srv, ctx.Env, registries, secrets)
 		results := syncer.SyncAll()
 
 		fmt.Printf("[%s] Sync Results\n", srv.Name)

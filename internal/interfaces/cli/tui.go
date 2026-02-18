@@ -120,8 +120,8 @@ func Run(env string, configDir string) error {
 	return err
 }
 
-func runTUI() {
-	if err := Run(Env, ConfigDir); err != nil {
+func runTUI(ctx *Context) {
+	if err := Run(ctx.Env, ctx.ConfigDir); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}

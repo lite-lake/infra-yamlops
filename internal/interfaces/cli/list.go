@@ -10,24 +10,24 @@ import (
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 )
 
-var listCmd = &cobra.Command{
-	Use:   "list <entity>",
-	Short: "List entities",
-	Long:  "List all entities of the specified type.",
-	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		entity := args[0]
-		runList(entity)
-	},
+func newListCommand(ctx *Context) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list <entity>",
+		Short: "List entities",
+		Long:  "List all entities of the specified type.",
+		Args:  cobra.ExactArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			entity := args[0]
+			runList(ctx, entity)
+		},
+	}
+
+	return cmd
 }
 
-func init() {
-	rootCmd.AddCommand(listCmd)
-}
-
-func runList(entity string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runList(ctx *Context, entity string) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)

@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 )
 
 type Client struct {
@@ -15,12 +17,19 @@ type Client struct {
 }
 
 func NewClient(host string, port int, user, password string) (*Client, error) {
+	knownHosts := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
+
+	hostKeyCallback, err := knownhosts.New(knownHosts)
+	if err != nil {
+		return nil, fmt.Errorf("load known_hosts: %w", err)
+	}
+
 	config := &ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{
 			ssh.Password(password),
 		},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		HostKeyCallback: hostKeyCallback,
 	}
 
 	addr := fmt.Sprintf("%s:%d", host, port)

@@ -12,23 +12,23 @@ import (
 	"github.com/litelake/yamlops/internal/ssh"
 )
 
-var cleanCmd = &cobra.Command{
-	Use:   "clean",
-	Short: "Clean up resources",
-	Long:  "Clean up temporary files and cached resources.",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		runClean()
-	},
+func newCleanCommand(ctx *Context) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "clean",
+		Short: "Clean up resources",
+		Long:  "Clean up temporary files and cached resources.",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			runClean(ctx)
+		},
+	}
+
+	return cmd
 }
 
-func init() {
-	rootCmd.AddCommand(cleanCmd)
-}
-
-func runClean() {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runClean(ctx *Context) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -81,10 +81,10 @@ func runClean() {
 				continue
 			}
 
-			if !strings.HasPrefix(container.Name, "yo-"+Env+"-") {
+			if !strings.HasPrefix(container.Name, "yo-"+ctx.Env+"-") {
 				continue
 			}
-			serviceName := strings.TrimPrefix(container.Name, "yo-"+Env+"-")
+			serviceName := strings.TrimPrefix(container.Name, "yo-"+ctx.Env+"-")
 			_, isService := serviceMap[serviceName]
 			_, isGateway := gatewayMap[serviceName]
 			if !isService && !isGateway {
@@ -96,10 +96,10 @@ func runClean() {
 			if line == "" {
 				continue
 			}
-			if !strings.HasPrefix(line, "yo-"+Env+"-") {
+			if !strings.HasPrefix(line, "yo-"+ctx.Env+"-") {
 				continue
 			}
-			serviceName := strings.TrimPrefix(line, "yo-"+Env+"-")
+			serviceName := strings.TrimPrefix(line, "yo-"+ctx.Env+"-")
 			_, isService := serviceMap[serviceName]
 			_, isGateway := gatewayMap[serviceName]
 			if !isService && !isGateway {

@@ -9,23 +9,23 @@ import (
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 )
 
-var validateCmd = &cobra.Command{
-	Use:   "validate",
-	Short: "Validate configurations",
-	Long:  "Validate all YAML configurations.",
-	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
-		runValidate()
-	},
+func newValidateCommand(ctx *Context) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "validate",
+		Short: "Validate configurations",
+		Long:  "Validate all YAML configurations.",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			runValidate(ctx)
+		},
+	}
+
+	return cmd
 }
 
-func init() {
-	rootCmd.AddCommand(validateCmd)
-}
-
-func runValidate() {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runValidate(ctx *Context) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)

@@ -8,40 +8,49 @@ import (
 )
 
 var (
-	Env         string
-	ConfigDir   string
-	ShowVersion bool
-
-	DomainFilter  string
-	ZoneFilter    string
-	ServerFilter  string
-	ServiceFilter string
+	flagEnv         string
+	flagConfigDir   string
+	flagShowVersion bool
 )
 
 var Version = "dev"
 
-var rootCmd = &cobra.Command{
-	Use:   "yamlops",
-	Short: "Infrastructure YAML operations tool",
-	Long:  "Yamlops is a CLI tool for managing infrastructure through YAML configurations.",
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if ShowVersion {
-			fmt.Println(Version)
-			os.Exit(0)
-		}
-	},
-	Run: func(cmd *cobra.Command, args []string) {
-		runTUI()
-	},
-}
-
-func init() {
-	rootCmd.PersistentFlags().StringVarP(&Env, "env", "e", "dev", "Environment (prod/staging/dev)")
-	rootCmd.PersistentFlags().StringVarP(&ConfigDir, "config", "c", ".", "Configuration directory")
-	rootCmd.PersistentFlags().BoolVarP(&ShowVersion, "version", "v", false, "Show version information")
-}
-
 func Execute() {
+	ctx := NewContext()
+
+	rootCmd := &cobra.Command{
+		Use:   "yamlops",
+		Short: "Infrastructure YAML operations tool",
+		Long:  "Yamlops is a CLI tool for managing infrastructure through YAML configurations.",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			if flagShowVersion {
+				fmt.Println(Version)
+				os.Exit(0)
+			}
+			ctx.Env = flagEnv
+			ctx.ConfigDir = flagConfigDir
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			runTUI(ctx)
+		},
+	}
+
+	rootCmd.PersistentFlags().StringVarP(&flagEnv, "env", "e", "dev", "Environment (prod/staging/dev)")
+	rootCmd.PersistentFlags().StringVarP(&flagConfigDir, "config", "c", ".", "Configuration directory")
+	rootCmd.PersistentFlags().BoolVarP(&flagShowVersion, "version", "v", false, "Show version information")
+
+	rootCmd.AddCommand(newPlanCommand(ctx))
+	rootCmd.AddCommand(newApplyCommand(ctx))
+	rootCmd.AddCommand(newValidateCommand(ctx))
+	rootCmd.AddCommand(newListCommand(ctx))
+	rootCmd.AddCommand(newShowCommand(ctx))
+	rootCmd.AddCommand(newEnvCommand(ctx))
+	rootCmd.AddCommand(newDNSCommand(ctx))
+	rootCmd.AddCommand(newCleanCommand(ctx))
+	rootCmd.AddCommand(newServerCommand(ctx))
+	rootCmd.AddCommand(newConfigCommand(ctx))
+	rootCmd.AddCommand(newAppCommand(ctx))
+
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}

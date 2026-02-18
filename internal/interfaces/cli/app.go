@@ -15,83 +15,85 @@ import (
 	"github.com/litelake/yamlops/internal/plan"
 )
 
-var (
-	appZoneFilter   string
-	appServerFilter string
-	appInfraFilter  string
-	appBizFilter    string
-	appAutoApprove  bool
-)
-
-var appCmd = &cobra.Command{
-	Use:   "app",
-	Short: "Manage application resources",
-	Long:  "Manage zones, servers, infra services, and business services.",
+type AppFilters struct {
+	Zone   string
+	Server string
+	Infra  string
+	Biz    string
 }
 
-var appPlanCmd = &cobra.Command{
-	Use:   "plan",
-	Short: "Generate deployment plan",
-	Long:  "Generate a deployment plan for application resources.",
-	Run: func(cmd *cobra.Command, args []string) {
-		runAppPlan()
-	},
-}
+func newAppCommand(ctx *Context) *cobra.Command {
+	var filters AppFilters
+	var autoApprove bool
 
-var appApplyCmd = &cobra.Command{
-	Use:   "apply",
-	Short: "Apply deployment",
-	Long:  "Apply the deployment for application resources.",
-	Run: func(cmd *cobra.Command, args []string) {
-		runAppApply()
-	},
-}
+	appCmd := &cobra.Command{
+		Use:   "app",
+		Short: "Manage application resources",
+		Long:  "Manage zones, servers, infra services, and business services.",
+	}
 
-var appListCmd = &cobra.Command{
-	Use:   "list [resource]",
-	Short: "List resources",
-	Long:  "List application resources (zones, servers, infra, biz).",
-	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		resource := ""
-		if len(args) > 0 {
-			resource = args[0]
-		}
-		runAppList(resource)
-	},
-}
+	appPlanCmd := &cobra.Command{
+		Use:   "plan",
+		Short: "Generate deployment plan",
+		Long:  "Generate a deployment plan for application resources.",
+		Run: func(cmd *cobra.Command, args []string) {
+			runAppPlan(ctx, filters)
+		},
+	}
 
-var appShowCmd = &cobra.Command{
-	Use:   "show <resource> <name>",
-	Short: "Show resource details",
-	Long:  "Show detailed information for a specific resource.",
-	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		resource := args[0]
-		name := args[1]
-		runAppShow(resource, name)
-	},
-}
+	appApplyCmd := &cobra.Command{
+		Use:   "apply",
+		Short: "Apply deployment",
+		Long:  "Apply the deployment for application resources.",
+		Run: func(cmd *cobra.Command, args []string) {
+			runAppApply(ctx, filters, autoApprove)
+		},
+	}
 
-func init() {
-	rootCmd.AddCommand(appCmd)
+	appListCmd := &cobra.Command{
+		Use:   "list [resource]",
+		Short: "List resources",
+		Long:  "List application resources (zones, servers, infra, biz).",
+		Args:  cobra.MaximumNArgs(1),
+		Run: func(cmd *cobra.Command, args []string) {
+			resource := ""
+			if len(args) > 0 {
+				resource = args[0]
+			}
+			runAppList(ctx, filters, resource)
+		},
+	}
 
-	appCmd.PersistentFlags().StringVarP(&appZoneFilter, "zone", "z", "", "Filter by zone")
-	appCmd.PersistentFlags().StringVarP(&appServerFilter, "server", "s", "", "Filter by server")
-	appCmd.PersistentFlags().StringVarP(&appInfraFilter, "infra", "i", "", "Filter by infra service")
-	appCmd.PersistentFlags().StringVarP(&appBizFilter, "biz", "b", "", "Filter by business service")
+	appShowCmd := &cobra.Command{
+		Use:   "show <resource> <name>",
+		Short: "Show resource details",
+		Long:  "Show detailed information for a specific resource.",
+		Args:  cobra.ExactArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			resource := args[0]
+			name := args[1]
+			runAppShow(ctx, resource, name)
+		},
+	}
 
-	appApplyCmd.Flags().BoolVar(&appAutoApprove, "auto-approve", false, "Auto approve changes")
+	appCmd.PersistentFlags().StringVarP(&filters.Zone, "zone", "z", "", "Filter by zone")
+	appCmd.PersistentFlags().StringVarP(&filters.Server, "server", "s", "", "Filter by server")
+	appCmd.PersistentFlags().StringVarP(&filters.Infra, "infra", "i", "", "Filter by infra service")
+	appCmd.PersistentFlags().StringVarP(&filters.Biz, "biz", "b", "", "Filter by business service")
+
+	appApplyCmd.Flags().BoolVar(&autoApprove, "auto-approve", false, "Auto approve changes")
 
 	appCmd.AddCommand(appPlanCmd)
 	appCmd.AddCommand(appApplyCmd)
 	appCmd.AddCommand(appListCmd)
 	appCmd.AddCommand(appShowCmd)
+
+	return appCmd
 }
 
-func runAppPlan() {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runAppPlan(ctx *Context, filters AppFilters) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -102,11 +104,11 @@ func runAppPlan() {
 		os.Exit(1)
 	}
 
-	planner := plan.NewPlanner(cfg, Env)
+	planner := plan.NewPlanner(cfg, ctx.Env)
 	planScope := &valueobject.Scope{
-		Zone:    appZoneFilter,
-		Server:  appServerFilter,
-		Service: appBizFilter,
+		Zone:    filters.Zone,
+		Server:  filters.Server,
+		Service: filters.Biz,
 	}
 
 	executionPlan, err := planner.Plan(planScope)
@@ -123,10 +125,10 @@ func runAppPlan() {
 	fmt.Println("Execution Plan:")
 	fmt.Println("===============")
 	for _, ch := range executionPlan.Changes {
-		if appInfraFilter != "" && ch.Entity != "infra_service" {
+		if filters.Infra != "" && ch.Entity != "infra_service" {
 			continue
 		}
-		if appBizFilter != "" && ch.Entity != "service" {
+		if filters.Biz != "" && ch.Entity != "service" {
 			continue
 		}
 		var prefix string
@@ -147,9 +149,9 @@ func runAppPlan() {
 	}
 }
 
-func runAppApply() {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runAppApply(ctx *Context, filters AppFilters, autoApprove bool) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -160,11 +162,11 @@ func runAppApply() {
 		os.Exit(1)
 	}
 
-	planner := plan.NewPlanner(cfg, Env)
+	planner := plan.NewPlanner(cfg, ctx.Env)
 	planScope := &valueobject.Scope{
-		Zone:    appZoneFilter,
-		Server:  appServerFilter,
-		Service: appBizFilter,
+		Zone:    filters.Zone,
+		Server:  filters.Server,
+		Service: filters.Biz,
 	}
 
 	executionPlan, err := planner.Plan(planScope)
@@ -178,7 +180,7 @@ func runAppApply() {
 		return
 	}
 
-	if !appAutoApprove {
+	if !autoApprove {
 		fmt.Print("Do you want to apply these changes? (y/N): ")
 		var response string
 		fmt.Scanln(&response)
@@ -193,17 +195,17 @@ func runAppApply() {
 		os.Exit(1)
 	}
 
-	executor := usecase.NewExecutor(executionPlan, Env)
+	executor := usecase.NewExecutor(executionPlan, ctx.Env)
 	executor.SetSecrets(cfg.GetSecretsMap())
 	executor.SetDomains(cfg.GetDomainMap())
 	executor.SetISPs(cfg.GetISPMap())
-	executor.SetWorkDir(ConfigDir)
+	executor.SetWorkDir(ctx.ConfigDir)
 
 	for _, srv := range cfg.Servers {
-		if appServerFilter != "" && srv.Name != appServerFilter {
+		if filters.Server != "" && srv.Name != filters.Server {
 			continue
 		}
-		if appZoneFilter != "" && srv.Zone != appZoneFilter {
+		if filters.Zone != "" && srv.Zone != filters.Zone {
 			continue
 		}
 		password, err := srv.SSH.Password.Resolve(cfg.GetSecretsMap())
@@ -218,10 +220,10 @@ func runAppApply() {
 
 	hasError := false
 	for _, result := range results {
-		if appInfraFilter != "" && result.Change.Entity != "infra_service" {
+		if filters.Infra != "" && result.Change.Entity != "infra_service" {
 			continue
 		}
-		if appBizFilter != "" && result.Change.Entity != "service" {
+		if filters.Biz != "" && result.Change.Entity != "service" {
 			continue
 		}
 		if result.Success {
@@ -237,9 +239,9 @@ func runAppApply() {
 	}
 }
 
-func runAppList(resource string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runAppList(ctx *Context, filters AppFilters, resource string) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
@@ -249,17 +251,17 @@ func runAppList(resource string) {
 	switch resource {
 	case "", "all":
 		listZones(cfg)
-		listServers(cfg)
-		listInfraServices(cfg)
-		listBizServices(cfg)
+		listServers(filters, cfg)
+		listInfraServices(filters, cfg)
+		listBizServices(filters, cfg)
 	case "zones", "zone":
 		listZones(cfg)
 	case "servers", "server":
-		listServers(cfg)
+		listServers(filters, cfg)
 	case "infra", "infra_service", "infra_services":
-		listInfraServices(cfg)
+		listInfraServices(filters, cfg)
 	case "biz", "business", "services", "service":
-		listBizServices(cfg)
+		listBizServices(filters, cfg)
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown resource type: %s\n", resource)
 		fmt.Fprintf(os.Stderr, "Valid types: zones, servers, infra, biz\n")
@@ -277,39 +279,39 @@ func listZones(cfg *entity.Config) {
 	}
 }
 
-func listServers(cfg *entity.Config) {
+func listServers(filters AppFilters, cfg *entity.Config) {
 	if len(cfg.Servers) == 0 {
 		return
 	}
 	fmt.Println("Servers:")
 	for _, s := range cfg.Servers {
-		if appZoneFilter != "" && s.Zone != appZoneFilter {
+		if filters.Zone != "" && s.Zone != filters.Zone {
 			continue
 		}
 		fmt.Printf("  - %s (zone: %s, ip: %s)\n", s.Name, s.Zone, s.IP.Public)
 	}
 }
 
-func listInfraServices(cfg *entity.Config) {
+func listInfraServices(filters AppFilters, cfg *entity.Config) {
 	if len(cfg.InfraServices) == 0 {
 		return
 	}
 	fmt.Println("Infra Services:")
 	for _, infra := range cfg.InfraServices {
-		if appServerFilter != "" && infra.Server != appServerFilter {
+		if filters.Server != "" && infra.Server != filters.Server {
 			continue
 		}
 		fmt.Printf("  - %s (server: %s, type: %s)\n", infra.Name, infra.Server, infra.Type)
 	}
 }
 
-func listBizServices(cfg *entity.Config) {
+func listBizServices(filters AppFilters, cfg *entity.Config) {
 	if len(cfg.Services) == 0 {
 		return
 	}
 	fmt.Println("Business Services:")
 	for _, s := range cfg.Services {
-		if appServerFilter != "" && s.Server != appServerFilter {
+		if filters.Server != "" && s.Server != filters.Server {
 			continue
 		}
 		portStr := ""
@@ -323,9 +325,9 @@ func listBizServices(cfg *entity.Config) {
 	}
 }
 
-func runAppShow(resource, name string) {
-	loader := persistence.NewConfigLoader(ConfigDir)
-	cfg, err := loader.Load(nil, Env)
+func runAppShow(ctx *Context, resource, name string) {
+	loader := persistence.NewConfigLoader(ctx.ConfigDir)
+	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
