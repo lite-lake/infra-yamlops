@@ -8,6 +8,14 @@ import (
 )
 
 func (m Model) View() string {
+	switch m.ViewState {
+	case ViewStateMainMenu:
+		return m.renderMainMenu()
+	case ViewStateServerSetup:
+		return m.renderServerSetup()
+	case ViewStateServerCheck:
+		return m.renderServerCheck()
+	}
 	var content strings.Builder
 	content.WriteString(m.renderHeader())
 	switch m.ViewState {

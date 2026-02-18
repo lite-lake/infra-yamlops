@@ -3,11 +3,11 @@ package cli
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
+	serverpkg "github.com/litelake/yamlops/internal/server"
 	"github.com/litelake/yamlops/internal/ssh"
 )
 
@@ -58,8 +58,10 @@ func runEnvCheck(server, zone string) {
 	}
 
 	secrets := cfg.GetSecretsMap()
+	registries := convertRegistries(cfg.Registries)
 
-	for _, srv := range cfg.Servers {
+	for i := range cfg.Servers {
+		srv := &cfg.Servers[i]
 		if server != "" && srv.Name != server {
 			continue
 		}
@@ -79,21 +81,11 @@ func runEnvCheck(server, zone string) {
 			continue
 		}
 
-		stdout, _, err := client.Run("sudo docker ps --format '{{.Names}}'")
+		checker := serverpkg.NewChecker(client, srv, registries, secrets)
+		results := checker.CheckAll()
+		fmt.Print(serverpkg.FormatResults(srv.Name, results))
+
 		client.Close()
-
-		if err != nil {
-			fmt.Printf("[%s] Check failed: %v\n", srv.Name, err)
-			continue
-		}
-
-		fmt.Printf("[%s] Status: running\n", srv.Name)
-		containers := strings.TrimSpace(stdout)
-		if containers != "" {
-			for _, c := range strings.Split(containers, "\n") {
-				fmt.Printf("  - %s\n", c)
-			}
-		}
 	}
 }
 
@@ -106,8 +98,10 @@ func runEnvSync(server, zone string) {
 	}
 
 	secrets := cfg.GetSecretsMap()
+	registries := convertRegistries(cfg.Registries)
 
-	for _, srv := range cfg.Servers {
+	for i := range cfg.Servers {
+		srv := &cfg.Servers[i]
 		if server != "" && srv.Name != server {
 			continue
 		}
@@ -127,14 +121,18 @@ func runEnvSync(server, zone string) {
 			continue
 		}
 
-		_, stderr, err := client.Run("sudo docker network create yamlops-" + Env + " 2>/dev/null || true")
-		client.Close()
+		syncer := serverpkg.NewSyncer(client, srv, Env, registries, secrets)
+		results := syncer.SyncAll()
 
-		if err != nil {
-			fmt.Printf("[%s] Sync failed: %v\n%s\n", srv.Name, err, stderr)
-			continue
+		fmt.Printf("[%s] Sync Results\n", srv.Name)
+		for _, r := range results {
+			if r.Success {
+				fmt.Printf("  ✅ %s: %s\n", r.Name, r.Message)
+			} else {
+				fmt.Printf("  ❌ %s: %s\n", r.Name, r.Message)
+			}
 		}
 
-		fmt.Printf("[%s] Network yamlops-%s ready\n", srv.Name, Env)
+		client.Close()
 	}
 }

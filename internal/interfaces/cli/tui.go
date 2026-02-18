@@ -30,12 +30,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "q", "ctrl+c":
-			if m.ViewState == ViewStateTree {
-				return m, tea.Quit
-			}
-			m.ViewState = ViewStateTree
-			m.ErrorMessage = ""
-			return m, nil
+			return m.handleQuit()
 		case "up", "k":
 			return m.handleUp(), nil
 		case "down", "j":
@@ -59,11 +54,41 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "r":
 			return m.handleRefresh(), nil
 		case "esc":
-			if m.ViewState != ViewStateTree {
-				m.ViewState = ViewStateTree
-				m.ErrorMessage = ""
-			}
-			return m, nil
+			return m.handleEscape()
+		}
+	}
+	return m, nil
+}
+
+func (m Model) handleQuit() (tea.Model, tea.Cmd) {
+	switch m.ViewState {
+	case ViewStateMainMenu:
+		return m, tea.Quit
+	case ViewStateTree:
+		return m, tea.Quit
+	case ViewStateServerSetup, ViewStateServerCheck:
+		m.ViewState = ViewStateMainMenu
+		m.ErrorMessage = ""
+		return m, nil
+	default:
+		m.ViewState = ViewStateMainMenu
+		m.ErrorMessage = ""
+		return m, nil
+	}
+}
+
+func (m Model) handleEscape() (tea.Model, tea.Cmd) {
+	switch m.ViewState {
+	case ViewStateServerSetup, ViewStateServerCheck:
+		m.ViewState = ViewStateMainMenu
+		m.ErrorMessage = ""
+	case ViewStateTree:
+		m.ViewState = ViewStateMainMenu
+		m.ErrorMessage = ""
+	default:
+		if m.ViewState != ViewStateTree {
+			m.ViewState = ViewStateTree
+			m.ErrorMessage = ""
 		}
 	}
 	return m, nil

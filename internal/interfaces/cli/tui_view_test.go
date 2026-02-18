@@ -9,6 +9,7 @@ func TestModel_RenderTree(t *testing.T) {
 	m := NewModel("demo", "../../..")
 	m.Width = 80
 	m.Height = 24
+	m.ViewState = ViewStateTree
 
 	view := m.View()
 
@@ -31,6 +32,7 @@ func TestModel_RenderTree(t *testing.T) {
 
 func TestModel_TabSwitch(t *testing.T) {
 	m := NewModel("demo", "../../..")
+	m.ViewState = ViewStateTree
 
 	if m.ViewMode != ViewModeApp {
 		t.Error("Default view mode should be App")
@@ -69,6 +71,7 @@ func TestModel_Selection(t *testing.T) {
 
 func TestModel_Navigation(t *testing.T) {
 	m := NewModel("demo", "../../..")
+	m.ViewState = ViewStateTree
 
 	initialCursor := m.CursorIndex
 

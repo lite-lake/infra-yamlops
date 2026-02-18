@@ -16,6 +16,20 @@ func tickApply() tea.Cmd {
 
 func (m Model) handleUp() Model {
 	switch m.ViewState {
+	case ViewStateMainMenu:
+		if m.MainMenuIndex > 0 {
+			m.MainMenuIndex--
+		}
+	case ViewStateServerSetup:
+		if m.ServerFocusPanel == 0 {
+			if m.ServerIndex > 0 {
+				m.ServerIndex--
+			}
+		} else {
+			if m.ServerAction > 0 {
+				m.ServerAction--
+			}
+		}
 	case ViewStateTree:
 		if m.CursorIndex > 0 {
 			m.CursorIndex--
@@ -30,6 +44,20 @@ func (m Model) handleUp() Model {
 
 func (m Model) handleDown() Model {
 	switch m.ViewState {
+	case ViewStateMainMenu:
+		if m.MainMenuIndex < 2 {
+			m.MainMenuIndex++
+		}
+	case ViewStateServerSetup:
+		if m.ServerFocusPanel == 0 {
+			if m.ServerIndex < len(m.ServerList)-1 {
+				m.ServerIndex++
+			}
+		} else {
+			if m.ServerAction < 3 {
+				m.ServerAction++
+			}
+		}
 	case ViewStateTree:
 		totalNodes := m.countVisibleNodes()
 		if m.CursorIndex < totalNodes-1 {
@@ -58,6 +86,35 @@ func (m Model) handleSpace() Model {
 
 func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 	switch m.ViewState {
+	case ViewStateMainMenu:
+		switch m.MainMenuIndex {
+		case 0:
+			m.ViewState = ViewStateTree
+			return m, nil
+		case 1:
+			m.ViewState = ViewStateServerSetup
+			m.ServerIndex = 0
+			m.ServerAction = 0
+			m.ServerFocusPanel = 0
+			return m, nil
+		case 2:
+			return m, tea.Quit
+		}
+	case ViewStateServerSetup:
+		switch m.ServerAction {
+		case 0:
+			m.executeServerCheck()
+		case 1:
+			m.executeServerSync()
+		case 2:
+			m.executeServerFullSetup()
+		case 3:
+			m.ViewState = ViewStateMainMenu
+		}
+		return m, nil
+	case ViewStateServerCheck:
+		m.ViewState = ViewStateServerSetup
+		return m, nil
 	case ViewStateTree:
 		node := m.getNodeAtIndex(m.CursorIndex)
 		if node == nil {
@@ -88,15 +145,21 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleTab() Model {
-	if m.ViewState != ViewStateTree {
-		return m
+	switch m.ViewState {
+	case ViewStateServerSetup:
+		if m.ServerFocusPanel == 0 {
+			m.ServerFocusPanel = 1
+		} else {
+			m.ServerFocusPanel = 0
+		}
+	case ViewStateTree:
+		if m.ViewMode == ViewModeApp {
+			m.ViewMode = ViewModeDNS
+		} else {
+			m.ViewMode = ViewModeApp
+		}
+		m.CursorIndex = 0
 	}
-	if m.ViewMode == ViewModeApp {
-		m.ViewMode = ViewModeDNS
-	} else {
-		m.ViewMode = ViewModeApp
-	}
-	m.CursorIndex = 0
 	return m
 }
 

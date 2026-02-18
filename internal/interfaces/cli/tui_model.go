@@ -6,6 +6,7 @@ import (
 	"github.com/litelake/yamlops/internal/application/handler"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
+	serverpkg "github.com/litelake/yamlops/internal/server"
 )
 
 type Environment string
@@ -24,6 +25,9 @@ const (
 	ViewStateApplyConfirm
 	ViewStateApplyProgress
 	ViewStateApplyComplete
+	ViewStateMainMenu
+	ViewStateServerSetup
+	ViewStateServerCheck
 )
 
 type ViewMode int
@@ -200,26 +204,33 @@ var tabInactiveStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#6B7280"))
 
 type Model struct {
-	ViewState       ViewState
-	ViewMode        ViewMode
-	Environment     Environment
-	ConfigDir       string
-	Config          *entity.Config
-	TreeNodes       []*TreeNode
-	DNSTreeNodes    []*TreeNode
-	CursorIndex     int
-	Width           int
-	Height          int
-	ErrorMessage    string
-	PlanResult      *valueobject.Plan
-	ApplyProgress   int
-	ApplyTotal      int
-	ApplyComplete   bool
-	ApplyResults    []*handler.Result
-	ApplyInProgress bool
-	ConfirmSelected int
-	PlanScope       *valueobject.Scope
-	ConfirmView     bool
+	ViewState          ViewState
+	ViewMode           ViewMode
+	Environment        Environment
+	ConfigDir          string
+	Config             *entity.Config
+	TreeNodes          []*TreeNode
+	DNSTreeNodes       []*TreeNode
+	CursorIndex        int
+	Width              int
+	Height             int
+	ErrorMessage       string
+	PlanResult         *valueobject.Plan
+	ApplyProgress      int
+	ApplyTotal         int
+	ApplyComplete      bool
+	ApplyResults       []*handler.Result
+	ApplyInProgress    bool
+	ConfirmSelected    int
+	PlanScope          *valueobject.Scope
+	ConfirmView        bool
+	MainMenuIndex      int
+	ServerList         []*entity.Server
+	ServerIndex        int
+	ServerCheckResults []serverpkg.CheckResult
+	ServerSyncResults  []serverpkg.SyncResult
+	ServerAction       int
+	ServerFocusPanel   int
 }
 
 func NewModel(env string, configDir string) Model {
@@ -235,15 +246,21 @@ func NewModel(env string, configDir string) Model {
 		environment = Environment(env)
 	}
 	m := Model{
-		ViewState:   ViewStateTree,
-		ViewMode:    ViewModeApp,
-		Environment: environment,
-		ConfigDir:   configDir,
-		PlanScope:   &valueobject.Scope{},
-		Width:       80,
-		Height:      24,
+		ViewState:        ViewStateMainMenu,
+		ViewMode:         ViewModeApp,
+		Environment:      environment,
+		ConfigDir:        configDir,
+		PlanScope:        &valueobject.Scope{},
+		Width:            80,
+		Height:           24,
+		ServerFocusPanel: 0,
 	}
 	m.loadConfig()
+	if m.Config != nil {
+		for i := range m.Config.Servers {
+			m.ServerList = append(m.ServerList, &m.Config.Servers[i])
+		}
+	}
 	return m
 }
 
