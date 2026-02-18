@@ -242,7 +242,7 @@ type Model struct {
 	DNSRecordDiffs     []RecordDiff
 	DNSPullSelected    map[int]bool
 	DNSPullCursor      int
-	DNSPullDone        bool
+	ScrollOffset       int
 }
 
 func NewModel(env string, configDir string) Model {

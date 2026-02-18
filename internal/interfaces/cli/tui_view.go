@@ -71,36 +71,59 @@ func (m Model) countTotal() int {
 }
 
 func (m Model) renderTree() string {
+	var lines []string
+	idx := 0
+	for _, node := range m.getCurrentTree() {
+		m.renderNodeToLines(node, 0, &idx, &lines)
+	}
+
+	availableHeight := m.Height - 8
+	if availableHeight < 5 {
+		availableHeight = 5
+	}
+
+	treeHeight := availableHeight - 2
+	if treeHeight < 3 {
+		treeHeight = 3
+	}
+
+	if m.ErrorMessage != "" {
+		treeHeight -= 2
+		if treeHeight < 3 {
+			treeHeight = 3
+		}
+	}
+
+	totalNodes := len(lines)
+	viewport := NewViewport(m.CursorIndex, totalNodes, treeHeight)
+	viewport.EnsureCursorVisible()
+	m.ScrollOffset = viewport.Offset
+
 	var content strings.Builder
 	content.WriteString(m.renderTabs())
 	content.WriteString("\n\n")
+
 	if m.ErrorMessage != "" {
 		content.WriteString(changeDeleteStyle.Render("Error: " + m.ErrorMessage))
 		content.WriteString("\n\n")
 	}
-	idx := 0
-	for _, node := range m.getCurrentTree() {
-		content.WriteString(m.renderNode(node, 0, &idx))
+
+	start := viewport.VisibleStart()
+	end := viewport.VisibleEnd()
+	for i := start; i < end && i < len(lines); i++ {
+		content.WriteString(lines[i])
+		content.WriteString("\n")
 	}
+
+	if viewport.TotalRows > viewport.VisibleRows {
+		content.WriteString("\n")
+		content.WriteString(viewport.RenderScrollIndicator())
+	}
+
 	return content.String()
 }
 
-func (m Model) renderTabs() string {
-	var tabs strings.Builder
-	if m.ViewMode == ViewModeApp {
-		tabs.WriteString(tabActiveStyle.Render("Applications"))
-		tabs.WriteString("    ")
-		tabs.WriteString(tabInactiveStyle.Render("DNS"))
-	} else {
-		tabs.WriteString(tabInactiveStyle.Render("Applications"))
-		tabs.WriteString("    ")
-		tabs.WriteString(tabActiveStyle.Render("DNS"))
-	}
-	return tabs.String()
-}
-
-func (m Model) renderNode(node *TreeNode, depth int, idx *int) string {
-	var content strings.Builder
+func (m Model) renderNodeToLines(node *TreeNode, depth int, idx *int, lines *[]string) {
 	indent := strings.Repeat("  ", depth)
 	prefix := indent
 	if depth > 0 {
@@ -139,23 +162,20 @@ func (m Model) renderNode(node *TreeNode, depth int, idx *int) string {
 	if *idx == m.CursorIndex {
 		line = selectedStyle.Render(line)
 	}
-	content.WriteString(line)
-	content.WriteString("\n")
+	*lines = append(*lines, line)
 	*idx++
 	if node.Expanded {
 		for i, child := range node.Children {
 			if i == len(node.Children)-1 {
-				content.WriteString(m.renderNodeLastChild(child, depth+1, idx))
+				m.renderNodeLastChildToLines(child, depth+1, idx, lines)
 			} else {
-				content.WriteString(m.renderNode(child, depth+1, idx))
+				m.renderNodeToLines(child, depth+1, idx, lines)
 			}
 		}
 	}
-	return content.String()
 }
 
-func (m Model) renderNodeLastChild(node *TreeNode, depth int, idx *int) string {
-	var content strings.Builder
+func (m Model) renderNodeLastChildToLines(node *TreeNode, depth int, idx *int, lines *[]string) {
 	indent := strings.Repeat("  ", depth)
 	prefix := indent
 	if depth > 0 {
@@ -193,33 +213,45 @@ func (m Model) renderNodeLastChild(node *TreeNode, depth int, idx *int) string {
 	if *idx == m.CursorIndex {
 		line = selectedStyle.Render(line)
 	}
-	content.WriteString(line)
-	content.WriteString("\n")
+	*lines = append(*lines, line)
 	*idx++
 	if node.Expanded {
 		for i, child := range node.Children {
 			if i == len(node.Children)-1 {
-				content.WriteString(m.renderNodeLastChild(child, depth+1, idx))
+				m.renderNodeLastChildToLines(child, depth+1, idx, lines)
 			} else {
-				content.WriteString(m.renderNode(child, depth+1, idx))
+				m.renderNodeToLines(child, depth+1, idx, lines)
 			}
 		}
 	}
-	return content.String()
+}
+
+func (m Model) renderTabs() string {
+	var tabs strings.Builder
+	if m.ViewMode == ViewModeApp {
+		tabs.WriteString(tabActiveStyle.Render("Applications"))
+		tabs.WriteString("    ")
+		tabs.WriteString(tabInactiveStyle.Render("DNS"))
+	} else {
+		tabs.WriteString(tabInactiveStyle.Render("Applications"))
+		tabs.WriteString("    ")
+		tabs.WriteString(tabActiveStyle.Render("DNS"))
+	}
+	return tabs.String()
 }
 
 func (m Model) renderPlan() string {
-	var content strings.Builder
-	content.WriteString(titleStyle.Render("执行计划"))
-	content.WriteString("\n\n")
+	var lines []string
+	lines = append(lines, titleStyle.Render("执行计划"))
+	lines = append(lines, "")
 	if m.ErrorMessage != "" {
-		content.WriteString(changeDeleteStyle.Render("Error: " + m.ErrorMessage))
-		content.WriteString("\n\n")
-		content.WriteString(helpStyle.Render("Esc 返回  q 退出"))
-		return content.String()
+		lines = append(lines, changeDeleteStyle.Render("Error: "+m.ErrorMessage))
+		lines = append(lines, "")
+		lines = append(lines, helpStyle.Render("Esc 返回  q 退出"))
+		return strings.Join(lines, "\n")
 	}
 	if m.PlanResult == nil || len(m.PlanResult.Changes) == 0 {
-		content.WriteString("No changes detected.\n")
+		lines = append(lines, "No changes detected.")
 	} else {
 		for _, ch := range m.PlanResult.Changes {
 			style := changeNoopStyle
@@ -236,13 +268,32 @@ func (m Model) renderPlan() string {
 				prefix = "-"
 			}
 			line := fmt.Sprintf("%s %s: %s", prefix, ch.Entity, ch.Name)
-			content.WriteString(style.Render(line))
-			content.WriteString("\n")
+			lines = append(lines, style.Render(line))
 		}
 	}
-	content.WriteString("\n")
-	content.WriteString(changeCreateStyle.Render("按 Enter 执行变更"))
-	content.WriteString("\n")
+	lines = append(lines, "")
+	lines = append(lines, changeCreateStyle.Render("按 Enter 执行变更"))
+
+	availableHeight := m.Height - 6
+	if availableHeight < 5 {
+		availableHeight = 5
+	}
+
+	totalLines := len(lines)
+	viewport := NewViewport(0, totalLines, availableHeight)
+	m.ScrollOffset = viewport.Offset
+
+	var content strings.Builder
+	for i := viewport.VisibleStart(); i < viewport.VisibleEnd() && i < len(lines); i++ {
+		content.WriteString(lines[i])
+		content.WriteString("\n")
+	}
+
+	if viewport.TotalRows > viewport.VisibleRows {
+		content.WriteString("\n")
+		content.WriteString(viewport.RenderSimpleScrollIndicator())
+	}
+
 	return content.String()
 }
 
@@ -287,27 +338,48 @@ func (m Model) renderApplyProgress() string {
 }
 
 func (m Model) renderApplyComplete() string {
-	var content strings.Builder
-	content.WriteString(titleStyle.Render("执行完成"))
-	content.WriteString("\n\n")
+	var lines []string
+	lines = append(lines, titleStyle.Render("执行完成"))
+	lines = append(lines, "")
+
 	if m.ApplyResults != nil {
 		successCount := 0
 		failCount := 0
 		for _, result := range m.ApplyResults {
 			if result.Success {
 				successCount++
-				content.WriteString(changeCreateStyle.Render(fmt.Sprintf("✓ %s: %s", result.Change.Entity, result.Change.Name)))
+				lines = append(lines, changeCreateStyle.Render(fmt.Sprintf("✓ %s: %s", result.Change.Entity, result.Change.Name)))
 			} else {
 				failCount++
-				content.WriteString(changeDeleteStyle.Render(fmt.Sprintf("✗ %s: %s - %v", result.Change.Entity, result.Change.Name, result.Error)))
+				lines = append(lines, changeDeleteStyle.Render(fmt.Sprintf("✗ %s: %s - %v", result.Change.Entity, result.Change.Name, result.Error)))
 			}
-			content.WriteString("\n")
 		}
-		content.WriteString("\n")
-		content.WriteString(fmt.Sprintf("成功: %d  失败: %d\n", successCount, failCount))
+		lines = append(lines, "")
+		lines = append(lines, fmt.Sprintf("成功: %d  失败: %d", successCount, failCount))
 	}
-	content.WriteString("\n")
-	content.WriteString(helpStyle.Render("Enter 返回  q 退出"))
+	lines = append(lines, "")
+	lines = append(lines, helpStyle.Render("Enter 返回  q 退出"))
+
+	availableHeight := m.Height - 6
+	if availableHeight < 5 {
+		availableHeight = 5
+	}
+
+	totalLines := len(lines)
+	viewport := NewViewport(0, totalLines, availableHeight)
+	m.ScrollOffset = viewport.Offset
+
+	var content strings.Builder
+	for i := viewport.VisibleStart(); i < viewport.VisibleEnd() && i < len(lines); i++ {
+		content.WriteString(lines[i])
+		content.WriteString("\n")
+	}
+
+	if viewport.TotalRows > viewport.VisibleRows {
+		content.WriteString("\n")
+		content.WriteString(viewport.RenderSimpleScrollIndicator())
+	}
+
 	return content.String()
 }
 
