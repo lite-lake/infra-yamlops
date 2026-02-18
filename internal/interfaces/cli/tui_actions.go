@@ -522,7 +522,6 @@ func (m *Model) saveDomainDiffsToConfig(diffs []DomainDiff) {
 		if diff.ChangeType == valueobject.ChangeTypeCreate {
 			newDomains = append(newDomains, entity.Domain{
 				Name:   diff.Name,
-				ISP:    diff.DNSISP,
 				DNSISP: diff.DNSISP,
 			})
 			domainSet[diff.Name] = true
@@ -622,7 +621,14 @@ func createDNSProviderFromConfig(isp *entity.ISP, secrets map[string]string) (dn
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve api_token: %w", err)
 		}
-		return dns.NewCloudflareProvider(apiToken), nil
+		accountID := ""
+		if accountIDRef, ok := isp.Credentials["account_id"]; ok {
+			accountID, err = (&accountIDRef).Resolve(secrets)
+			if err != nil {
+				return nil, fmt.Errorf("failed to resolve account_id: %w", err)
+			}
+		}
+		return dns.NewCloudflareProvider(apiToken, accountID), nil
 	case entity.ISPTypeTencent:
 		secretIDRef := isp.Credentials["secret_id"]
 		secretID, err := (&secretIDRef).Resolve(secrets)

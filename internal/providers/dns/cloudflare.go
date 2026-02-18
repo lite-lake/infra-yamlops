@@ -13,14 +13,15 @@ import (
 )
 
 type CloudflareProvider struct {
-	client *cloudflare.Client
+	client    *cloudflare.Client
+	accountID string
 }
 
-func NewCloudflareProvider(apiToken string) Provider {
+func NewCloudflareProvider(apiToken string, accountID string) Provider {
 	client := cloudflare.NewClient(
 		option.WithAPIToken(apiToken),
 	)
-	return &CloudflareProvider{client: client}
+	return &CloudflareProvider{client: client, accountID: accountID}
 }
 
 func (p *CloudflareProvider) Name() string {
@@ -148,7 +149,13 @@ func (p *CloudflareProvider) UpdateRecord(domain string, recordID string, record
 func (p *CloudflareProvider) ListDomains() ([]string, error) {
 	ctx := context.Background()
 	var zoneNames []string
-	pager := p.client.Zones.ListAutoPaging(ctx, zones.ZoneListParams{})
+	params := zones.ZoneListParams{}
+	if p.accountID != "" {
+		params.Account = cloudflare.F(zones.ZoneListParamsAccount{
+			ID: cloudflare.F(p.accountID),
+		})
+	}
+	pager := p.client.Zones.ListAutoPaging(ctx, params)
 	for pager.Next() {
 		zone := pager.Current()
 		zoneNames = append(zoneNames, zone.Name)

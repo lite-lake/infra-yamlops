@@ -458,13 +458,13 @@ func validateDomainConflicts(cfg *entity.Config) error {
 		domainNames[domain.Name] = domain.Name
 	}
 
-	dnsKeys := make(map[string]string)
+	dnsKeys := make(map[string]bool)
 	for _, record := range cfg.DNSRecords {
-		key := fmt.Sprintf("%s:%s:%s", record.Domain, record.Type, record.Name)
-		if existing, ok := dnsKeys[key]; ok {
-			return fmt.Errorf("%w: dns record '%s' is defined multiple times (type: %s, name: %s)", ErrDNSSubdomainConflict, record.Domain, existing, record.Name)
+		key := fmt.Sprintf("%s:%s:%s:%s", record.Domain, record.Type, record.Name, record.Value)
+		if dnsKeys[key] {
+			return fmt.Errorf("%w: dns record '%s' is defined multiple times (type: %s, name: %s, value: %s)", ErrDNSSubdomainConflict, record.Domain, record.Type, record.Name, record.Value)
 		}
-		dnsKeys[key] = record.Name
+		dnsKeys[key] = true
 	}
 
 	return nil

@@ -285,6 +285,13 @@ func (m Model) renderDNSPullRecords() string {
 func (m Model) renderDNSPullDiff() string {
 	var sb strings.Builder
 
+	if m.ErrorMessage != "" {
+		sb.WriteString(titleStyle.Render("  Error") + "\n\n")
+		sb.WriteString(changeDeleteStyle.Render("  "+m.ErrorMessage) + "\n")
+		sb.WriteString("\n" + helpStyle.Render("  Enter/q Back"))
+		return baseStyle.Render(sb.String())
+	}
+
 	if len(m.DNSPullDiffs) > 0 {
 		title := titleStyle.Render("  Select Domains to Sync")
 		sb.WriteString(title + "\n\n")

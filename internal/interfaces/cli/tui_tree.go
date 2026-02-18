@@ -147,7 +147,7 @@ func (m *Model) buildDNSTree() []*TreeNode {
 			Type:     NodeTypeDomain,
 			Name:     d.Name,
 			Info:     d.DNSISP,
-			Expanded: true,
+			Expanded: false,
 		}
 		domainMap[d.Name] = domainNode
 	}
