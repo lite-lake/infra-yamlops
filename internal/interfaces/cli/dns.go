@@ -269,11 +269,12 @@ func printDomains(cfg *entity.Config) {
 
 func printDNSRecords(cfg *entity.Config) {
 	fmt.Println("DNS RECORDS:")
-	if len(cfg.DNSRecords) == 0 {
+	records := cfg.GetAllDNSRecords()
+	if len(records) == 0 {
 		fmt.Println("  (none)")
 		return
 	}
-	for _, r := range cfg.DNSRecords {
+	for _, r := range records {
 		name := r.Name
 		if name == "" || name == "@" {
 			name = "@"
@@ -299,7 +300,7 @@ func runDNSShow(resource, name string) {
 			found = m[name]
 		}
 	case "record", "dns":
-		for _, r := range cfg.DNSRecords {
+		for _, r := range cfg.GetAllDNSRecords() {
 			fullName := r.Name + "." + r.Domain
 			if r.Name == "" || r.Name == "@" {
 				fullName = r.Domain

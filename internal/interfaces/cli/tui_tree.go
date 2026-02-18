@@ -150,17 +150,15 @@ func (m *Model) buildDNSTree() []*TreeNode {
 			Expanded: false,
 		}
 		domainMap[d.Name] = domainNode
-	}
-	for _, r := range m.Config.DNSRecords {
-		recordNode := &TreeNode{
-			ID:   fmt.Sprintf("record:%s:%s:%s", r.Domain, r.Type, r.Name),
-			Type: NodeTypeDNSRecord,
-			Name: fmt.Sprintf("%-6s %s", r.Type, r.Name),
-			Info: r.Value,
-		}
-		if dNode, ok := domainMap[r.Domain]; ok {
-			recordNode.Parent = dNode
-			dNode.Children = append(dNode.Children, recordNode)
+		for _, r := range d.Records {
+			recordNode := &TreeNode{
+				ID:   fmt.Sprintf("record:%s:%s:%s", d.Name, r.Type, r.Name),
+				Type: NodeTypeDNSRecord,
+				Name: fmt.Sprintf("%-6s %s", r.Type, r.Name),
+				Info: r.Value,
+			}
+			recordNode.Parent = domainNode
+			domainNode.Children = append(domainNode.Children, recordNode)
 		}
 	}
 	var roots []*TreeNode

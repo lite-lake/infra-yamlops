@@ -75,7 +75,7 @@ func runList(entity string) {
 			fmt.Printf("- %s (isp: %s)\n", d.Name, d.ISP)
 		}
 	case "records", "dns":
-		for _, r := range cfg.DNSRecords {
+		for _, r := range cfg.GetAllDNSRecords() {
 			fmt.Printf("- %s %s %s -> %s (ttl: %d)\n", r.Domain, r.Type, r.Name, r.Value, r.TTL)
 		}
 	case "certificates", "certs":

@@ -250,8 +250,7 @@ User configs in `userdata/{env}/`:
 - `servers.yaml` - Server definitions
 - `services.yaml` - Service definitions
 - `registries.yaml` - Docker registry credentials
-- `domains.yaml` - Domain configs
-- `dns.yaml` - DNS records
+- `dns.yaml` - Domain configs with embedded DNS records
 - `certificates.yaml` - SSL certificate configs
 
 ## Key Patterns

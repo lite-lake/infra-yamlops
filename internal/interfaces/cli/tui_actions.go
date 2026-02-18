@@ -427,10 +427,11 @@ func (m *Model) fetchRecordDiffs(domainName string) {
 	}
 
 	localRecordMap := make(map[string]*entity.DNSRecord)
-	for i := range m.Config.DNSRecords {
-		if m.Config.DNSRecords[i].Domain == domainName {
-			key := fmt.Sprintf("%s:%s", m.Config.DNSRecords[i].Type, m.Config.DNSRecords[i].Name)
-			localRecordMap[key] = &m.Config.DNSRecords[i]
+	for _, d := range m.Config.Domains {
+		for i := range d.Records {
+			key := fmt.Sprintf("%s:%s", d.Records[i].Type, d.Records[i].Name)
+			localRecordMap[key] = &d.Records[i]
+			localRecordMap[key].Domain = d.Name
 		}
 	}
 
@@ -513,7 +514,7 @@ func (m *Model) saveSelectedDiffs() {
 
 func (m *Model) saveDomainDiffsToConfig(diffs []DomainDiff) {
 	configDir := filepath.Join(m.ConfigDir, "userdata", string(m.Environment))
-	domainsPath := filepath.Join(configDir, "domains.yaml")
+	dnsPath := filepath.Join(configDir, "dns.yaml")
 
 	newDomains := make([]entity.Domain, 0)
 	domainSet := make(map[string]bool)
@@ -543,7 +544,7 @@ func (m *Model) saveDomainDiffsToConfig(diffs []DomainDiff) {
 		}
 	}
 
-	saveYAMLConfig(domainsPath, "domains", newDomains)
+	saveYAMLConfig(dnsPath, "domains", newDomains)
 	m.Config = nil
 	m.loadConfig()
 	m.buildTrees()
@@ -551,42 +552,51 @@ func (m *Model) saveDomainDiffsToConfig(diffs []DomainDiff) {
 
 func (m *Model) saveRecordDiffsToConfig(diffs []RecordDiff) {
 	configDir := filepath.Join(m.ConfigDir, "userdata", string(m.Environment))
-	recordsPath := filepath.Join(configDir, "dns.yaml")
+	dnsPath := filepath.Join(configDir, "dns.yaml")
 
-	newRecords := make([]entity.DNSRecord, 0)
-	recordSet := make(map[string]bool)
+	newDomains := make([]entity.Domain, 0)
+	domainSet := make(map[string]bool)
 
 	for _, diff := range diffs {
-		if diff.ChangeType == valueobject.ChangeTypeCreate || diff.ChangeType == valueobject.ChangeTypeUpdate {
-			key := fmt.Sprintf("%s:%s:%s", diff.Domain, diff.Type, diff.Name)
-			newRecords = append(newRecords, entity.DNSRecord{
-				Domain: diff.Domain,
-				Type:   diff.Type,
-				Name:   diff.Name,
-				Value:  diff.Value,
-				TTL:    diff.TTL,
-			})
-			recordSet[key] = true
-		}
+		domainSet[diff.Domain] = true
 	}
 
-	for _, r := range m.Config.DNSRecords {
-		key := fmt.Sprintf("%s:%s:%s", r.Domain, r.Type, r.Name)
-		if !recordSet[key] {
+	for _, d := range m.Config.Domains {
+		newDomain := entity.Domain{
+			Name:   d.Name,
+			ISP:    d.ISP,
+			DNSISP: d.DNSISP,
+			Parent: d.Parent,
+		}
+		for _, r := range d.Records {
 			shouldKeep := true
 			for _, diff := range diffs {
-				if diff.Domain == r.Domain && string(diff.Type) == string(r.Type) && diff.Name == r.Name && diff.ChangeType == valueobject.ChangeTypeDelete {
+				if diff.Domain == d.Name && string(diff.Type) == string(r.Type) && diff.Name == r.Name && diff.ChangeType == valueobject.ChangeTypeDelete {
 					shouldKeep = false
 					break
 				}
 			}
 			if shouldKeep {
-				newRecords = append(newRecords, r)
+				newDomain.Records = append(newDomain.Records, r)
 			}
 		}
+		if domainSet[d.Name] {
+			for _, diff := range diffs {
+				if diff.Domain == d.Name && (diff.ChangeType == valueobject.ChangeTypeCreate || diff.ChangeType == valueobject.ChangeTypeUpdate) {
+					newDomain.Records = append(newDomain.Records, entity.DNSRecord{
+						Type:  diff.Type,
+						Name:  diff.Name,
+						Value: diff.Value,
+						TTL:   diff.TTL,
+					})
+				}
+			}
+			delete(domainSet, d.Name)
+		}
+		newDomains = append(newDomains, newDomain)
 	}
 
-	saveYAMLConfig(recordsPath, "records", newRecords)
+	saveYAMLConfig(dnsPath, "domains", newDomains)
 	m.Config = nil
 	m.loadConfig()
 	m.buildTrees()

@@ -20,7 +20,7 @@ const (
 )
 
 type DNSRecord struct {
-	Domain string        `yaml:"domain"`
+	Domain string        `yaml:"-"`
 	Type   DNSRecordType `yaml:"type"`
 	Name   string        `yaml:"name"`
 	Value  string        `yaml:"value"`
@@ -28,9 +28,6 @@ type DNSRecord struct {
 }
 
 func (r *DNSRecord) Validate() error {
-	if r.Domain == "" {
-		return errors.New("domain is required")
-	}
 	validTypes := map[DNSRecordType]bool{
 		DNSRecordTypeA:     true,
 		DNSRecordTypeAAAA:  true,

@@ -62,7 +62,7 @@ func (p *Planner) Plan(scope *valueobject.Scope) (*valueobject.Plan, error) {
 	p.plannerService.PlanISPs(plan, p.config.GetISPMap(), scope)
 	p.plannerService.PlanZones(plan, p.config.GetZoneMap(), scope)
 	p.plannerService.PlanDomains(plan, p.config.GetDomainMap(), scope)
-	p.plannerService.PlanRecords(plan, p.config.DNSRecords, scope)
+	p.plannerService.PlanRecords(plan, p.config.GetAllDNSRecords(), scope)
 	p.plannerService.PlanCertificates(plan, p.config.GetCertificateMap(), scope)
 	p.plannerService.PlanRegistries(plan, p.config.GetRegistryMap(), scope)
 	p.plannerService.PlanServers(plan, p.config.GetServerMap(), p.config.GetZoneMap(), scope)
@@ -115,10 +115,11 @@ func (p *Planner) LoadStateFromFile(path string) error {
 	}
 	for i := range cfg.Domains {
 		state.Domains[cfg.Domains[i].Name] = &cfg.Domains[i]
-	}
-	for i := range cfg.DNSRecords {
-		key := fmt.Sprintf("%s:%s:%s", cfg.DNSRecords[i].Domain, cfg.DNSRecords[i].Type, cfg.DNSRecords[i].Name)
-		state.Records[key] = &cfg.DNSRecords[i]
+		for _, r := range cfg.Domains[i].FlattenRecords() {
+			record := r
+			key := fmt.Sprintf("%s:%s:%s", record.Domain, record.Type, record.Name)
+			state.Records[key] = &record
+		}
 	}
 	for i := range cfg.Certificates {
 		state.Certs[cfg.Certificates[i].Name] = &cfg.Certificates[i]
@@ -142,7 +143,6 @@ func (p *Planner) SaveStateToFile(path string) error {
 		Servers:      make([]entity.Server, 0, len(state.Servers)),
 		Zones:        make([]entity.Zone, 0, len(state.Zones)),
 		Domains:      make([]entity.Domain, 0, len(state.Domains)),
-		DNSRecords:   make([]entity.DNSRecord, 0, len(state.Records)),
 		Certificates: make([]entity.Certificate, 0, len(state.Certs)),
 		Registries:   make([]entity.Registry, 0, len(state.Registries)),
 		ISPs:         make([]entity.ISP, 0, len(state.ISPs)),
@@ -162,9 +162,6 @@ func (p *Planner) SaveStateToFile(path string) error {
 	}
 	for _, d := range state.Domains {
 		cfg.Domains = append(cfg.Domains, *d)
-	}
-	for _, r := range state.Records {
-		cfg.DNSRecords = append(cfg.DNSRecords, *r)
 	}
 	for _, c := range state.Certs {
 		cfg.Certificates = append(cfg.Certificates, *c)

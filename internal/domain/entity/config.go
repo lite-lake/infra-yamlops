@@ -17,7 +17,6 @@ type Config struct {
 	Gateways      []Gateway      `yaml:"gateways,omitempty"`
 	Services      []BizService   `yaml:"services,omitempty"`
 	Domains       []Domain       `yaml:"domains,omitempty"`
-	DNSRecords    []DNSRecord    `yaml:"records,omitempty"`
 	Certificates  []Certificate  `yaml:"certificates,omitempty"`
 }
 
@@ -65,11 +64,6 @@ func (c *Config) Validate() error {
 	for i, d := range c.Domains {
 		if err := d.Validate(); err != nil {
 			return fmt.Errorf("domains[%d]: %w", i, err)
-		}
-	}
-	for i, r := range c.DNSRecords {
-		if err := r.Validate(); err != nil {
-			return fmt.Errorf("records[%d]: %w", i, err)
 		}
 	}
 	for i, cert := range c.Certificates {
@@ -150,6 +144,14 @@ func (c *Config) GetDomainMap() map[string]*Domain {
 		m[c.Domains[i].Name] = &c.Domains[i]
 	}
 	return m
+}
+
+func (c *Config) GetAllDNSRecords() []DNSRecord {
+	var records []DNSRecord
+	for _, d := range c.Domains {
+		records = append(records, d.FlattenRecords()...)
+	}
+	return records
 }
 
 func (c *Config) GetCertificateMap() map[string]*Certificate {

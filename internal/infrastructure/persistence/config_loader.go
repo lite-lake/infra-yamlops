@@ -51,8 +51,7 @@ func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, er
 		{"servers.yaml", loadServers},
 		{"services.yaml", loadServices},
 		{"registries.yaml", loadRegistries},
-		{"domains.yaml", loadDomains},
-		{"dns.yaml", loadDNSRecords},
+		{"dns.yaml", loadDomains},
 		{"certificates.yaml", loadCertificates},
 	}
 
@@ -204,15 +203,6 @@ func loadDomains(filePath string, cfg *entity.Config) error {
 		return err
 	}
 	cfg.Domains = items
-	return nil
-}
-
-func loadDNSRecords(filePath string, cfg *entity.Config) error {
-	items, err := loadEntity[entity.DNSRecord](filePath, "records")
-	if err != nil {
-		return err
-	}
-	cfg.DNSRecords = items
 	return nil
 }
 
@@ -382,7 +372,7 @@ func validateDomainReferences(cfg *entity.Config, isps map[string]*entity.ISP, d
 }
 
 func validateDNSReferences(cfg *entity.Config, domains map[string]*entity.Domain) error {
-	for _, record := range cfg.DNSRecords {
+	for _, record := range cfg.GetAllDNSRecords() {
 		if _, ok := domains[record.Domain]; !ok {
 			return fmt.Errorf("%w: domain '%s' referenced by dns record does not exist", ErrMissingReference, record.Domain)
 		}
@@ -459,7 +449,7 @@ func validateDomainConflicts(cfg *entity.Config) error {
 	}
 
 	dnsKeys := make(map[string]bool)
-	for _, record := range cfg.DNSRecords {
+	for _, record := range cfg.GetAllDNSRecords() {
 		key := fmt.Sprintf("%s:%s:%s:%s", record.Domain, record.Type, record.Name, record.Value)
 		if dnsKeys[key] {
 			return fmt.Errorf("%w: dns record '%s' is defined multiple times (type: %s, name: %s, value: %s)", ErrDNSSubdomainConflict, record.Domain, record.Type, record.Name, record.Value)

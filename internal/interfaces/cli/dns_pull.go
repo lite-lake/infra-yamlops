@@ -70,6 +70,7 @@ type DomainDiff struct {
 
 type RecordDiff struct {
 	Domain     string
+	DNSISP     string
 	Type       entity.DNSRecordType
 	Name       string
 	Value      string
@@ -230,10 +231,11 @@ func runDNSPullRecords(domainName string, autoApprove bool) {
 	}
 
 	localRecordMap := make(map[string]*entity.DNSRecord)
-	for i := range cfg.DNSRecords {
-		if cfg.DNSRecords[i].Domain == domainName {
-			key := fmt.Sprintf("%s:%s", cfg.DNSRecords[i].Type, cfg.DNSRecords[i].Name)
-			localRecordMap[key] = &cfg.DNSRecords[i]
+	for _, d := range cfg.Domains {
+		for i := range d.Records {
+			key := fmt.Sprintf("%s:%s", d.Records[i].Type, d.Records[i].Name)
+			localRecordMap[key] = &d.Records[i]
+			localRecordMap[key].Domain = d.Name
 		}
 	}
 
@@ -251,6 +253,7 @@ func runDNSPullRecords(domainName string, autoApprove bool) {
 			if local.Value != remote.Value || local.TTL != remote.TTL {
 				diffs = append(diffs, RecordDiff{
 					Domain:     domainName,
+					DNSISP:     domain.DNSISP,
 					Type:       entity.DNSRecordType(remote.Type),
 					Name:       recordName,
 					Value:      remote.Value,
@@ -262,6 +265,7 @@ func runDNSPullRecords(domainName string, autoApprove bool) {
 		} else {
 			diffs = append(diffs, RecordDiff{
 				Domain:     domainName,
+				DNSISP:     domain.DNSISP,
 				Type:       entity.DNSRecordType(remote.Type),
 				Name:       recordName,
 				Value:      remote.Value,
@@ -274,6 +278,7 @@ func runDNSPullRecords(domainName string, autoApprove bool) {
 	for _, local := range localRecordMap {
 		diffs = append(diffs, RecordDiff{
 			Domain:     local.Domain,
+			DNSISP:     domain.DNSISP,
 			Type:       local.Type,
 			Name:       local.Name,
 			Value:      local.Value,
@@ -380,7 +385,7 @@ func createDNSProvider(isp *entity.ISP, secrets map[string]string) (dns.Provider
 
 func saveDomainDiffs(diffs []DomainDiff, cfg *entity.Config) error {
 	configDir := filepath.Join(ConfigDir, "userdata", Env)
-	domainsPath := filepath.Join(configDir, "domains.yaml")
+	dnsPath := filepath.Join(configDir, "dns.yaml")
 
 	newDomains := make([]entity.Domain, 0)
 	domainSet := make(map[string]bool)
@@ -410,47 +415,75 @@ func saveDomainDiffs(diffs []DomainDiff, cfg *entity.Config) error {
 		}
 	}
 
-	return saveYAMLFile(domainsPath, "domains", newDomains)
+	return saveYAMLFile(dnsPath, "domains", newDomains)
 }
 
 func saveRecordDiffs(diffs []RecordDiff, cfg *entity.Config) error {
 	configDir := filepath.Join(ConfigDir, "userdata", Env)
-	recordsPath := filepath.Join(configDir, "dns.yaml")
+	dnsPath := filepath.Join(configDir, "dns.yaml")
 
-	newRecords := make([]entity.DNSRecord, 0)
-	recordSet := make(map[string]bool)
+	newDomains := make([]entity.Domain, 0)
+	domainSet := make(map[string]bool)
 
 	for _, diff := range diffs {
-		if diff.ChangeType == valueobject.ChangeTypeCreate || diff.ChangeType == valueobject.ChangeTypeUpdate {
-			key := fmt.Sprintf("%s:%s:%s", diff.Domain, diff.Type, diff.Name)
-			newRecords = append(newRecords, entity.DNSRecord{
-				Domain: diff.Domain,
-				Type:   diff.Type,
-				Name:   diff.Name,
-				Value:  diff.Value,
-				TTL:    diff.TTL,
-			})
-			recordSet[key] = true
-		}
+		domainSet[diff.Domain] = true
 	}
 
-	for _, r := range cfg.DNSRecords {
-		key := fmt.Sprintf("%s:%s:%s", r.Domain, r.Type, r.Name)
-		if !recordSet[key] {
+	for _, d := range cfg.Domains {
+		newDomain := entity.Domain{
+			Name:   d.Name,
+			ISP:    d.ISP,
+			DNSISP: d.DNSISP,
+			Parent: d.Parent,
+		}
+		for _, r := range d.Records {
 			shouldKeep := true
 			for _, diff := range diffs {
-				if diff.Domain == r.Domain && string(diff.Type) == string(r.Type) && diff.Name == r.Name && diff.ChangeType == valueobject.ChangeTypeDelete {
+				if diff.Domain == d.Name && string(diff.Type) == string(r.Type) && diff.Name == r.Name && diff.ChangeType == valueobject.ChangeTypeDelete {
 					shouldKeep = false
 					break
 				}
 			}
 			if shouldKeep {
-				newRecords = append(newRecords, r)
+				newDomain.Records = append(newDomain.Records, r)
 			}
 		}
+		if domainSet[d.Name] {
+			for _, diff := range diffs {
+				if diff.Domain == d.Name && (diff.ChangeType == valueobject.ChangeTypeCreate || diff.ChangeType == valueobject.ChangeTypeUpdate) {
+					newDomain.Records = append(newDomain.Records, entity.DNSRecord{
+						Type:  diff.Type,
+						Name:  diff.Name,
+						Value: diff.Value,
+						TTL:   diff.TTL,
+					})
+				}
+			}
+			delete(domainSet, d.Name)
+		}
+		newDomains = append(newDomains, newDomain)
 	}
 
-	return saveYAMLFile(recordsPath, "records", newRecords)
+	for domainName := range domainSet {
+		newDomain := entity.Domain{
+			Name:    domainName,
+			DNSISP:  diffs[0].DNSISP,
+			Records: []entity.DNSRecord{},
+		}
+		for _, diff := range diffs {
+			if diff.Domain == domainName && (diff.ChangeType == valueobject.ChangeTypeCreate || diff.ChangeType == valueobject.ChangeTypeUpdate) {
+				newDomain.Records = append(newDomain.Records, entity.DNSRecord{
+					Type:  diff.Type,
+					Name:  diff.Name,
+					Value: diff.Value,
+					TTL:   diff.TTL,
+				})
+			}
+		}
+		newDomains = append(newDomains, newDomain)
+	}
+
+	return saveYAMLFile(dnsPath, "domains", newDomains)
 }
 
 func saveYAMLFile(path, key string, data interface{}) error {

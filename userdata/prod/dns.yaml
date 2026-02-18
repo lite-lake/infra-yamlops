@@ -1,24 +1,36 @@
-records:
-  - domain: example.com
-    type: A
-    name: "@"
-    value: 203.0.113.10
-    ttl: 300
+domains:
+  - name: example.com
+    isp: aliyun
+    dns_isp: aliyun
+    records:
+      - type: A
+        name: "@"
+        value: 203.0.113.10
+        ttl: 300
+      - type: A
+        name: www
+        value: 203.0.113.10
+        ttl: 300
+      - type: A
+        name: api
+        value: 203.0.113.10
+        ttl: 300
+      - type: CNAME
+        name: cdn
+        value: cdn.example.com.cdn.dnsv1.com
+        ttl: 600
 
-  - domain: example.com
-    type: A
-    name: www
-    value: 203.0.113.10
-    ttl: 300
+  - name: "*.example.com"
+    parent: example.com
+    isp: aliyun
+    dns_isp: aliyun
 
-  - domain: example.com
-    type: A
-    name: api
-    value: 203.0.113.10
-    ttl: 300
+  - name: api.example.com
+    parent: example.com
+    isp: aliyun
+    dns_isp: aliyun
 
-  - domain: example.com
-    type: CNAME
-    name: cdn
-    value: cdn.example.com.cdn.dnsv1.com
-    ttl: 600
+  - name: www.example.com
+    parent: example.com
+    isp: aliyun
+    dns_isp: aliyun
