@@ -143,6 +143,60 @@ go build -o yamlops ./cmd/yamlops
 ./yamlops env sync -e prod --server srv-east-01
 ```
 
+#### dns - DNS 管理
+
+```bash
+# 查看 DNS 变更计划
+./yamlops dns plan -e prod --domain example.com
+
+# 应用 DNS 变更
+./yamlops dns apply -e prod --domain example.com
+
+# 列出 DNS 资源
+./yamlops dns list domains -e prod
+./yamlops dns list records -e prod
+
+# 查看资源详情
+./yamlops dns show domain example.com -e prod
+./yamlops dns show record www.example.com -e prod
+```
+
+#### dns pull - 从服务商拉取 DNS 配置
+
+**拉取域名列表**：从指定 ISP 拉取域名并同步到本地配置
+
+```bash
+# 查看可用 ISP
+./yamlops dns pull domains -e prod
+
+# 从 ISP 拉取域名（交互模式，勾选需要同步的域名）
+./yamlops dns pull domains -e prod --isp aliyun
+
+# 从 ISP 拉取域名（直接模式，自动同步所有差异）
+./yamlops dns pull domains -e prod --isp aliyun --auto-approve
+```
+
+**拉取 DNS 记录**：从指定域名拉取 DNS 记录并同步到本地配置
+
+```bash
+# 查看可用域名
+./yamlops dns pull records -e prod
+
+# 从域名拉取 DNS 记录（交互模式，勾选需要同步的记录）
+./yamlops dns pull records -e prod --domain example.com
+
+# 从域名拉取 DNS 记录（直接模式，自动同步所有差异）
+./yamlops dns pull records -e prod --domain example.com --auto-approve
+```
+
+**差异类型**：
+
+| 符号 | 类型 | 说明 |
+|------|------|------|
+| `+` | CREATE | 远程有，本地无 |
+| `~` | UPDATE | 值不同 |
+| `-` | DELETE | 本地有，远程无 |
+
 #### clean - 清理资源
 
 ```bash

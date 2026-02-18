@@ -18,6 +18,7 @@ type DNSRecord struct {
 
 type Provider interface {
 	Name() string
+	ListDomains() ([]string, error)
 	ListRecords(domain string) ([]DNSRecord, error)
 	CreateRecord(domain string, record *DNSRecord) error
 	DeleteRecord(domain string, recordID string) error

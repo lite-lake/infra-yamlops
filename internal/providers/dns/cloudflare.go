@@ -145,7 +145,7 @@ func (p *CloudflareProvider) UpdateRecord(domain string, recordID string, record
 	return nil
 }
 
-func (p *CloudflareProvider) ListZones() ([]string, error) {
+func (p *CloudflareProvider) ListDomains() ([]string, error) {
 	ctx := context.Background()
 	var zoneNames []string
 	pager := p.client.Zones.ListAutoPaging(ctx, zones.ZoneListParams{})

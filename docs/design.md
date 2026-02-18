@@ -795,7 +795,61 @@ yamlops env sync --server srv-east-01
 | Registry 登录 | 登录配置的 Docker 仓库 |
 | Docker 网络 | 创建 yamlops 网络（如果不存在） |
 
-### 6.4 作用域
+### 6.3 DNS 管理命令
+
+```bash
+# 查看 DNS 变更计划
+yamlops dns plan --domain example.com
+
+# 应用 DNS 变更
+yamlops dns apply --domain example.com
+
+# 列出 DNS 资源
+yamlops dns list domains
+yamlops dns list records
+
+# 查看资源详情
+yamlops dns show domain example.com
+yamlops dns show record www.example.com
+```
+
+### 6.4 DNS Pull 命令（从服务商同步配置）
+
+**拉取域名列表**：从指定 ISP 拉取域名并同步到本地配置
+
+```bash
+# 查看可用 ISP
+yamlops dns pull domains
+
+# 从 ISP 拉取域名（交互模式，勾选需要同步的域名）
+yamlops dns pull domains --isp aliyun
+
+# 从 ISP 拉取域名（直接模式，自动同步所有差异）
+yamlops dns pull domains --isp aliyun --auto-approve
+```
+
+**拉取 DNS 记录**：从指定域名拉取 DNS 记录并同步到本地配置
+
+```bash
+# 查看可用域名
+yamlops dns pull records
+
+# 从域名拉取 DNS 记录（交互模式，勾选需要同步的记录）
+yamlops dns pull records --domain example.com
+
+# 从域名拉取 DNS 记录（直接模式，自动同步所有差异）
+yamlops dns pull records --domain example.com --auto-approve
+```
+
+**差异类型**：
+
+| 符号 | 类型 | 说明 |
+|------|------|------|
+| `+` | CREATE | 远程有，本地无 |
+| `~` | UPDATE | 值不同 |
+| `-` | DELETE | 本地有，远程无 |
+
+### 6.5 作用域
 
 ```bash
 # 全局操作

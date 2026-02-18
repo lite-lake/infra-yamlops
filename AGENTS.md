@@ -66,6 +66,8 @@ internal/
 │       ├── apply.go                # Apply command
 │       ├── validate.go             # Validate command
 │       ├── env.go                  # Environment check/sync
+│       ├── dns.go                  # DNS plan/apply commands
+│       ├── dns_pull.go             # Pull domains/records from providers
 │       ├── list.go                 # List entities
 │       ├── show.go                 # Show entity details
 │       ├── clean.go                # Clean orphan services
