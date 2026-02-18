@@ -1,22 +1,34 @@
-# YAMLOps 使用指南
+# YAMLOps
 
-基于 YAML 的基础设施运维工具，支持交互式 CLI。
+基于 YAML 的基础设施即代码（IaC）管理工具，支持多环境、Plan/Apply 工作流和交互式 TUI。
+
+## 特性
+
+- **多环境支持**：prod / staging / dev 环境隔离
+- **Plan/Apply 工作流**：类似 Terraform 的预览+执行模式
+- **声明式配置**：通过 YAML 描述期望状态
+- **密钥管理**：支持明文和密钥引用两种方式
+- **DNS 管理**：支持 Cloudflare、阿里云、腾讯云
+- **SSL 证书**：Let's Encrypt、ZeroSSL 自动化管理
+- **Docker Compose**：自动生成和部署
+- **交互式 TUI**：基于 BubbleTea 的终端界面
 
 ## 目录
 
 - [快速开始](#快速开始)
 - [安装](#安装)
+- [架构](#架构)
 - [配置目录结构](#配置目录结构)
 - [CLI 命令](#cli-命令)
 - [实体配置](#实体配置)
-- [秘钥管理](#秘钥管理)
 - [工作流程](#工作流程)
 - [服务器部署规范](#服务器部署规范)
+- [故障排查](#故障排查)
 
 ## 快速开始
 
 ```bash
-# 构建项目
+# 构建
 go build -o yamlops ./cmd/yamlops
 
 # 验证配置
@@ -29,7 +41,7 @@ go build -o yamlops ./cmd/yamlops
 ./yamlops apply -e prod
 
 # 启动交互式 TUI
-./yamlops
+./yamlops -e prod
 ```
 
 ## 安装
@@ -48,6 +60,24 @@ go build -o yamlops ./cmd/yamlops
 - Go 1.24+
 - SSH 访问权限（用于服务器管理）
 
+## 架构
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        Interface Layer (CLI/TUI)                     │
+├─────────────────────────────────────────────────────────────────────┤
+│                      Application Layer (Handler + Executor)          │
+├─────────────────────────────────────────────────────────────────────┤
+│                       Plan Layer (Planner + Generator)               │
+├─────────────────────────────────────────────────────────────────────┤
+│                        Domain Layer (Entity + Service)               │
+├─────────────────────────────────────────────────────────────────────┤
+│                    Infrastructure Layer (Provider + SSH)             │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+详细设计文档：[docs/system-design.md](docs/system-design.md)
+
 ## 配置目录结构
 
 ```
@@ -55,15 +85,15 @@ go build -o yamlops ./cmd/yamlops
 ├── yamlops                  # 可执行文件
 └── userdata/
     ├── prod/                # 生产环境
-    │   ├── secrets.yaml     # 秘钥
+    │   ├── secrets.yaml     # 密钥
     │   ├── isps.yaml        # 服务商
     │   ├── zones.yaml       # 网区
-    │   ├── gateways.yaml    # 网关
     │   ├── servers.yaml     # 服务器
-    │   ├── services.yaml    # 服务
+    │   ├── services.yaml    # 业务服务
+    │   ├── gateways.yaml    # 网关
+    │   ├── infra_services.yaml  # 基础设施服务
     │   ├── registries.yaml  # Docker Registry
-    │   ├── domains.yaml     # 域名
-    │   ├── dns.yaml         # DNS 记录
+    │   ├── dns.yaml         # 域名和 DNS 记录
     │   ├── certificates.yaml # SSL 证书
     │   └── volumes/         # 配置文件
     │       ├── infra-gate/
@@ -83,16 +113,42 @@ go build -o yamlops ./cmd/yamlops
 | `--version` | `-v` | - | 显示版本 |
 | `--help` | `-h` | - | 显示帮助 |
 
-### 命令列表
+### 命令总览
 
-#### validate - 验证配置
-
-```bash
-./yamlops validate -e prod
-./yamlops validate -e staging -c /path/to/config
+```
+yamlops
+├── plan [scope]             # 生成执行计划
+├── apply [scope]            # 应用变更
+├── validate                 # 验证配置
+├── list <entity>            # 列出实体
+├── show <entity> <name>     # 显示详情
+├── clean                    # 清理孤立资源
+├── env
+│   ├── check                # 检查环境状态
+│   └── sync                 # 同步环境配置
+├── server
+│   ├── setup                # 完整设置（check + sync）
+│   ├── check                # 检查服务器状态
+│   └── sync                 # 同步服务器配置
+├── dns
+│   ├── plan                 # DNS 变更计划
+│   ├── apply                # 应用 DNS 变更
+│   ├── list [resource]      # 列出域名/记录
+│   ├── show <resource> <name>
+│   └── pull
+│       ├── domains          # 从 ISP 拉取域名
+│       └── records          # 从域名拉取记录
+├── config
+│   ├── list [type]          # 列出配置项
+│   └── show <type> <name>   # 显示配置详情
+└── app
+    ├── plan                 # 应用部署计划
+    ├── apply                # 应用部署
+    ├── list [resource]      # 列出资源
+    └── show <resource> <name>
 ```
 
-#### plan - 生成变更计划
+### plan - 生成变更计划
 
 ```bash
 # 查看所有变更
@@ -102,55 +158,69 @@ go build -o yamlops ./cmd/yamlops
 ./yamlops plan -e prod --zone cn-east
 ./yamlops plan -e prod --server srv-east-01
 ./yamlops plan -e prod --service api-server
-./yamlops plan -e prod --domain infra
+./yamlops plan -e prod --domain example.com
 ```
 
-#### apply - 应用变更
+### apply - 应用变更
 
 ```bash
-# 应用所有变更
+# 应用所有变更（需确认）
 ./yamlops apply -e prod
+
+# 自动确认
+./yamlops apply -e prod --auto-approve
 
 # 按作用域应用
 ./yamlops apply -e prod --zone cn-east
 ./yamlops apply -e prod --server srv-east-01
 ```
 
-#### list - 列出实体
+### validate - 验证配置
 
 ```bash
+./yamlops validate -e prod
+./yamlops validate -e staging -c /path/to/config
+```
+
+### list / show - 实体管理
+
+```bash
+# 列出实体
 ./yamlops list servers -e prod
 ./yamlops list services -e prod
-./yamlops list zones -e prod
 ./yamlops list domains -e prod
-```
+./yamlops list certificates -e prod
 
-#### show - 查看实体详情
-
-```bash
+# 查看详情
 ./yamlops show server srv-east-01 -e prod
 ./yamlops show service api-server -e prod
+./yamlops show domain example.com -e prod
 ```
 
-#### env - 环境管理
+### server - 服务器管理
 
 ```bash
-# 检查服务器环境
-./yamlops env check -e prod
-./yamlops env check -e prod --zone cn-east
+# 完整设置（检查 + 同步）
+./yamlops server setup -e prod --server srv-east-01
 
-# 同步环境配置
-./yamlops env sync -e prod --server srv-east-01
+# 仅检查
+./yamlops server check -e prod --zone cn-east
+
+# 仅同步
+./yamlops server sync -e prod --server srv-east-01
+
+# 组合使用
+./yamlops server setup -e prod --check-only --zone cn-east
 ```
 
-#### dns - DNS 管理
+### dns - DNS 管理
 
 ```bash
 # 查看 DNS 变更计划
 ./yamlops dns plan -e prod --domain example.com
 
 # 应用 DNS 变更
-./yamlops dns apply -e prod --domain example.com
+./yamlops dns apply -e prod --domain example.com --auto-approve
 
 # 列出 DNS 资源
 ./yamlops dns list domains -e prod
@@ -158,67 +228,76 @@ go build -o yamlops ./cmd/yamlops
 
 # 查看资源详情
 ./yamlops dns show domain example.com -e prod
-./yamlops dns show record www.example.com -e prod
-```
 
-#### dns pull - 从服务商拉取 DNS 配置
-
-**拉取域名列表**：从指定 ISP 拉取域名并同步到本地配置
-
-```bash
-# 查看可用 ISP
-./yamlops dns pull domains -e prod
-
-# 从 ISP 拉取域名（交互模式，勾选需要同步的域名）
+# 从 ISP 拉取域名
 ./yamlops dns pull domains -e prod --isp aliyun
 
-# 从 ISP 拉取域名（直接模式，自动同步所有差异）
-./yamlops dns pull domains -e prod --isp aliyun --auto-approve
-```
-
-**拉取 DNS 记录**：从指定域名拉取 DNS 记录并同步到本地配置
-
-```bash
-# 查看可用域名
-./yamlops dns pull records -e prod
-
-# 从域名拉取 DNS 记录（交互模式，勾选需要同步的记录）
+# 从域名拉取 DNS 记录
 ./yamlops dns pull records -e prod --domain example.com
-
-# 从域名拉取 DNS 记录（直接模式，自动同步所有差异）
-./yamlops dns pull records -e prod --domain example.com --auto-approve
 ```
 
-**差异类型**：
-
-| 符号 | 类型 | 说明 |
-|------|------|------|
-| `+` | CREATE | 远程有，本地无 |
-| `~` | UPDATE | 值不同 |
-| `-` | DELETE | 本地有，远程无 |
-
-#### clean - 清理资源
+### app - 应用部署
 
 ```bash
+# 生成部署计划
+./yamlops app plan -e prod --server srv-east-01
+
+# 应用部署
+./yamlops app apply -e prod --auto-approve
+
+# 列出资源
+./yamlops app list -e prod
+./yamlops app list biz -e prod --server srv-east-01
+```
+
+### config - 配置管理
+
+```bash
+# 列出配置项
+./yamlops config list -e prod
+./yamlops config list secrets -e prod
+
+# 查看配置详情
+./yamlops config show secret db_password -e prod
+./yamlops config show isp aliyun -e prod
+```
+
+### clean - 清理资源
+
+```bash
+# 清理孤立服务和目录
 ./yamlops clean -e prod
 ```
 
-#### TUI 交互模式
+### TUI 交互模式
 
 ```bash
 # 无参数启动进入 TUI
 ./yamlops -e prod
 ```
 
+**TUI 快捷键**：
+
+| 按键 | 功能 |
+|------|------|
+| ↑/k, ↓/j | 上下移动 |
+| Space | 切换选择 |
+| Enter | 确认/展开 |
+| a/n | 选择/取消当前项 |
+| A/N | 全选/全不选 |
+| p | 生成计划 |
+| r | 刷新配置 |
+| Esc | 返回 |
+| q/Ctrl+C | 退出 |
+
 ## 实体配置
 
-### secrets.yaml - 秘钥定义
+### secrets.yaml - 密钥定义
 
 ```yaml
 secrets:
   - name: db_password
     value: "your-db-password"
-
   - name: api_key
     value: "your-api-key"
 ```
@@ -228,33 +307,16 @@ secrets:
 ```yaml
 isps:
   - name: aliyun
-    services:
-      - server
-      - domain
-      - dns
-      - certificate
+    type: aliyun                    # aliyun | cloudflare | tencent
+    services: [server, domain, dns, certificate]
     credentials:
-      access_key_id:
-        secret: aliyun_access_key
-      access_key_secret:
-        secret: aliyun_access_secret
+      access_key_id: {secret: aliyun_access_key}
+      access_key_secret: {secret: aliyun_access_secret}
 
   - name: cloudflare
-    services:
-      - dns
-      - certificate
+    services: [dns, certificate]
     credentials:
       api_token: "cf-api-token"
-
-  - name: tencent
-    services:
-      - server
-      - dns
-    credentials:
-      secret_id:
-        secret: tencent_secret_id
-      secret_key:
-        secret: tencent_secret_key
 ```
 
 ### zones.yaml - 网区定义
@@ -265,11 +327,6 @@ zones:
     description: 华东区生产环境
     isp: aliyun
     region: cn-shanghai
-
-  - name: cn-south
-    description: 华南区
-    isp: tencent
-    region: ap-guangzhou
 ```
 
 ### servers.yaml - 服务器配置
@@ -287,15 +344,11 @@ servers:
       host: 203.0.113.10
       port: 22
       user: root
-      password:
-        secret: srv_east_01_password
+      password: {secret: srv_east_01_password}
     environment:
-      apt_source: tuna
-      registries:
-        - registry-aliyun
+      apt_source: tuna              # tuna | aliyun | tencent | official
+      registries: [registry-aliyun]
 ```
-
-**APT 源选项**: `tuna` | `aliyun` | `tencent` | `official`
 
 ### gateways.yaml - 网关配置
 
@@ -312,8 +365,8 @@ gateways:
       source: volumes://infra-gate
       sync: true
     ssl:
-      mode: remote
-      endpoint: http://infra-ssl.example.com:38567
+      mode: remote                  # local | remote
+      endpoint: http://infra-ssl:38567
     waf:
       enabled: true
       whitelist:
@@ -329,15 +382,14 @@ services:
   - name: api-server
     server: srv-east-01
     image: myapp/api:v1.0.0
-    port: 3000
+    ports:
+      - container: 3000
+        host: 13000
+        protocol: tcp
     env:
       NODE_ENV: production
       DATABASE_URL: postgres://db:5432/myapp
-      REDIS_PASSWORD:
-        secret: redis_password
-    secrets:
-      - db_password
-      - jwt_secret
+      REDIS_PASSWORD: {secret: redis_password}
     healthcheck:
       path: /health
       interval: 30s
@@ -351,11 +403,12 @@ services:
         sync: true
       - ./data:/app/data
       - redis-data:/data
-    gateway:
-      enabled: true
-      hostname: api.example.com
-      path: /
-      ssl: true
+    gateways:
+      - hostname: api.example.com
+        container_port: 3000
+        path: /
+        http: true
+        https: true
     internal: false
 ```
 
@@ -364,6 +417,23 @@ services:
 - `./xxx` - 相对路径，在服务器上创建
 - `name:/path` - Docker named volume
 
+### infra_services.yaml - 基础设施服务
+
+```yaml
+infra_services:
+  - name: infra-ssl
+    type: ssl                      # gateway | ssl
+    server: srv-east-01
+    image: infra-ssl:latest
+    ssl_config:
+      ports:
+        http: 8080
+        acme: 38567
+      auth:
+        username: admin
+        password: {secret: ssl_admin_pwd}
+```
+
 ### registries.yaml - Docker Registry
 
 ```yaml
@@ -371,56 +441,34 @@ registries:
   - name: registry-aliyun
     url: registry.cn-shanghai.aliyuncs.com
     credentials:
-      username:
-        secret: aliyun_registry_user
-      password:
-        secret: aliyun_registry_password
-
-  - name: registry-dockerhub
-    url: registry.hub.docker.com
-    credentials:
-      username: "myuser"
-      password:
-        secret: dockerhub_password
+      username: {secret: aliyun_registry_user}
+      password: {secret: aliyun_registry_password}
 ```
 
-### domains.yaml - 域名
+### dns.yaml - 域名和 DNS 记录
 
 ```yaml
 domains:
   - name: example.com
     isp: aliyun
+    dns_isp: cloudflare
+    records:
+      - type: A
+        name: "@"
+        value: 203.0.113.10
+        ttl: 300
+      - type: A
+        name: www
+        value: 203.0.113.10
+        ttl: 300
+      - type: CNAME
+        name: cdn
+        value: cdn.example.com.cdn.dnsv1.com
+        ttl: 600
 
   - name: "*.example.com"
     parent: example.com
-    isp: aliyun
-
-  - name: api.example.com
-    parent: example.com
-    isp: cloudflare
-```
-
-### dns.yaml - DNS 记录
-
-```yaml
-records:
-  - domain: example.com
-    type: A
-    name: "@"
-    value: 203.0.113.10
-    ttl: 300
-
-  - domain: example.com
-    type: A
-    name: www
-    value: 203.0.113.10
-    ttl: 300
-
-  - domain: example.com
-    type: CNAME
-    name: cdn
-    value: cdn.example.com.cdn.dnsv1.com
-    ttl: 600
+    dns_isp: cloudflare
 ```
 
 **记录类型**: `A` | `AAAA` | `CNAME` | `MX` | `TXT` | `NS` | `SRV`
@@ -433,43 +481,9 @@ certificates:
     domains:
       - example.com
       - "*.example.com"
-    provider: letsencrypt
+    provider: letsencrypt          # letsencrypt | zerossl
     dns_provider: cloudflare
-    renew_before: 30d
-
-  - name: api-example-com
-    domains:
-      - api.example.com
-    provider: zerossl
-    dns_provider: aliyun
-```
-
-**Provider**: `letsencrypt` | `zerossl`
-
-## 秘钥管理
-
-### 引用秘钥
-
-支持两种方式引用秘钥：
-
-```yaml
-# 方式一：明文
-password: "plain-text-password"
-
-# 方式二：引用 secrets.yaml
-password:
-  secret: secret_name
-```
-
-### 环境变量中的秘钥
-
-```yaml
-services:
-  - name: my-service
-    env:
-      DB_HOST: postgres.local
-      DB_PASSWORD:
-        secret: db_password
+    renew_before: 720h
 ```
 
 ## 工作流程
@@ -477,7 +491,7 @@ services:
 ### 1. 新增服务
 
 ```bash
-# 1. 编辑 services.yaml 添加服务定义
+# 1. 编辑配置
 vim userdata/prod/services.yaml
 
 # 2. 验证配置
@@ -501,16 +515,31 @@ vim userdata/prod/services.yaml
 ### 3. 新增服务器
 
 ```bash
-# 1. 添加服务器配置
+# 1. 添加服务器配置到 servers.yaml
 # 2. 添加 SSH 密码到 secrets.yaml
 # 3. 验证环境
-./yamlops env check -e prod --server new-server
+./yamlops server check -e prod --server new-server
 
 # 4. 同步环境
-./yamlops env sync -e prod --server new-server
+./yamlops server sync -e prod --server new-server
+
+# 或一步完成
+./yamlops server setup -e prod --server new-server
 ```
 
-### 4. 日常部署
+### 4. DNS 管理
+
+```bash
+# 从远程拉取到本地
+./yamlops dns pull domains -e prod --isp aliyun
+./yamlops dns pull records -e prod --domain example.com
+
+# 从本地推送到远程
+./yamlops dns plan -e prod
+./yamlops dns apply -e prod --auto-approve
+```
+
+### 5. 日常部署
 
 ```bash
 # Plan + Apply 工作流
@@ -539,21 +568,19 @@ vim userdata/prod/services.yaml
 
 ### 命名规范
 
-- 所有服务容器名: `yo-<env>-<服务名>` (例如: `yo-prod-api-server`)
-- 支持同一台服务器运行多个环境的服务，通过环境前缀区分
-- 服务间通信使用容器名: `http://yo-<env>-<服务名>:<端口>`
+- 容器名: `yo-<env>-<服务名>` (例如: `yo-prod-api-server`)
+- 网络名: `yamlops-<env>` (例如: `yamlops-prod`)
+- 部署目录: `/data/yamlops/yo-<env>-<服务名>`
 
 ### Docker 网络
 
-每个环境使用独立的 Docker 网络 `yamlops-<env>`：
+每个环境使用独立的 Docker 网络：
 
 ```yaml
 networks:
   yamlops-prod:
     external: true
 ```
-
-不同环境的服务使用各自的网络，实现环境隔离。
 
 ## 变更类型
 
@@ -579,14 +606,13 @@ networks:
 | CA | 方式 | 有效期 |
 |----|------|--------|
 | Let's Encrypt | ACME v2 | 90 天 |
-| ZeroSSL | ACME v2 | 90 天 |
+| ZeroSSL | ACME v2 + EAB | 90 天 |
 
 ## 故障排查
 
 ### 配置验证失败
 
 ```bash
-# 查看详细错误
 ./yamlops validate -e prod
 ```
 
@@ -613,3 +639,7 @@ networks:
 |------|------|
 | `YAMLOPS_ENV` | 默认环境 |
 | `YAMLOPS_CONFIG` | 默认配置目录 |
+
+## 更多文档
+
+- [系统设计说明](docs/system-design.md)
