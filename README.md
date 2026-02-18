@@ -390,7 +390,6 @@ registries:
 domains:
   - name: example.com
     isp: aliyun
-    auto_renew: true
 
   - name: "*.example.com"
     parent: example.com
@@ -436,7 +435,6 @@ certificates:
       - "*.example.com"
     provider: letsencrypt
     dns_provider: cloudflare
-    auto_renew: true
     renew_before: 30d
 
   - name: api-example-com
@@ -444,7 +442,6 @@ certificates:
       - api.example.com
     provider: zerossl
     dns_provider: aliyun
-    auto_renew: true
 ```
 
 **Provider**: `letsencrypt` | `zerossl`

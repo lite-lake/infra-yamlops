@@ -388,7 +388,6 @@ func (m *Model) fetchDomainDiffs(ispName string) {
 				DNSISP:     localDomain.DNSISP,
 				ISP:        localDomain.ISP,
 				Parent:     localDomain.Parent,
-				AutoRenew:  localDomain.AutoRenew,
 				ChangeType: valueobject.ChangeTypeDelete,
 			})
 		}
@@ -523,6 +522,7 @@ func (m *Model) saveDomainDiffsToConfig(diffs []DomainDiff) {
 		if diff.ChangeType == valueobject.ChangeTypeCreate {
 			newDomains = append(newDomains, entity.Domain{
 				Name:   diff.Name,
+				ISP:    diff.DNSISP,
 				DNSISP: diff.DNSISP,
 			})
 			domainSet[diff.Name] = true
@@ -603,8 +603,8 @@ func saveYAMLConfig(path, key string, data interface{}) {
 }
 
 func createDNSProviderFromConfig(isp *entity.ISP, secrets map[string]string) (dns.Provider, error) {
-	switch isp.Name {
-	case "aliyun":
+	switch isp.Type {
+	case entity.ISPTypeAliyun:
 		accessKeyIDRef := isp.Credentials["access_key_id"]
 		accessKeyID, err := (&accessKeyIDRef).Resolve(secrets)
 		if err != nil {
@@ -616,14 +616,14 @@ func createDNSProviderFromConfig(isp *entity.ISP, secrets map[string]string) (dn
 			return nil, fmt.Errorf("failed to resolve access_key_secret: %w", err)
 		}
 		return dns.NewAliyunProvider(accessKeyID, accessKeySecret), nil
-	case "cloudflare":
+	case entity.ISPTypeCloudflare:
 		apiTokenRef := isp.Credentials["api_token"]
 		apiToken, err := (&apiTokenRef).Resolve(secrets)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve api_token: %w", err)
 		}
 		return dns.NewCloudflareProvider(apiToken), nil
-	case "tencent":
+	case entity.ISPTypeTencent:
 		secretIDRef := isp.Credentials["secret_id"]
 		secretID, err := (&secretIDRef).Resolve(secrets)
 		if err != nil {
@@ -636,6 +636,6 @@ func createDNSProviderFromConfig(isp *entity.ISP, secrets map[string]string) (dn
 		}
 		return dns.NewTencentProvider(secretID, secretKey), nil
 	default:
-		return nil, fmt.Errorf("unsupported DNS provider: %s", isp.Name)
+		return nil, fmt.Errorf("unsupported DNS provider type: %s (ISP name: %s)", isp.Type, isp.Name)
 	}
 }

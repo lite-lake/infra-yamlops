@@ -344,7 +344,6 @@ domains:
   - name: example.com
     isp: aliyun           # 域名注册商（可选）
     dns_isp: cloudflare   # DNS 服务商（必填）
-    auto_renew: true
     
   - name: "*.example.com"
     isp: aliyun
@@ -354,11 +353,10 @@ domains:
 
 ```go
 type Domain struct {
-    Name      string `yaml:"name"`
-    ISP       string `yaml:"isp,omitempty"`      // 域名注册商（可选）
-    DNSISP    string `yaml:"dns_isp"`            // DNS 服务商（必填）
-    Parent    string `yaml:"parent,omitempty"`
-    AutoRenew bool   `yaml:"auto_renew,omitempty"`
+    Name   string `yaml:"name"`
+    ISP    string `yaml:"isp,omitempty"`      // 域名注册商（可选）
+    DNSISP string `yaml:"dns_isp"`            // DNS 服务商（必填）
+    Parent string `yaml:"parent,omitempty"`
 }
 ```
 
@@ -1347,7 +1345,6 @@ domains:
   - name: example.com
     dns_isp: cloudflare
     isp: aliyun
-    auto_renew: true
     
   - name: "*.example.com"
     dns_isp: cloudflare

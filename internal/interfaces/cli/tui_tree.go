@@ -180,7 +180,13 @@ func (m *Model) generatePlan() {
 		return
 	}
 	m.buildScopeFromSelection()
-	planner := plan.NewPlanner(m.Config, string(m.Environment))
+
+	var state *plan.DeploymentState
+	if m.ViewMode == ViewModeDNS {
+		state = m.fetchDNSRemoteState()
+	}
+
+	planner := plan.NewPlannerWithState(m.Config, state, string(m.Environment))
 	executionPlan, err := planner.Plan(m.PlanScope)
 	if err != nil {
 		m.ErrorMessage = fmt.Sprintf("Failed to generate plan: %v", err)
@@ -191,6 +197,92 @@ func (m *Model) generatePlan() {
 	if m.ApplyTotal == 0 {
 		m.ApplyTotal = 1
 	}
+}
+
+func (m *Model) fetchDNSRemoteState() *plan.DeploymentState {
+	state := &plan.DeploymentState{
+		Services:   make(map[string]*entity.BizService),
+		Gateways:   make(map[string]*entity.Gateway),
+		Servers:    make(map[string]*entity.Server),
+		Zones:      make(map[string]*entity.Zone),
+		Domains:    make(map[string]*entity.Domain),
+		Records:    make(map[string]*entity.DNSRecord),
+		Certs:      make(map[string]*entity.Certificate),
+		Registries: make(map[string]*entity.Registry),
+		ISPs:       make(map[string]*entity.ISP),
+	}
+
+	selectedDomains := m.getSelectedDomains()
+	if len(selectedDomains) == 0 {
+		return state
+	}
+
+	for _, domainName := range selectedDomains {
+		domain := m.Config.GetDomainMap()[domainName]
+		if domain == nil {
+			continue
+		}
+		isp := m.Config.GetISPMap()[domain.DNSISP]
+		if isp == nil {
+			continue
+		}
+		provider, err := createDNSProviderFromConfig(isp, m.Config.GetSecretsMap())
+		if err != nil {
+			continue
+		}
+		remoteRecords, err := provider.ListRecords(domainName)
+		if err != nil {
+			continue
+		}
+		for _, rr := range remoteRecords {
+			recordName := rr.Name
+			if recordName == domainName || recordName == "" {
+				recordName = "@"
+			} else if strings.HasSuffix(rr.Name, "."+domainName) {
+				recordName = strings.TrimSuffix(rr.Name, "."+domainName)
+			}
+			key := fmt.Sprintf("%s:%s:%s", domainName, rr.Type, recordName)
+			state.Records[key] = &entity.DNSRecord{
+				Domain: domainName,
+				Type:   entity.DNSRecordType(rr.Type),
+				Name:   recordName,
+				Value:  rr.Value,
+				TTL:    rr.TTL,
+			}
+		}
+	}
+
+	for _, d := range m.Config.Domains {
+		state.Domains[d.Name] = &d
+	}
+
+	return state
+}
+
+func (m *Model) getSelectedDomains() []string {
+	domainSet := make(map[string]bool)
+	currentTree := m.getCurrentTree()
+	for _, node := range currentTree {
+		leaves := node.GetSelectedLeaves()
+		for _, leaf := range leaves {
+			if leaf.Type == NodeTypeDNSRecord {
+				parts := strings.Split(leaf.ID, ":")
+				if len(parts) >= 2 {
+					domainSet[parts[1]] = true
+				}
+			}
+		}
+		for _, child := range node.Children {
+			if child.Selected && child.Type == NodeTypeDomain {
+				domainSet[child.Name] = true
+			}
+		}
+	}
+	var domains []string
+	for d := range domainSet {
+		domains = append(domains, d)
+	}
+	return domains
 }
 
 func (m *Model) buildScopeFromSelection() {

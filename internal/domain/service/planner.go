@@ -196,5 +196,5 @@ func (s *PlannerService) PlanDomains(plan *valueobject.Plan, cfgMap map[string]*
 }
 
 func DomainEquals(a, b *entity.Domain) bool {
-	return a.Name == b.Name && a.ISP == b.ISP && a.Parent == b.Parent && a.AutoRenew == b.AutoRenew
+	return a.Name == b.Name && a.ISP == b.ISP && a.Parent == b.Parent
 }

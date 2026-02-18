@@ -17,8 +17,17 @@ const (
 	ISPServiceCertificate ISPService = "certificate"
 )
 
+type ISPType string
+
+const (
+	ISPTypeAliyun     ISPType = "aliyun"
+	ISPTypeCloudflare ISPType = "cloudflare"
+	ISPTypeTencent    ISPType = "tencent"
+)
+
 type ISP struct {
 	Name        string                           `yaml:"name"`
+	Type        ISPType                          `yaml:"type"`
 	Services    []ISPService                     `yaml:"services"`
 	Credentials map[string]valueobject.SecretRef `yaml:"credentials"`
 }
@@ -26,6 +35,9 @@ type ISP struct {
 func (i *ISP) Validate() error {
 	if i.Name == "" {
 		return fmt.Errorf("%w: isp name is required", domain.ErrInvalidName)
+	}
+	if i.Type == "" {
+		i.Type = ISPType(i.Name)
 	}
 	if len(i.Services) == 0 {
 		return errors.New("at least one service is required")

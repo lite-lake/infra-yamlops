@@ -10,11 +10,10 @@ import (
 )
 
 type Domain struct {
-	Name      string `yaml:"name"`
-	ISP       string `yaml:"isp,omitempty"`
-	DNSISP    string `yaml:"dns_isp"`
-	Parent    string `yaml:"parent,omitempty"`
-	AutoRenew bool   `yaml:"auto_renew,omitempty"`
+	Name   string `yaml:"name"`
+	ISP    string `yaml:"isp,omitempty"`
+	DNSISP string `yaml:"dns_isp"`
+	Parent string `yaml:"parent,omitempty"`
 }
 
 var domainRegex = regexp.MustCompile(`^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$`)

@@ -1,7 +1,6 @@
 domains:
   - name: example.com
     isp: aliyun
-    auto_renew: true
 
   - name: "*.example.com"
     parent: example.com

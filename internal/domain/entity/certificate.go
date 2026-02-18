@@ -19,7 +19,6 @@ type Certificate struct {
 	Domains     []string            `yaml:"domains"`
 	Provider    CertificateProvider `yaml:"provider"`
 	DNSProvider string              `yaml:"dns_provider"`
-	AutoRenew   bool                `yaml:"auto_renew,omitempty"`
 	RenewBefore string              `yaml:"renew_before,omitempty"`
 }
 
