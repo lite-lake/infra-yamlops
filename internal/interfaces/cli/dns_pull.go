@@ -232,12 +232,10 @@ func runDNSPullRecords(ctx *Context, domainName string, autoApprove bool) {
 	}
 
 	localRecordMap := make(map[string]*entity.DNSRecord)
-	for _, d := range cfg.Domains {
-		for i := range d.Records {
-			key := fmt.Sprintf("%s:%s", d.Records[i].Type, d.Records[i].Name)
-			localRecordMap[key] = &d.Records[i]
-			localRecordMap[key].Domain = d.Name
-		}
+	for i := range domain.Records {
+		key := fmt.Sprintf("%s:%s:%s", domain.Records[i].Type, domain.Records[i].Name, domain.Records[i].Value)
+		localRecordMap[key] = &domain.Records[i]
+		localRecordMap[key].Domain = domain.Name
 	}
 
 	var diffs []RecordDiff
@@ -249,9 +247,9 @@ func runDNSPullRecords(ctx *Context, domainName string, autoApprove bool) {
 			recordName = strings.TrimSuffix(remote.Name, "."+domainName)
 		}
 
-		key := fmt.Sprintf("%s:%s", remote.Type, recordName)
+		key := fmt.Sprintf("%s:%s:%s", remote.Type, recordName, remote.Value)
 		if local, exists := localRecordMap[key]; exists {
-			if local.Value != remote.Value || local.TTL != remote.TTL {
+			if local.TTL != remote.TTL {
 				diffs = append(diffs, RecordDiff{
 					Domain:     domainName,
 					DNSISP:     domain.DNSISP,
@@ -440,7 +438,8 @@ func saveRecordDiffs(ctx *Context, diffs []RecordDiff, cfg *entity.Config) error
 		for _, r := range d.Records {
 			shouldKeep := true
 			for _, diff := range diffs {
-				if diff.Domain == d.Name && string(diff.Type) == string(r.Type) && diff.Name == r.Name && diff.ChangeType == valueobject.ChangeTypeDelete {
+				if diff.Domain == d.Name && string(diff.Type) == string(r.Type) && diff.Name == r.Name &&
+					(diff.ChangeType == valueobject.ChangeTypeDelete || diff.ChangeType == valueobject.ChangeTypeUpdate) {
 					shouldKeep = false
 					break
 				}

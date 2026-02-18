@@ -252,6 +252,9 @@ func (m Model) getDNSISPs() []string {
 
 func (m Model) getDNSDomains() []string {
 	var domains []string
+	if m.Config == nil || m.Config.Domains == nil {
+		return domains
+	}
 	for _, d := range m.Config.Domains {
 		domains = append(domains, d.Name)
 	}
