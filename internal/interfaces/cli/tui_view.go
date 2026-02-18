@@ -215,7 +215,7 @@ func (m Model) renderPlan() string {
 	if m.ErrorMessage != "" {
 		content.WriteString(changeDeleteStyle.Render("Error: " + m.ErrorMessage))
 		content.WriteString("\n\n")
-		content.WriteString(helpStyle.Render("Press q to go back"))
+		content.WriteString(helpStyle.Render("Esc 返回  q 退出"))
 		return content.String()
 	}
 	if m.PlanResult == nil || len(m.PlanResult.Changes) == 0 {
@@ -241,7 +241,7 @@ func (m Model) renderPlan() string {
 		}
 	}
 	content.WriteString("\n")
-	content.WriteString(changeCreateStyle.Render("Press Enter to apply changes"))
+	content.WriteString(changeCreateStyle.Render("按 Enter 执行变更"))
 	content.WriteString("\n")
 	return content.String()
 }
@@ -307,16 +307,25 @@ func (m Model) renderApplyComplete() string {
 		content.WriteString(fmt.Sprintf("成功: %d  失败: %d\n", successCount, failCount))
 	}
 	content.WriteString("\n")
-	content.WriteString(helpStyle.Render("Press Enter to return"))
+	content.WriteString(helpStyle.Render("Enter 返回  q 退出"))
 	return content.String()
 }
 
 func (m Model) renderHelp() string {
 	if m.ViewState == ViewStateTree {
-		return helpStyle.Render("\n[Space] 选择  [Enter] 展开/折叠  [a] 全选当前  [n] 取消当前  [p] Plan\n[A] 全部选中  [N] 全部取消  [Tab] 切换 App/DNS  [r] 刷新  [q] 退出")
+		return helpStyle.Render("\nSpace 选择  Enter 展开  a 当前  n 取消  A 全选  N 全不选  p 计划  r 刷新  Tab 切换  Esc 主菜单  q 退出")
 	}
 	if m.ViewState == ViewStateApplyProgress {
 		return ""
 	}
-	return helpStyle.Render("\n[q] 返回  [Esc] 返回主界面")
+	if m.ViewState == ViewStatePlan {
+		return helpStyle.Render("\nEnter 执行  Esc 返回  q 退出")
+	}
+	if m.ViewState == ViewStateApplyConfirm {
+		return helpStyle.Render("\n↑/↓ 选择  Enter 确认  Esc 取消  q 退出")
+	}
+	if m.ViewState == ViewStateApplyComplete {
+		return helpStyle.Render("\nEnter 返回  q 退出")
+	}
+	return helpStyle.Render("\nEsc 返回  q 退出")
 }

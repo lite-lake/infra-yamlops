@@ -45,7 +45,7 @@ func (m Model) renderMainMenu() string {
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ Select  Enter Confirm  q Quit"))
+	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  q 退出"))
 
 	return baseStyle.Render(sb.String())
 }
@@ -77,7 +77,7 @@ func (m Model) renderServerSetup() string {
 		sb.WriteString(fmt.Sprintf("  %s%s%s\n", focusPrefix, prefix, action))
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ Select  Tab Switch Panel  Enter Confirm  q Back"))
+	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Tab 切换面板  Enter 确认  Esc 返回  q 退出"))
 
 	return baseStyle.Render(sb.String())
 }
@@ -101,7 +101,7 @@ func (m Model) renderServerCheck() string {
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  Enter/q Back"))
+	sb.WriteString("\n" + helpStyle.Render("  Esc 返回  q 退出"))
 
 	return baseStyle.Render(sb.String())
 }
@@ -211,7 +211,7 @@ func (m Model) renderDNSManagement() string {
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ Select  Enter Confirm  q Back"))
+	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
 
 	return baseStyle.Render(sb.String())
 }
@@ -235,7 +235,7 @@ func (m Model) renderDNSPullDomains() string {
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ Select  Enter Confirm  q Back"))
+	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
 
 	return baseStyle.Render(sb.String())
 }
@@ -277,7 +277,7 @@ func (m Model) renderDNSPullRecords() string {
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ Select  Enter Confirm  q Back"))
+	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
 
 	return baseStyle.Render(sb.String())
 }
@@ -288,7 +288,7 @@ func (m Model) renderDNSPullDiff() string {
 	if m.ErrorMessage != "" {
 		sb.WriteString(titleStyle.Render("  Error") + "\n\n")
 		sb.WriteString(changeDeleteStyle.Render("  "+m.ErrorMessage) + "\n")
-		sb.WriteString("\n" + helpStyle.Render("  Enter/q Back"))
+		sb.WriteString("\n" + helpStyle.Render("  Esc 返回  q 退出"))
 		return baseStyle.Render(sb.String())
 	}
 
@@ -321,7 +321,7 @@ func (m Model) renderDNSPullDiff() string {
 			sb.WriteString(style.Render(line) + "\n")
 		}
 
-		sb.WriteString("\n" + helpStyle.Render("  ↑/↓ Move  Space Toggle  a Select All  n Deselect All  Enter Confirm  q Cancel"))
+		sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 移动  Space 切换  a 全选  n 全不选  Enter 确认  Esc 取消  q 退出"))
 	} else if len(m.DNSRecordDiffs) > 0 {
 		title := titleStyle.Render("  Select DNS Records to Sync")
 		sb.WriteString(title + "\n\n")
@@ -355,11 +355,11 @@ func (m Model) renderDNSPullDiff() string {
 			sb.WriteString(style.Render(line) + "\n")
 		}
 
-		sb.WriteString("\n" + helpStyle.Render("  ↑/↓ Move  Space Toggle  a Select All  n Deselect All  Enter Confirm  q Cancel"))
+		sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 移动  Space 切换  a 全选  n 全不选  Enter 确认  Esc 取消  q 退出"))
 	} else {
 		sb.WriteString(titleStyle.Render("  No Differences") + "\n\n")
 		sb.WriteString("All items are in sync.\n")
-		sb.WriteString("\n" + helpStyle.Render("  Enter/q Back"))
+		sb.WriteString("\n" + helpStyle.Render("  Esc 返回  q 退出"))
 	}
 
 	return baseStyle.Render(sb.String())

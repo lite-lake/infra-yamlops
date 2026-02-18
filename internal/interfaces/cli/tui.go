@@ -29,8 +29,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "q", "ctrl+c":
-			return m.handleQuit()
+		case "ctrl+c":
+			return m, tea.Quit
+		case "q":
+			return m, tea.Quit
+		case "esc":
+			return m.handleEscape()
+		case "x":
+			return m.handleCancel()
 		case "up", "k":
 			return m.handleUp(), nil
 		case "down", "j":
@@ -59,44 +65,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.handlePlan()
 		case "r":
 			return m.handleRefresh(), nil
-		case "esc":
-			return m.handleEscape()
 		}
 	}
 	return m, nil
 }
 
-func (m Model) handleQuit() (tea.Model, tea.Cmd) {
-	switch m.ViewState {
-	case ViewStateMainMenu:
-		return m, tea.Quit
-	case ViewStateTree:
-		return m, tea.Quit
-	case ViewStateServerSetup, ViewStateServerCheck:
-		m.ViewState = ViewStateMainMenu
-		m.ErrorMessage = ""
-		return m, nil
-	case ViewStateDNSManagement:
-		m.ViewState = ViewStateMainMenu
-		return m, nil
-	case ViewStateDNSPullDomains, ViewStateDNSPullRecords:
-		m.ViewState = ViewStateDNSManagement
-		return m, nil
-	case ViewStateDNSPullDiff:
-		m.DNSPullDiffs = nil
-		m.DNSRecordDiffs = nil
-		m.DNSPullSelected = nil
-		m.ViewState = ViewStateDNSManagement
-		return m, nil
-	default:
-		m.ViewState = ViewStateMainMenu
-		m.ErrorMessage = ""
-		return m, nil
-	}
-}
-
 func (m Model) handleEscape() (tea.Model, tea.Cmd) {
 	switch m.ViewState {
+	case ViewStateTree:
+		m.ViewState = ViewStateMainMenu
+		m.ErrorMessage = ""
 	case ViewStateServerSetup, ViewStateServerCheck:
 		m.ViewState = ViewStateMainMenu
 		m.ErrorMessage = ""
@@ -109,14 +87,29 @@ func (m Model) handleEscape() (tea.Model, tea.Cmd) {
 		m.DNSRecordDiffs = nil
 		m.DNSPullSelected = nil
 		m.ViewState = ViewStateDNSManagement
-	case ViewStateTree:
+	case ViewStatePlan:
+		m.ViewState = ViewStateTree
+	case ViewStateApplyConfirm:
+		m.ViewState = ViewStatePlan
+	default:
 		m.ViewState = ViewStateMainMenu
 		m.ErrorMessage = ""
+	}
+	return m, nil
+}
+
+func (m Model) handleCancel() (tea.Model, tea.Cmd) {
+	switch m.ViewState {
+	case ViewStateApplyConfirm:
+		m.ViewState = ViewStatePlan
+	case ViewStateDNSPullDiff:
+		m.DNSPullDiffs = nil
+		m.DNSRecordDiffs = nil
+		m.DNSPullSelected = nil
+		m.ViewState = ViewStateDNSManagement
 	default:
-		if m.ViewState != ViewStateTree {
-			m.ViewState = ViewStateTree
-			m.ErrorMessage = ""
-		}
+		m.ViewState = ViewStateMainMenu
+		m.ErrorMessage = ""
 	}
 	return m, nil
 }
