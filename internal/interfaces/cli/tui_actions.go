@@ -1,9 +1,19 @@
 package cli
 
 import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
+	"gopkg.in/yaml.v3"
+
+	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/litelake/yamlops/internal/providers/dns"
 )
 
 type applyProgressMsg struct{}
@@ -30,6 +40,22 @@ func (m Model) handleUp() Model {
 				m.ServerAction--
 			}
 		}
+	case ViewStateDNSManagement:
+		if m.DNSMenuIndex > 0 {
+			m.DNSMenuIndex--
+		}
+	case ViewStateDNSPullDomains:
+		if m.DNSISPIndex > 0 {
+			m.DNSISPIndex--
+		}
+	case ViewStateDNSPullRecords:
+		if m.DNSDomainIndex > 0 {
+			m.DNSDomainIndex--
+		}
+	case ViewStateDNSPullDiff:
+		if m.DNSPullCursor > 0 {
+			m.DNSPullCursor--
+		}
 	case ViewStateTree:
 		if m.CursorIndex > 0 {
 			m.CursorIndex--
@@ -45,7 +71,7 @@ func (m Model) handleUp() Model {
 func (m Model) handleDown() Model {
 	switch m.ViewState {
 	case ViewStateMainMenu:
-		if m.MainMenuIndex < 2 {
+		if m.MainMenuIndex < 3 {
 			m.MainMenuIndex++
 		}
 	case ViewStateServerSetup:
@@ -57,6 +83,28 @@ func (m Model) handleDown() Model {
 			if m.ServerAction < 3 {
 				m.ServerAction++
 			}
+		}
+	case ViewStateDNSManagement:
+		if m.DNSMenuIndex < 3 {
+			m.DNSMenuIndex++
+		}
+	case ViewStateDNSPullDomains:
+		isps := m.getDNSISPs()
+		if m.DNSISPIndex < len(isps)-1 {
+			m.DNSISPIndex++
+		}
+	case ViewStateDNSPullRecords:
+		domains := m.getDNSDomains()
+		if m.DNSDomainIndex < len(domains)-1 {
+			m.DNSDomainIndex++
+		}
+	case ViewStateDNSPullDiff:
+		maxIdx := len(m.DNSPullDiffs) - 1
+		if len(m.DNSRecordDiffs) > 0 {
+			maxIdx = len(m.DNSRecordDiffs) - 1
+		}
+		if m.DNSPullCursor < maxIdx {
+			m.DNSPullCursor++
 		}
 	case ViewStateTree:
 		totalNodes := m.countVisibleNodes()
@@ -72,6 +120,12 @@ func (m Model) handleDown() Model {
 }
 
 func (m Model) handleSpace() Model {
+	if m.ViewState == ViewStateDNSPullDiff {
+		if len(m.DNSPullDiffs) > 0 || len(m.DNSRecordDiffs) > 0 {
+			m.DNSPullSelected[m.DNSPullCursor] = !m.DNSPullSelected[m.DNSPullCursor]
+		}
+		return m
+	}
 	if m.ViewState != ViewStateTree {
 		return m
 	}
@@ -81,6 +135,20 @@ func (m Model) handleSpace() Model {
 	}
 	node.Selected = !node.Selected
 	node.UpdateParentSelection()
+	return m
+}
+
+func (m Model) handleDNSPullSelectAll(selected bool) Model {
+	if m.ViewState != ViewStateDNSPullDiff {
+		return m
+	}
+	maxIdx := len(m.DNSPullDiffs)
+	if len(m.DNSRecordDiffs) > 0 {
+		maxIdx = len(m.DNSRecordDiffs)
+	}
+	for i := 0; i < maxIdx; i++ {
+		m.DNSPullSelected[i] = selected
+	}
 	return m
 }
 
@@ -98,8 +166,77 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 			m.ServerFocusPanel = 0
 			return m, nil
 		case 2:
+			m.ViewState = ViewStateDNSManagement
+			m.DNSMenuIndex = 0
+			return m, nil
+		case 3:
 			return m, tea.Quit
 		}
+	case ViewStateDNSManagement:
+		switch m.DNSMenuIndex {
+		case 0:
+			m.ViewState = ViewStateDNSPullDomains
+			m.DNSISPIndex = 0
+			return m, nil
+		case 1:
+			m.ViewState = ViewStateDNSPullRecords
+			m.DNSDomainIndex = 0
+			return m, nil
+		case 2:
+			m.ViewState = ViewStateTree
+			m.ViewMode = ViewModeDNS
+			return m, nil
+		case 3:
+			m.ViewState = ViewStateMainMenu
+			return m, nil
+		}
+	case ViewStateDNSPullDomains:
+		isps := m.getDNSISPs()
+		if len(isps) > 0 && m.DNSISPIndex < len(isps) {
+			ispName := isps[m.DNSISPIndex]
+			m.fetchDomainDiffs(ispName)
+			if len(m.DNSPullDiffs) > 0 {
+				m.ViewState = ViewStateDNSPullDiff
+				m.DNSPullCursor = 0
+				m.DNSPullSelected = make(map[int]bool)
+				for i, diff := range m.DNSPullDiffs {
+					if diff.ChangeType == valueobject.ChangeTypeCreate {
+						m.DNSPullSelected[i] = true
+					}
+				}
+			} else {
+				m.ViewState = ViewStateDNSPullDiff
+			}
+		}
+		return m, nil
+	case ViewStateDNSPullRecords:
+		domains := m.getDNSDomains()
+		if len(domains) > 0 && m.DNSDomainIndex < len(domains) {
+			domainName := domains[m.DNSDomainIndex]
+			m.fetchRecordDiffs(domainName)
+			if len(m.DNSRecordDiffs) > 0 {
+				m.ViewState = ViewStateDNSPullDiff
+				m.DNSPullCursor = 0
+				m.DNSPullSelected = make(map[int]bool)
+				for i, diff := range m.DNSRecordDiffs {
+					if diff.ChangeType == valueobject.ChangeTypeCreate || diff.ChangeType == valueobject.ChangeTypeUpdate {
+						m.DNSPullSelected[i] = true
+					}
+				}
+			} else {
+				m.ViewState = ViewStateDNSPullDiff
+			}
+		}
+		return m, nil
+	case ViewStateDNSPullDiff:
+		if len(m.DNSPullDiffs) > 0 || len(m.DNSRecordDiffs) > 0 {
+			m.saveSelectedDiffs()
+		}
+		m.ViewState = ViewStateDNSManagement
+		m.DNSPullDiffs = nil
+		m.DNSRecordDiffs = nil
+		m.DNSPullSelected = nil
+		return m, nil
 	case ViewStateServerSetup:
 		switch m.ServerAction {
 		case 0:
@@ -203,4 +340,302 @@ func (m Model) handleRefresh() Model {
 	m.loadConfig()
 	m.buildTrees()
 	return m
+}
+
+func (m *Model) fetchDomainDiffs(ispName string) {
+	m.DNSPullDiffs = nil
+	m.ErrorMessage = ""
+
+	isp := m.Config.GetISPMap()[ispName]
+	if isp == nil {
+		m.ErrorMessage = fmt.Sprintf("ISP '%s' not found", ispName)
+		return
+	}
+
+	provider, err := createDNSProviderFromConfig(isp, m.Config.GetSecretsMap())
+	if err != nil {
+		m.ErrorMessage = fmt.Sprintf("Error creating DNS provider: %v", err)
+		return
+	}
+
+	remoteDomains, err := provider.ListDomains()
+	if err != nil {
+		m.ErrorMessage = fmt.Sprintf("Error listing domains: %v", err)
+		return
+	}
+
+	localDomainMap := make(map[string]*entity.Domain)
+	for i := range m.Config.Domains {
+		localDomainMap[m.Config.Domains[i].Name] = &m.Config.Domains[i]
+	}
+
+	for _, domainName := range remoteDomains {
+		if _, exists := localDomainMap[domainName]; !exists {
+			m.DNSPullDiffs = append(m.DNSPullDiffs, DomainDiff{
+				Name:       domainName,
+				DNSISP:     ispName,
+				ChangeType: valueobject.ChangeTypeCreate,
+			})
+		} else {
+			delete(localDomainMap, domainName)
+		}
+	}
+
+	for _, localDomain := range localDomainMap {
+		if localDomain.DNSISP == ispName {
+			m.DNSPullDiffs = append(m.DNSPullDiffs, DomainDiff{
+				Name:       localDomain.Name,
+				DNSISP:     localDomain.DNSISP,
+				ISP:        localDomain.ISP,
+				Parent:     localDomain.Parent,
+				AutoRenew:  localDomain.AutoRenew,
+				ChangeType: valueobject.ChangeTypeDelete,
+			})
+		}
+	}
+
+	sort.Slice(m.DNSPullDiffs, func(i, j int) bool {
+		return m.DNSPullDiffs[i].Name < m.DNSPullDiffs[j].Name
+	})
+}
+
+func (m *Model) fetchRecordDiffs(domainName string) {
+	m.DNSRecordDiffs = nil
+	m.ErrorMessage = ""
+
+	domain := m.Config.GetDomainMap()[domainName]
+	if domain == nil {
+		m.ErrorMessage = fmt.Sprintf("Domain '%s' not found", domainName)
+		return
+	}
+
+	isp := m.Config.GetISPMap()[domain.DNSISP]
+	if isp == nil {
+		m.ErrorMessage = fmt.Sprintf("DNS ISP '%s' not found", domain.DNSISP)
+		return
+	}
+
+	provider, err := createDNSProviderFromConfig(isp, m.Config.GetSecretsMap())
+	if err != nil {
+		m.ErrorMessage = fmt.Sprintf("Error creating DNS provider: %v", err)
+		return
+	}
+
+	remoteRecords, err := provider.ListRecords(domainName)
+	if err != nil {
+		m.ErrorMessage = fmt.Sprintf("Error listing records: %v", err)
+		return
+	}
+
+	localRecordMap := make(map[string]*entity.DNSRecord)
+	for i := range m.Config.DNSRecords {
+		if m.Config.DNSRecords[i].Domain == domainName {
+			key := fmt.Sprintf("%s:%s", m.Config.DNSRecords[i].Type, m.Config.DNSRecords[i].Name)
+			localRecordMap[key] = &m.Config.DNSRecords[i]
+		}
+	}
+
+	for _, remote := range remoteRecords {
+		recordName := remote.Name
+		if recordName == domainName || recordName == "" {
+			recordName = "@"
+		} else if strings.HasSuffix(remote.Name, "."+domainName) {
+			recordName = strings.TrimSuffix(remote.Name, "."+domainName)
+		}
+
+		key := fmt.Sprintf("%s:%s", remote.Type, recordName)
+		if local, exists := localRecordMap[key]; exists {
+			if local.Value != remote.Value || local.TTL != remote.TTL {
+				m.DNSRecordDiffs = append(m.DNSRecordDiffs, RecordDiff{
+					Domain:     domainName,
+					Type:       entity.DNSRecordType(remote.Type),
+					Name:       recordName,
+					Value:      remote.Value,
+					TTL:        remote.TTL,
+					ChangeType: valueobject.ChangeTypeUpdate,
+				})
+			}
+			delete(localRecordMap, key)
+		} else {
+			m.DNSRecordDiffs = append(m.DNSRecordDiffs, RecordDiff{
+				Domain:     domainName,
+				Type:       entity.DNSRecordType(remote.Type),
+				Name:       recordName,
+				Value:      remote.Value,
+				TTL:        remote.TTL,
+				ChangeType: valueobject.ChangeTypeCreate,
+			})
+		}
+	}
+
+	for _, local := range localRecordMap {
+		m.DNSRecordDiffs = append(m.DNSRecordDiffs, RecordDiff{
+			Domain:     local.Domain,
+			Type:       local.Type,
+			Name:       local.Name,
+			Value:      local.Value,
+			TTL:        local.TTL,
+			ChangeType: valueobject.ChangeTypeDelete,
+		})
+	}
+
+	sort.Slice(m.DNSRecordDiffs, func(i, j int) bool {
+		if m.DNSRecordDiffs[i].Name != m.DNSRecordDiffs[j].Name {
+			return m.DNSRecordDiffs[i].Name < m.DNSRecordDiffs[j].Name
+		}
+		return m.DNSRecordDiffs[i].Type < m.DNSRecordDiffs[j].Type
+	})
+}
+
+func (m *Model) saveSelectedDiffs() {
+	if len(m.DNSPullDiffs) > 0 {
+		selectedDiffs := make([]DomainDiff, 0)
+		for i, diff := range m.DNSPullDiffs {
+			if m.DNSPullSelected[i] {
+				selectedDiffs = append(selectedDiffs, diff)
+			}
+		}
+		if len(selectedDiffs) > 0 {
+			m.saveDomainDiffsToConfig(selectedDiffs)
+		}
+	}
+	if len(m.DNSRecordDiffs) > 0 {
+		selectedDiffs := make([]RecordDiff, 0)
+		for i, diff := range m.DNSRecordDiffs {
+			if m.DNSPullSelected[i] {
+				selectedDiffs = append(selectedDiffs, diff)
+			}
+		}
+		if len(selectedDiffs) > 0 {
+			m.saveRecordDiffsToConfig(selectedDiffs)
+		}
+	}
+}
+
+func (m *Model) saveDomainDiffsToConfig(diffs []DomainDiff) {
+	configDir := filepath.Join(m.ConfigDir, "userdata", string(m.Environment))
+	domainsPath := filepath.Join(configDir, "domains.yaml")
+
+	newDomains := make([]entity.Domain, 0)
+	domainSet := make(map[string]bool)
+
+	for _, diff := range diffs {
+		if diff.ChangeType == valueobject.ChangeTypeCreate {
+			newDomains = append(newDomains, entity.Domain{
+				Name:   diff.Name,
+				DNSISP: diff.DNSISP,
+			})
+			domainSet[diff.Name] = true
+		}
+	}
+
+	for _, d := range m.Config.Domains {
+		if !domainSet[d.Name] {
+			shouldKeep := true
+			for _, diff := range diffs {
+				if diff.Name == d.Name && diff.ChangeType == valueobject.ChangeTypeDelete {
+					shouldKeep = false
+					break
+				}
+			}
+			if shouldKeep {
+				newDomains = append(newDomains, d)
+			}
+		}
+	}
+
+	saveYAMLConfig(domainsPath, "domains", newDomains)
+	m.Config = nil
+	m.loadConfig()
+	m.buildTrees()
+}
+
+func (m *Model) saveRecordDiffsToConfig(diffs []RecordDiff) {
+	configDir := filepath.Join(m.ConfigDir, "userdata", string(m.Environment))
+	recordsPath := filepath.Join(configDir, "dns.yaml")
+
+	newRecords := make([]entity.DNSRecord, 0)
+	recordSet := make(map[string]bool)
+
+	for _, diff := range diffs {
+		if diff.ChangeType == valueobject.ChangeTypeCreate || diff.ChangeType == valueobject.ChangeTypeUpdate {
+			key := fmt.Sprintf("%s:%s:%s", diff.Domain, diff.Type, diff.Name)
+			newRecords = append(newRecords, entity.DNSRecord{
+				Domain: diff.Domain,
+				Type:   diff.Type,
+				Name:   diff.Name,
+				Value:  diff.Value,
+				TTL:    diff.TTL,
+			})
+			recordSet[key] = true
+		}
+	}
+
+	for _, r := range m.Config.DNSRecords {
+		key := fmt.Sprintf("%s:%s:%s", r.Domain, r.Type, r.Name)
+		if !recordSet[key] {
+			shouldKeep := true
+			for _, diff := range diffs {
+				if diff.Domain == r.Domain && string(diff.Type) == string(r.Type) && diff.Name == r.Name && diff.ChangeType == valueobject.ChangeTypeDelete {
+					shouldKeep = false
+					break
+				}
+			}
+			if shouldKeep {
+				newRecords = append(newRecords, r)
+			}
+		}
+	}
+
+	saveYAMLConfig(recordsPath, "records", newRecords)
+	m.Config = nil
+	m.loadConfig()
+	m.buildTrees()
+}
+
+func saveYAMLConfig(path, key string, data interface{}) {
+	yamlData := map[string]interface{}{key: data}
+	content, err := yaml.Marshal(yamlData)
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, content, 0644)
+}
+
+func createDNSProviderFromConfig(isp *entity.ISP, secrets map[string]string) (dns.Provider, error) {
+	switch isp.Name {
+	case "aliyun":
+		accessKeyIDRef := isp.Credentials["access_key_id"]
+		accessKeyID, err := (&accessKeyIDRef).Resolve(secrets)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve access_key_id: %w", err)
+		}
+		accessKeySecretRef := isp.Credentials["access_key_secret"]
+		accessKeySecret, err := (&accessKeySecretRef).Resolve(secrets)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve access_key_secret: %w", err)
+		}
+		return dns.NewAliyunProvider(accessKeyID, accessKeySecret), nil
+	case "cloudflare":
+		apiTokenRef := isp.Credentials["api_token"]
+		apiToken, err := (&apiTokenRef).Resolve(secrets)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve api_token: %w", err)
+		}
+		return dns.NewCloudflareProvider(apiToken), nil
+	case "tencent":
+		secretIDRef := isp.Credentials["secret_id"]
+		secretID, err := (&secretIDRef).Resolve(secrets)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve secret_id: %w", err)
+		}
+		secretKeyRef := isp.Credentials["secret_key"]
+		secretKey, err := (&secretKeyRef).Resolve(secrets)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve secret_key: %w", err)
+		}
+		return dns.NewTencentProvider(secretID, secretKey), nil
+	default:
+		return nil, fmt.Errorf("unsupported DNS provider: %s", isp.Name)
+	}
 }

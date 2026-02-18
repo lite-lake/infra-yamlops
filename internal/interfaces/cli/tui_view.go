@@ -15,6 +15,14 @@ func (m Model) View() string {
 		return m.renderServerSetup()
 	case ViewStateServerCheck:
 		return m.renderServerCheck()
+	case ViewStateDNSManagement:
+		return m.renderDNSManagement()
+	case ViewStateDNSPullDomains:
+		return m.renderDNSPullDomains()
+	case ViewStateDNSPullRecords:
+		return m.renderDNSPullRecords()
+	case ViewStateDNSPullDiff:
+		return m.renderDNSPullDiff()
 	}
 	var content strings.Builder
 	content.WriteString(m.renderHeader())

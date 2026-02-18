@@ -28,6 +28,10 @@ const (
 	ViewStateMainMenu
 	ViewStateServerSetup
 	ViewStateServerCheck
+	ViewStateDNSManagement
+	ViewStateDNSPullDomains
+	ViewStateDNSPullRecords
+	ViewStateDNSPullDiff
 )
 
 type ViewMode int
@@ -231,6 +235,14 @@ type Model struct {
 	ServerSyncResults  []serverpkg.SyncResult
 	ServerAction       int
 	ServerFocusPanel   int
+	DNSMenuIndex       int
+	DNSISPIndex        int
+	DNSDomainIndex     int
+	DNSPullDiffs       []DomainDiff
+	DNSRecordDiffs     []RecordDiff
+	DNSPullSelected    map[int]bool
+	DNSPullCursor      int
+	DNSPullDone        bool
 }
 
 func NewModel(env string, configDir string) Model {

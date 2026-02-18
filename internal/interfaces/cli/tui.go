@@ -42,8 +42,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "tab":
 			return m.handleTab(), nil
 		case "a":
+			if m.ViewState == ViewStateDNSPullDiff {
+				return m.handleDNSPullSelectAll(true), nil
+			}
 			return m.handleSelectCurrent(true), nil
 		case "n":
+			if m.ViewState == ViewStateDNSPullDiff {
+				return m.handleDNSPullSelectAll(false), nil
+			}
 			return m.handleSelectCurrent(false), nil
 		case "A":
 			return m.handleSelectAll(true), nil
@@ -70,6 +76,18 @@ func (m Model) handleQuit() (tea.Model, tea.Cmd) {
 		m.ViewState = ViewStateMainMenu
 		m.ErrorMessage = ""
 		return m, nil
+	case ViewStateDNSManagement:
+		m.ViewState = ViewStateMainMenu
+		return m, nil
+	case ViewStateDNSPullDomains, ViewStateDNSPullRecords:
+		m.ViewState = ViewStateDNSManagement
+		return m, nil
+	case ViewStateDNSPullDiff:
+		m.DNSPullDiffs = nil
+		m.DNSRecordDiffs = nil
+		m.DNSPullSelected = nil
+		m.ViewState = ViewStateDNSManagement
+		return m, nil
 	default:
 		m.ViewState = ViewStateMainMenu
 		m.ErrorMessage = ""
@@ -82,6 +100,15 @@ func (m Model) handleEscape() (tea.Model, tea.Cmd) {
 	case ViewStateServerSetup, ViewStateServerCheck:
 		m.ViewState = ViewStateMainMenu
 		m.ErrorMessage = ""
+	case ViewStateDNSManagement:
+		m.ViewState = ViewStateMainMenu
+	case ViewStateDNSPullDomains, ViewStateDNSPullRecords:
+		m.ViewState = ViewStateDNSManagement
+	case ViewStateDNSPullDiff:
+		m.DNSPullDiffs = nil
+		m.DNSRecordDiffs = nil
+		m.DNSPullSelected = nil
+		m.ViewState = ViewStateDNSManagement
 	case ViewStateTree:
 		m.ViewState = ViewStateMainMenu
 		m.ErrorMessage = ""
