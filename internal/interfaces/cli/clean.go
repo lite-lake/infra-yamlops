@@ -6,9 +6,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
+
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 	"github.com/litelake/yamlops/internal/ssh"
-	"github.com/spf13/cobra"
 )
 
 var cleanCmd = &cobra.Command{

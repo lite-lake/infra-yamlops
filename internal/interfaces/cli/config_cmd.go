@@ -5,10 +5,11 @@ import (
 	"os"
 	"strings"
 
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
+
+	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 )
 
 var configCmd = &cobra.Command{

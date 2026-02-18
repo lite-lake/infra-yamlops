@@ -6,7 +6,7 @@ import (
 )
 
 func TestModel_RenderTree(t *testing.T) {
-	m := NewModel("demo", "../..")
+	m := NewModel("demo", "../../..")
 	m.Width = 80
 	m.Height = 24
 
@@ -30,7 +30,7 @@ func TestModel_RenderTree(t *testing.T) {
 }
 
 func TestModel_TabSwitch(t *testing.T) {
-	m := NewModel("demo", "../..")
+	m := NewModel("demo", "../../..")
 
 	if m.ViewMode != ViewModeApp {
 		t.Error("Default view mode should be App")
@@ -48,7 +48,7 @@ func TestModel_TabSwitch(t *testing.T) {
 }
 
 func TestModel_Selection(t *testing.T) {
-	m := NewModel("demo", "../..")
+	m := NewModel("demo", "../../..")
 
 	initialSelected := m.countSelected()
 
@@ -68,7 +68,7 @@ func TestModel_Selection(t *testing.T) {
 }
 
 func TestModel_Navigation(t *testing.T) {
-	m := NewModel("demo", "../..")
+	m := NewModel("demo", "../../..")
 
 	initialCursor := m.CursorIndex
 
@@ -84,7 +84,7 @@ func TestModel_Navigation(t *testing.T) {
 }
 
 func TestModel_DNSTree(t *testing.T) {
-	m := NewModel("demo", "../..")
+	m := NewModel("demo", "../../..")
 
 	if len(m.DNSTreeNodes) == 0 {
 		t.Error("DNS tree should be built")

@@ -99,7 +99,7 @@ func (p *Planner) LoadStateFromFile(path string) error {
 		return fmt.Errorf("failed to parse state file: %w", err)
 	}
 
-	state := service.NewDeploymentState()
+	state := repository.NewDeploymentState()
 
 	for i := range cfg.Services {
 		state.Services[cfg.Services[i].Name] = &cfg.Services[i]

@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/repository"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
@@ -179,18 +178,4 @@ func (s *PlannerService) PlanRegistries(plan *valueobject.Plan, cfgMap map[strin
 
 func RegistryEquals(a, b *entity.Registry) bool {
 	return a.Name == b.Name && a.URL == b.URL
-}
-
-func NewDeploymentState() *repository.DeploymentState {
-	return &repository.DeploymentState{
-		Services:   make(map[string]*entity.BizService),
-		Gateways:   make(map[string]*entity.Gateway),
-		Servers:    make(map[string]*entity.Server),
-		Zones:      make(map[string]*entity.Zone),
-		Domains:    make(map[string]*entity.Domain),
-		Records:    make(map[string]*entity.DNSRecord),
-		Certs:      make(map[string]*entity.Certificate),
-		Registries: make(map[string]*entity.Registry),
-		ISPs:       make(map[string]*entity.ISP),
-	}
 }

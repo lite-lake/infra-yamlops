@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 	"github.com/spf13/cobra"
+
+	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 )
 
 var validateCmd = &cobra.Command{

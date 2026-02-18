@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewModel_LoadsConfig(t *testing.T) {
-	m := NewModel("demo", "../..")
+	m := NewModel("demo", "../../..")
 
 	if m.Config == nil {
 		t.Error("Config should be loaded on NewModel")
@@ -28,7 +28,7 @@ func TestNewModel_LoadsConfig(t *testing.T) {
 }
 
 func TestNewModel_BuildsTrees(t *testing.T) {
-	m := NewModel("demo", "../..")
+	m := NewModel("demo", "../../..")
 
 	if len(m.TreeNodes) == 0 {
 		t.Error("App tree should be built")

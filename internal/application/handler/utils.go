@@ -1,6 +1,11 @@
 package handler
 
-import "github.com/litelake/yamlops/internal/domain/valueobject"
+import (
+	"fmt"
+	"os"
+
+	"github.com/litelake/yamlops/internal/domain/valueobject"
+)
 
 func ExtractServerFromChange(ch *valueobject.Change) string {
 	if ch.OldState != nil {
@@ -26,4 +31,20 @@ func ExtractServerFromChange(ch *valueobject.Change) string {
 		}
 	}
 	return ""
+}
+
+func SyncContent(client SSHClient, content, remotePath string) error {
+	tmpFile, err := os.CreateTemp("", "yamlops-*.yml")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+	defer tmpFile.Close()
+
+	if _, err := tmpFile.WriteString(content); err != nil {
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	tmpFile.Close()
+
+	return client.UploadFileSudo(tmpFile.Name(), remotePath)
 }

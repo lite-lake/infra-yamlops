@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/cobra"
+
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 	"github.com/litelake/yamlops/internal/plan"
-	"github.com/spf13/cobra"
 )
 
 var planCmd = &cobra.Command{

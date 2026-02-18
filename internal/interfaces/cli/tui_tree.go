@@ -1,0 +1,277 @@
+package cli
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/litelake/yamlops/internal/application/usecase"
+	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/litelake/yamlops/internal/infrastructure/persistence"
+	"github.com/litelake/yamlops/internal/plan"
+)
+
+func (m *Model) loadConfig() {
+	if m.Config != nil {
+		return
+	}
+	loader := persistence.NewConfigLoader(m.ConfigDir)
+	cfg, err := loader.Load(nil, string(m.Environment))
+	if err != nil {
+		m.ErrorMessage = fmt.Sprintf("Failed to load config: %v", err)
+		return
+	}
+	if err := loader.Validate(cfg); err != nil {
+		m.ErrorMessage = fmt.Sprintf("Validation error: %v", err)
+		return
+	}
+	m.Config = cfg
+	m.buildTrees()
+}
+
+func (m *Model) buildTrees() {
+	if m.Config == nil {
+		return
+	}
+	m.TreeNodes = m.buildAppTree()
+	m.DNSTreeNodes = m.buildDNSTree()
+}
+
+func (m *Model) buildAppTree() []*TreeNode {
+	if m.Config == nil {
+		return nil
+	}
+	zoneMap := make(map[string]*TreeNode)
+	serverByZone := make(map[string][]*TreeNode)
+	serviceByServer := make(map[string][]*TreeNode)
+	for _, z := range m.Config.Zones {
+		zoneNode := &TreeNode{
+			ID:       fmt.Sprintf("zone:%s", z.Name),
+			Type:     NodeTypeZone,
+			Name:     z.Name,
+			Info:     z.Description,
+			Expanded: true,
+		}
+		zoneMap[z.Name] = zoneNode
+	}
+	for _, srv := range m.Config.Servers {
+		serverNode := &TreeNode{
+			ID:       fmt.Sprintf("server:%s", srv.Name),
+			Type:     NodeTypeServer,
+			Name:     srv.Name,
+			Info:     srv.IP.Public,
+			Expanded: true,
+		}
+		if zNode, ok := zoneMap[srv.Zone]; ok {
+			serverNode.Parent = zNode
+			zNode.Children = append(zNode.Children, serverNode)
+		}
+		serverByZone[srv.Zone] = append(serverByZone[srv.Zone], serverNode)
+		serviceByServer[srv.Name] = []*TreeNode{}
+	}
+	for _, infra := range m.Config.InfraServices {
+		infraNode := &TreeNode{
+			ID:   fmt.Sprintf("infra:%s", infra.Name),
+			Type: NodeTypeInfra,
+			Name: infra.Name,
+			Info: m.getServicePortsInfo(infra.Server),
+		}
+		for _, sn := range serverByZone {
+			for _, s := range sn {
+				if s.Name == infra.Server {
+					infraNode.Parent = s
+					s.Children = append(s.Children, infraNode)
+				}
+			}
+		}
+	}
+	for _, svc := range m.Config.Services {
+		svcNode := &TreeNode{
+			ID:   fmt.Sprintf("biz:%s", svc.Name),
+			Type: NodeTypeBiz,
+			Name: svc.Name,
+			Info: m.getBizServicePortsInfo(svc),
+		}
+		for _, z := range m.Config.Zones {
+			for _, srv := range m.Config.Servers {
+				if srv.Name == svc.Server && srv.Zone == z.Name {
+					if zNode, ok := zoneMap[z.Name]; ok {
+						for _, sNode := range zNode.Children {
+							if sNode.Name == srv.Name {
+								svcNode.Parent = sNode
+								sNode.Children = append(sNode.Children, svcNode)
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	var roots []*TreeNode
+	for _, z := range m.Config.Zones {
+		if zNode, ok := zoneMap[z.Name]; ok {
+			roots = append(roots, zNode)
+		}
+	}
+	return roots
+}
+
+func (m *Model) getServicePortsInfo(serverName string) string {
+	for _, srv := range m.Config.Servers {
+		if srv.Name == serverName {
+			return ""
+		}
+	}
+	return ""
+}
+
+func (m *Model) getBizServicePortsInfo(svc entity.BizService) string {
+	if len(svc.Ports) == 0 {
+		return ""
+	}
+	var ports []string
+	for _, p := range svc.Ports {
+		ports = append(ports, fmt.Sprintf(":%d", p.Host))
+	}
+	return strings.Join(ports, ",")
+}
+
+func (m *Model) buildDNSTree() []*TreeNode {
+	if m.Config == nil {
+		return nil
+	}
+	domainMap := make(map[string]*TreeNode)
+	for _, d := range m.Config.Domains {
+		domainNode := &TreeNode{
+			ID:       fmt.Sprintf("domain:%s", d.Name),
+			Type:     NodeTypeDomain,
+			Name:     d.Name,
+			Info:     d.DNSISP,
+			Expanded: true,
+		}
+		domainMap[d.Name] = domainNode
+	}
+	for _, r := range m.Config.DNSRecords {
+		recordNode := &TreeNode{
+			ID:   fmt.Sprintf("record:%s:%s:%s", r.Domain, r.Type, r.Name),
+			Type: NodeTypeDNSRecord,
+			Name: fmt.Sprintf("%-6s %s", r.Type, r.Name),
+			Info: r.Value,
+		}
+		if dNode, ok := domainMap[r.Domain]; ok {
+			recordNode.Parent = dNode
+			dNode.Children = append(dNode.Children, recordNode)
+		}
+	}
+	var roots []*TreeNode
+	for _, d := range m.Config.Domains {
+		if dNode, ok := domainMap[d.Name]; ok {
+			roots = append(roots, dNode)
+		}
+	}
+	return roots
+}
+
+func (m *Model) generatePlan() {
+	m.PlanResult = valueobject.NewPlan()
+	m.ErrorMessage = ""
+	m.loadConfig()
+	if m.ErrorMessage != "" {
+		return
+	}
+	m.buildScopeFromSelection()
+	planner := plan.NewPlanner(m.Config, string(m.Environment))
+	executionPlan, err := planner.Plan(m.PlanScope)
+	if err != nil {
+		m.ErrorMessage = fmt.Sprintf("Failed to generate plan: %v", err)
+		return
+	}
+	m.PlanResult = executionPlan
+	m.ApplyTotal = len(executionPlan.Changes)
+	if m.ApplyTotal == 0 {
+		m.ApplyTotal = 1
+	}
+}
+
+func (m *Model) buildScopeFromSelection() {
+	m.PlanScope = &valueobject.Scope{}
+	currentTree := m.getCurrentTree()
+	for _, node := range currentTree {
+		leaves := node.GetSelectedLeaves()
+		for _, leaf := range leaves {
+			switch leaf.Type {
+			case NodeTypeInfra, NodeTypeBiz:
+				if m.PlanScope.Service == "" {
+					m.PlanScope.Service = leaf.Name
+				}
+			case NodeTypeDNSRecord:
+				if m.PlanScope.Domain == "" {
+					parts := strings.Split(leaf.ID, ":")
+					if len(parts) >= 2 {
+						m.PlanScope.Domain = parts[1]
+					}
+				}
+			}
+		}
+	}
+}
+
+func (m *Model) executeApply() {
+	if m.PlanResult == nil || !m.PlanResult.HasChanges() {
+		m.ApplyComplete = true
+		return
+	}
+	m.loadConfig()
+	if m.Config == nil {
+		m.ApplyComplete = true
+		return
+	}
+	planner := plan.NewPlanner(m.Config, string(m.Environment))
+	if err := planner.GenerateDeployments(); err != nil {
+		m.ErrorMessage = fmt.Sprintf("Failed to generate deployments: %v", err)
+		m.ApplyComplete = true
+		return
+	}
+	executor := usecase.NewExecutor(m.PlanResult, string(m.Environment))
+	executor.SetSecrets(m.Config.GetSecretsMap())
+	executor.SetDomains(m.Config.GetDomainMap())
+	executor.SetISPs(m.Config.GetISPMap())
+	executor.SetWorkDir(m.ConfigDir)
+	secrets := m.Config.GetSecretsMap()
+	for _, srv := range m.Config.Servers {
+		password, err := srv.SSH.Password.Resolve(secrets)
+		if err != nil {
+			continue
+		}
+		executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+	}
+	m.ApplyResults = executor.Apply()
+	m.ApplyComplete = true
+}
+
+func (m Model) getCurrentTree() []*TreeNode {
+	if m.ViewMode == ViewModeDNS {
+		return m.DNSTreeNodes
+	}
+	return m.TreeNodes
+}
+
+func (m Model) countVisibleNodes() int {
+	count := 0
+	for _, node := range m.getCurrentTree() {
+		count += len(node.GetVisibleNodes())
+	}
+	return count
+}
+
+func (m Model) getNodeAtIndex(index int) *TreeNode {
+	count := 0
+	for _, node := range m.getCurrentTree() {
+		visible := node.GetVisibleNodes()
+		if index < count+len(visible) {
+			return visible[index-count]
+		}
+		count += len(visible)
+	}
+	return nil
+}

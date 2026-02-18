@@ -22,7 +22,7 @@ func (h *ServiceHandler) EntityType() string {
 func (h *ServiceHandler) Apply(ctx context.Context, change *valueobject.Change, deps *Deps) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
-	serverName := h.extractServerFromChange(change)
+	serverName := ExtractServerFromChange(change)
 	if serverName == "" {
 		result.Error = fmt.Errorf("cannot determine server for change %s", change.Name)
 		return result, nil
@@ -42,10 +42,6 @@ func (h *ServiceHandler) Apply(ctx context.Context, change *valueobject.Change, 
 	default:
 		return h.deployService(change, client, remoteDir, deps)
 	}
-}
-
-func (h *ServiceHandler) extractServerFromChange(ch *valueobject.Change) string {
-	return ExtractServerFromChange(ch)
 }
 
 func (h *ServiceHandler) getClient(serverName string, deps *Deps) (SSHClient, error) {
@@ -71,7 +67,7 @@ func (h *ServiceHandler) deployService(change *valueobject.Change, client SSHCli
 				result.Error = fmt.Errorf("failed to read compose file: %w", err)
 				return result, nil
 			}
-			if err := h.syncContent(client, string(content), remoteDir+"/docker-compose.yml"); err != nil {
+			if err := SyncContent(client, string(content), remoteDir+"/docker-compose.yml"); err != nil {
 				result.Error = fmt.Errorf("failed to sync compose file: %w", err)
 				return result, nil
 			}
@@ -114,25 +110,9 @@ func (h *ServiceHandler) deleteService(change *valueobject.Change, client SSHCli
 }
 
 func (h *ServiceHandler) getComposeFilePath(ch *valueobject.Change, deps *Deps) string {
-	serverName := h.extractServerFromChange(ch)
+	serverName := ExtractServerFromChange(ch)
 	if serverName == "" {
 		return ""
 	}
 	return filepath.Join(deps.WorkDir, "deployments", serverName, ch.Name+".compose.yaml")
-}
-
-func (h *ServiceHandler) syncContent(client SSHClient, content, remotePath string) error {
-	tmpFile, err := os.CreateTemp("", "yamlops-*.yml")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
-
-	if _, err := tmpFile.WriteString(content); err != nil {
-		return fmt.Errorf("failed to write temp file: %w", err)
-	}
-	tmpFile.Close()
-
-	return client.UploadFileSudo(tmpFile.Name(), remotePath)
 }

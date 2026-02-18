@@ -5,8 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 	"github.com/spf13/cobra"
+
+	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 )
 
 var listCmd = &cobra.Command{

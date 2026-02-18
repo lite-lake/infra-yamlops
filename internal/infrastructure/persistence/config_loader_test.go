@@ -10,7 +10,7 @@ import (
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
-func TestConfigLoaderImpl_Load(t *testing.T) {
+func TestConfigLoader_Load(t *testing.T) {
 	tmpDir := t.TempDir()
 	envDir := filepath.Join(tmpDir, "userdata", "test")
 	if err := os.MkdirAll(envDir, 0755); err != nil {
@@ -37,7 +37,7 @@ func TestConfigLoaderImpl_Load(t *testing.T) {
 	})
 }
 
-func TestConfigLoaderImpl_Validate(t *testing.T) {
+func TestConfigLoader_Validate(t *testing.T) {
 	loader := NewConfigLoader(".")
 
 	t.Run("nil config", func(t *testing.T) {

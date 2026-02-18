@@ -22,7 +22,7 @@ func (h *GatewayHandler) EntityType() string {
 func (h *GatewayHandler) Apply(ctx context.Context, change *valueobject.Change, deps *Deps) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
-	serverName := h.extractServerFromChange(change)
+	serverName := ExtractServerFromChange(change)
 	if serverName == "" {
 		result.Error = fmt.Errorf("cannot determine server for change %s", change.Name)
 		return result, nil
@@ -35,10 +35,6 @@ func (h *GatewayHandler) Apply(ctx context.Context, change *valueobject.Change, 
 	}
 
 	return h.deployGateway(change, deps, serverName, remoteDir)
-}
-
-func (h *GatewayHandler) extractServerFromChange(ch *valueobject.Change) string {
-	return ExtractServerFromChange(ch)
 }
 
 func (h *GatewayHandler) deployGateway(change *valueobject.Change, deps *Deps, serverName, remoteDir string) (*Result, error) {
@@ -85,7 +81,7 @@ func (h *GatewayHandler) deployGateway(change *valueobject.Change, deps *Deps, s
 		return result, nil
 	}
 
-	if err := h.syncContent(deps.SSHClient, string(content), remoteDir+"/gateway.yml"); err != nil {
+	if err := SyncContent(deps.SSHClient, string(content), remoteDir+"/gateway.yml"); err != nil {
 		result.Error = fmt.Errorf("failed to sync gateway file: %w", err)
 		return result, nil
 	}
@@ -98,7 +94,7 @@ func (h *GatewayHandler) deployGateway(change *valueobject.Change, deps *Deps, s
 				result.Error = fmt.Errorf("failed to read compose file: %w", err)
 				return result, nil
 			}
-			if err := h.syncContent(deps.SSHClient, string(composeContent), remoteDir+"/docker-compose.yml"); err != nil {
+			if err := SyncContent(deps.SSHClient, string(composeContent), remoteDir+"/docker-compose.yml"); err != nil {
 				result.Error = fmt.Errorf("failed to sync compose file: %w", err)
 				return result, nil
 			}
@@ -144,7 +140,7 @@ func (h *GatewayHandler) deleteGateway(change *valueobject.Change, deps *Deps, r
 }
 
 func (h *GatewayHandler) getGatewayFilePath(ch *valueobject.Change, deps *Deps) string {
-	serverName := h.extractServerFromChange(ch)
+	serverName := ExtractServerFromChange(ch)
 	if serverName == "" {
 		return ""
 	}
@@ -152,25 +148,9 @@ func (h *GatewayHandler) getGatewayFilePath(ch *valueobject.Change, deps *Deps) 
 }
 
 func (h *GatewayHandler) getComposeFilePath(ch *valueobject.Change, deps *Deps) string {
-	serverName := h.extractServerFromChange(ch)
+	serverName := ExtractServerFromChange(ch)
 	if serverName == "" {
 		return ""
 	}
 	return filepath.Join(deps.WorkDir, "deployments", serverName, ch.Name+".compose.yaml")
-}
-
-func (h *GatewayHandler) syncContent(client SSHClient, content, remotePath string) error {
-	tmpFile, err := os.CreateTemp("", "yamlops-*.yml")
-	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
-	}
-	defer os.Remove(tmpFile.Name())
-	defer tmpFile.Close()
-
-	if _, err := tmpFile.WriteString(content); err != nil {
-		return fmt.Errorf("failed to write temp file: %w", err)
-	}
-	tmpFile.Close()
-
-	return client.UploadFileSudo(tmpFile.Name(), remotePath)
 }

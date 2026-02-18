@@ -22,15 +22,15 @@ var (
 	ErrDNSSubdomainConflict = errors.New("dns subdomain conflict")
 )
 
-type ConfigLoaderImpl struct {
+type ConfigLoader struct {
 	baseDir string
 }
 
-func NewConfigLoader(baseDir string) *ConfigLoaderImpl {
-	return &ConfigLoaderImpl{baseDir: baseDir}
+func NewConfigLoader(baseDir string) *ConfigLoader {
+	return &ConfigLoader{baseDir: baseDir}
 }
 
-func (l *ConfigLoaderImpl) Load(ctx context.Context, env string) (*entity.Config, error) {
+func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, error) {
 	configDir := filepath.Join(l.baseDir, "userdata", env)
 
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
@@ -69,7 +69,7 @@ func (l *ConfigLoaderImpl) Load(ctx context.Context, env string) (*entity.Config
 	return cfg, nil
 }
 
-func (l *ConfigLoaderImpl) Validate(cfg *entity.Config) error {
+func (l *ConfigLoader) Validate(cfg *entity.Config) error {
 	if cfg == nil {
 		return ErrConfigNotLoaded
 	}
@@ -486,4 +486,4 @@ func validateHostnameConflicts(cfg *entity.Config) error {
 	return nil
 }
 
-var _ repository.ConfigLoader = (*ConfigLoaderImpl)(nil)
+var _ repository.ConfigLoader = (*ConfigLoader)(nil)

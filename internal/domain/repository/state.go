@@ -22,3 +22,17 @@ type DeploymentState struct {
 	Registries map[string]*entity.Registry
 	ISPs       map[string]*entity.ISP
 }
+
+func NewDeploymentState() *DeploymentState {
+	return &DeploymentState{
+		Services:   make(map[string]*entity.BizService),
+		Gateways:   make(map[string]*entity.Gateway),
+		Servers:    make(map[string]*entity.Server),
+		Zones:      make(map[string]*entity.Zone),
+		Domains:    make(map[string]*entity.Domain),
+		Records:    make(map[string]*entity.DNSRecord),
+		Certs:      make(map[string]*entity.Certificate),
+		Registries: make(map[string]*entity.Registry),
+		ISPs:       make(map[string]*entity.ISP),
+	}
+}
