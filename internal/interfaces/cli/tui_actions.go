@@ -228,6 +228,8 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		switch m.ServiceMenuIndex {
 		case 0:
 			m.ViewState = ViewStateTree
+			m.fetchServiceStatus()
+			m.applyServiceStatusToTree()
 			return m, nil
 		case 1:
 			m.ViewState = ViewStateServiceStop

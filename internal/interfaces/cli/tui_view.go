@@ -173,6 +173,9 @@ func (m Model) renderNodeToLines(node *TreeNode, depth int, idx *int, lines *[]s
 	if node.Info != "" {
 		line = fmt.Sprintf("%-50s %s", line, node.Info)
 	}
+	if statusStr := formatNodeStatus(node.Status); statusStr != "" {
+		line = fmt.Sprintf("%s %s", line, statusStr)
+	}
 	if *idx == m.CursorIndex {
 		line = selectedStyle.Render(line)
 	}
@@ -223,6 +226,9 @@ func (m Model) renderNodeLastChildToLines(node *TreeNode, depth int, idx *int, l
 	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
 	if node.Info != "" {
 		line = fmt.Sprintf("%-50s %s", line, node.Info)
+	}
+	if statusStr := formatNodeStatus(node.Status); statusStr != "" {
+		line = fmt.Sprintf("%s %s", line, statusStr)
 	}
 	if *idx == m.CursorIndex {
 		line = selectedStyle.Render(line)

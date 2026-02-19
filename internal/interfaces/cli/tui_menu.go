@@ -828,6 +828,102 @@ func (m *Model) buildStopTree() {
 	for _, node := range m.TreeNodes {
 		node.SelectRecursive(false)
 	}
+	m.fetchServiceStatus()
+	m.applyServiceStatusToTree()
+}
+
+func (m *Model) fetchServiceStatus() {
+	m.ServiceStatusMap = make(map[string]NodeStatus)
+	if m.Config == nil {
+		return
+	}
+	secrets := m.Config.GetSecretsMap()
+
+	for _, srv := range m.Config.Servers {
+		password, err := srv.SSH.Password.Resolve(secrets)
+		if err != nil {
+			continue
+		}
+
+		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		if err != nil {
+			continue
+		}
+
+		stdout, _, err := client.Run("sudo docker compose ls -a --format json 2>/dev/null || sudo docker compose ls -a --format json")
+		client.Close()
+
+		if err != nil || stdout == "" {
+			continue
+		}
+
+		type composeProject struct {
+			Name string `json:"Name"`
+		}
+		var projects []composeProject
+		if err := json.Unmarshal([]byte(stdout), &projects); err != nil {
+			for _, line := range strings.Split(stdout, "\n") {
+				line = strings.TrimSpace(line)
+				if line == "" {
+					continue
+				}
+				var proj composeProject
+				if err := json.Unmarshal([]byte(line), &proj); err == nil && proj.Name != "" {
+					projects = append(projects, proj)
+				}
+			}
+		}
+
+		for _, proj := range projects {
+			m.ServiceStatusMap[proj.Name] = StatusRunning
+		}
+
+		for _, infra := range m.Config.InfraServices {
+			if infra.Server != srv.Name {
+				continue
+			}
+			remoteDir := fmt.Sprintf("/data/yamlops/yo-%s-%s", m.Environment, infra.Name)
+			key := fmt.Sprintf("yo-%s-%s", m.Environment, infra.Name)
+			if _, exists := m.ServiceStatusMap[key]; !exists {
+				stdout, _, _ := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
+				if strings.TrimSpace(stdout) == "exists" {
+					m.ServiceStatusMap[key] = StatusStopped
+				}
+			}
+		}
+
+		for _, svc := range m.Config.Services {
+			if svc.Server != srv.Name {
+				continue
+			}
+			remoteDir := fmt.Sprintf("/data/yamlops/yo-%s-%s", m.Environment, svc.Name)
+			key := fmt.Sprintf("yo-%s-%s", m.Environment, svc.Name)
+			if _, exists := m.ServiceStatusMap[key]; !exists {
+				stdout, _, _ := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
+				if strings.TrimSpace(stdout) == "exists" {
+					m.ServiceStatusMap[key] = StatusStopped
+				}
+			}
+		}
+	}
+}
+
+func (m *Model) applyServiceStatusToTree() {
+	for _, node := range m.TreeNodes {
+		m.applyStatusToNode(node)
+	}
+}
+
+func (m *Model) applyStatusToNode(node *TreeNode) {
+	if node.Type == NodeTypeInfra || node.Type == NodeTypeBiz {
+		key := fmt.Sprintf("yo-%s-%s", m.Environment, node.Name)
+		if status, exists := m.ServiceStatusMap[key]; exists {
+			node.Status = status
+		}
+	}
+	for _, child := range node.Children {
+		m.applyStatusToNode(child)
+	}
 }
 
 func (m *Model) executeServiceStop() {
@@ -989,6 +1085,21 @@ func (m Model) renderServiceStop() string {
 	return baseStyle.Render(sb.String())
 }
 
+func formatNodeStatus(status NodeStatus) string {
+	switch status {
+	case StatusRunning:
+		return successStyle.Render("[运行中]")
+	case StatusStopped:
+		return warningStyle.Render("[已停止]")
+	case StatusNeedsUpdate:
+		return changeUpdateStyle.Render("[需更新]")
+	case StatusError:
+		return changeDeleteStyle.Render("[错误]")
+	default:
+		return ""
+	}
+}
+
 func (m Model) renderNodeToLinesForStop(node *TreeNode, depth int, idx *int, lines *[]string) {
 	indent := strings.Repeat("  ", depth)
 	prefix := indent
@@ -1021,6 +1132,9 @@ func (m Model) renderNodeToLinesForStop(node *TreeNode, depth int, idx *int, lin
 		typePrefix = "[biz] "
 	}
 	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
+	if statusStr := formatNodeStatus(node.Status); statusStr != "" {
+		line = fmt.Sprintf("%s %s", line, statusStr)
+	}
 	if *idx == m.CursorIndex {
 		line = selectedStyle.Render(line)
 	}
@@ -1069,6 +1183,9 @@ func (m Model) renderNodeLastChildToLinesForStop(node *TreeNode, depth int, idx 
 		typePrefix = "[biz] "
 	}
 	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
+	if statusStr := formatNodeStatus(node.Status); statusStr != "" {
+		line = fmt.Sprintf("%s %s", line, statusStr)
+	}
 	if *idx == m.CursorIndex {
 		line = selectedStyle.Render(line)
 	}

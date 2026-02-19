@@ -289,6 +289,7 @@ type Model struct {
 	StopResults        []StopResult
 	StopSelected       map[int]bool
 	StopCursor         int
+	ServiceStatusMap   map[string]NodeStatus
 }
 
 func NewModel(env string, configDir string) Model {
