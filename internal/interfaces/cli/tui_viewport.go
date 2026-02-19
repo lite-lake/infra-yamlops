@@ -3,8 +3,6 @@ package cli
 import (
 	"fmt"
 	"strings"
-
-	"github.com/charmbracelet/lipgloss"
 )
 
 type Viewport struct {
@@ -74,19 +72,15 @@ func (v *Viewport) RenderScrollIndicator() string {
 	if v.IsScrolledDown() {
 		parts = append(parts, "↓")
 	}
-	return scrollIndicatorStyle.Render(strings.Join(parts, " "))
+	return ScrollIndicatorStyle.Render(strings.Join(parts, " "))
 }
 
 func (v *Viewport) RenderSimpleScrollIndicator() string {
 	if v.TotalRows <= v.VisibleRows {
 		return ""
 	}
-	return scrollIndicatorStyle.Render(fmt.Sprintf("[%d/%d]", v.CursorIndex+1, v.TotalRows))
+	return ScrollIndicatorStyle.Render(fmt.Sprintf("[%d/%d]", v.CursorIndex+1, v.TotalRows))
 }
-
-var scrollIndicatorStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#6B7280")).
-	Padding(0, 1)
 
 func max(a, b int) int {
 	if a > b {

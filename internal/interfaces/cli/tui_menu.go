@@ -5,25 +5,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	serverpkg "github.com/litelake/yamlops/internal/server"
 	"github.com/litelake/yamlops/internal/ssh"
 )
-
-var menuStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#7C3AED")).
-	Bold(true)
-
-var menuItemStyle = lipgloss.NewStyle().
-	Padding(0, 2)
-
-var menuSelectedStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#7C3AED")).
-	Background(lipgloss.Color("#1E1B4B")).
-	Padding(0, 2).
-	Bold(true)
 
 func (m Model) renderMainMenu() string {
 	items := []string{
@@ -42,20 +28,20 @@ func (m Model) renderMainMenu() string {
 	viewport.EnsureCursorVisible()
 
 	var sb strings.Builder
-	title := titleStyle.Render(fmt.Sprintf("  YAMLOps [%s]", strings.ToUpper(string(m.Environment))))
+	title := TitleStyle.Render(fmt.Sprintf("  YAMLOps [%s]", strings.ToUpper(string(m.Environment))))
 	sb.WriteString(title + "\n\n")
 
 	for i := viewport.VisibleStart(); i < viewport.VisibleEnd() && i < len(items); i++ {
 		if i == m.MainMenuIndex {
-			sb.WriteString(menuSelectedStyle.Render("> "+items[i]) + "\n")
+			sb.WriteString(MenuSelectedStyle.Render("> "+items[i]) + "\n")
 		} else {
-			sb.WriteString(menuItemStyle.Render("  "+items[i]) + "\n")
+			sb.WriteString(MenuItemStyle.Render("  "+items[i]) + "\n")
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  q 退出"))
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }
 
 func (m Model) renderServiceManagement() string {
@@ -68,20 +54,20 @@ func (m Model) renderServiceManagement() string {
 	}
 
 	var sb strings.Builder
-	title := titleStyle.Render("  服务管理")
+	title := TitleStyle.Render("  服务管理")
 	sb.WriteString(title + "\n\n")
 
 	for i, item := range items {
 		if i == m.ServiceMenuIndex {
-			sb.WriteString(menuSelectedStyle.Render("> "+item) + "\n")
+			sb.WriteString(MenuSelectedStyle.Render("> "+item) + "\n")
 		} else {
-			sb.WriteString(menuItemStyle.Render("  "+item) + "\n")
+			sb.WriteString(MenuItemStyle.Render("  "+item) + "\n")
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }
 
 func (m Model) renderServerSetup() string {
@@ -103,7 +89,7 @@ func (m Model) renderServerSetup() string {
 	serverViewport.EnsureCursorVisible()
 
 	var sb strings.Builder
-	title := titleStyle.Render("  Server Setup")
+	title := TitleStyle.Render("  Server Setup")
 	sb.WriteString(title + "\n\n")
 
 	sb.WriteString("  Select Server:\n")
@@ -131,9 +117,9 @@ func (m Model) renderServerSetup() string {
 		sb.WriteString(fmt.Sprintf("  %s%s%s\n", focusPrefix, prefix, action))
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Tab 切换面板  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Tab 切换面板  Enter 确认  Esc 返回  q 退出"))
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }
 
 func (m Model) renderServerCheck() string {
@@ -156,7 +142,7 @@ func (m Model) renderServerCheck() string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, helpStyle.Render("  Esc 返回  q 退出"))
+	lines = append(lines, HelpStyle.Render("  Esc 返回  q 退出"))
 
 	availableHeight := m.Height - 4
 	if availableHeight < 5 {
@@ -181,7 +167,7 @@ func (m Model) renderServerCheck() string {
 		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
 	}
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }
 
 func (m *Model) executeServerCheck() {
@@ -271,7 +257,7 @@ func (m *Model) executeServerFullSetup() {
 func (m Model) renderDNSManagement() string {
 	var sb strings.Builder
 
-	title := titleStyle.Render("  DNS Management")
+	title := TitleStyle.Render("  DNS Management")
 	sb.WriteString(title + "\n\n")
 
 	items := []string{
@@ -283,15 +269,15 @@ func (m Model) renderDNSManagement() string {
 
 	for i, item := range items {
 		if i == m.DNSMenuIndex {
-			sb.WriteString(menuSelectedStyle.Render("> "+item) + "\n")
+			sb.WriteString(MenuSelectedStyle.Render("> "+item) + "\n")
 		} else {
-			sb.WriteString(menuItemStyle.Render("  "+item) + "\n")
+			sb.WriteString(MenuItemStyle.Render("  "+item) + "\n")
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }
 
 func (m Model) renderDNSPullDomains() string {
@@ -307,7 +293,7 @@ func (m Model) renderDNSPullDomains() string {
 	viewport.EnsureCursorVisible()
 
 	var sb strings.Builder
-	title := titleStyle.Render("  Pull Domains - Select ISP")
+	title := TitleStyle.Render("  Pull Domains - Select ISP")
 	sb.WriteString(title + "\n\n")
 
 	if len(isps) == 0 {
@@ -315,20 +301,20 @@ func (m Model) renderDNSPullDomains() string {
 	} else {
 		for i := viewport.VisibleStart(); i < viewport.VisibleEnd() && i < len(isps); i++ {
 			if i == m.DNSISPIndex {
-				sb.WriteString(menuSelectedStyle.Render("> "+isps[i]) + "\n")
+				sb.WriteString(MenuSelectedStyle.Render("> "+isps[i]) + "\n")
 			} else {
-				sb.WriteString(menuItemStyle.Render("  "+isps[i]) + "\n")
+				sb.WriteString(MenuItemStyle.Render("  "+isps[i]) + "\n")
 			}
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
 
 	if viewport.TotalRows > viewport.VisibleRows {
 		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
 	}
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }
 
 func (m Model) getDNSISPs() []string {
@@ -365,7 +351,7 @@ func (m Model) renderDNSPullRecords() string {
 	viewport.EnsureCursorVisible()
 
 	var sb strings.Builder
-	title := titleStyle.Render("  Pull Records - Select Domain")
+	title := TitleStyle.Render("  Pull Records - Select Domain")
 	sb.WriteString(title + "\n\n")
 
 	if len(domains) == 0 {
@@ -373,20 +359,20 @@ func (m Model) renderDNSPullRecords() string {
 	} else {
 		for i := viewport.VisibleStart(); i < viewport.VisibleEnd() && i < len(domains); i++ {
 			if i == m.DNSDomainIndex {
-				sb.WriteString(menuSelectedStyle.Render("> "+domains[i]) + "\n")
+				sb.WriteString(MenuSelectedStyle.Render("> "+domains[i]) + "\n")
 			} else {
-				sb.WriteString(menuItemStyle.Render("  "+domains[i]) + "\n")
+				sb.WriteString(MenuItemStyle.Render("  "+domains[i]) + "\n")
 			}
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
 
 	if viewport.TotalRows > viewport.VisibleRows {
 		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
 	}
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }
 
 func (m Model) renderDNSPullDiff() string {
@@ -397,10 +383,10 @@ func (m Model) renderDNSPullDiff() string {
 
 	if m.ErrorMessage != "" {
 		var sb strings.Builder
-		sb.WriteString(titleStyle.Render("  Error") + "\n\n")
-		sb.WriteString(changeDeleteStyle.Render("  "+m.ErrorMessage) + "\n")
-		sb.WriteString("\n" + helpStyle.Render("  Esc 返回  q 退出"))
-		return baseStyle.Render(sb.String())
+		sb.WriteString(TitleStyle.Render("  Error") + "\n\n")
+		sb.WriteString(ChangeDeleteStyle.Render("  "+m.ErrorMessage) + "\n")
+		sb.WriteString("\n" + HelpStyle.Render("  Esc 返回  q 退出"))
+		return BaseStyle.Render(sb.String())
 	}
 
 	if len(m.DNSPullDiffs) > 0 {
@@ -409,7 +395,7 @@ func (m Model) renderDNSPullDiff() string {
 		viewport.EnsureCursorVisible()
 
 		var sb strings.Builder
-		title := titleStyle.Render("  Select Domains to Sync")
+		title := TitleStyle.Render("  Select Domains to Sync")
 		sb.WriteString(title + "\n\n")
 
 		for i := viewport.VisibleStart(); i < viewport.VisibleEnd() && i < len(m.DNSPullDiffs); i++ {
@@ -424,34 +410,34 @@ func (m Model) renderDNSPullDiff() string {
 			}
 
 			var prefix string
-			var style = lipgloss.NewStyle()
+			var style = ChangeNoopStyle
 			switch diff.ChangeType {
 			case valueobject.ChangeTypeCreate:
 				prefix = "+"
-				style = changeCreateStyle
+				style = ChangeCreateStyle
 			case valueobject.ChangeTypeDelete:
 				prefix = "-"
-				style = changeDeleteStyle
+				style = ChangeDeleteStyle
 			}
 
 			line := fmt.Sprintf("%s [%s] %s %s", cursor, checked, prefix, diff.Name)
 			sb.WriteString(style.Render(line) + "\n")
 		}
 
-		sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 移动  Space 切换  a 全选  n 全不选  Enter 确认  Esc 取消  q 退出"))
+		sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 移动  Space 切换  a 全选  n 全不选  Enter 确认  Esc 取消  q 退出"))
 
 		if viewport.TotalRows > viewport.VisibleRows {
 			sb.WriteString("\n" + viewport.RenderScrollIndicator())
 		}
 
-		return baseStyle.Render(sb.String())
+		return BaseStyle.Render(sb.String())
 	} else if len(m.DNSRecordDiffs) > 0 {
 		viewport := NewViewport(0, len(m.DNSRecordDiffs), availableHeight)
 		viewport.CursorIndex = m.DNSPullCursor
 		viewport.EnsureCursorVisible()
 
 		var sb strings.Builder
-		title := titleStyle.Render("  Select DNS Records to Sync")
+		title := TitleStyle.Render("  Select DNS Records to Sync")
 		sb.WriteString(title + "\n\n")
 
 		for i := viewport.VisibleStart(); i < viewport.VisibleEnd() && i < len(m.DNSRecordDiffs); i++ {
@@ -466,17 +452,17 @@ func (m Model) renderDNSPullDiff() string {
 			}
 
 			var prefix string
-			var style = lipgloss.NewStyle()
+			var style = ChangeNoopStyle
 			switch diff.ChangeType {
 			case valueobject.ChangeTypeCreate:
 				prefix = "+"
-				style = changeCreateStyle
+				style = ChangeCreateStyle
 			case valueobject.ChangeTypeUpdate:
 				prefix = "~"
-				style = changeUpdateStyle
+				style = ChangeUpdateStyle
 			case valueobject.ChangeTypeDelete:
 				prefix = "-"
-				style = changeDeleteStyle
+				style = ChangeDeleteStyle
 			}
 
 			line := fmt.Sprintf("%s [%s] %s %-6s %-20s -> %-30s",
@@ -484,19 +470,19 @@ func (m Model) renderDNSPullDiff() string {
 			sb.WriteString(style.Render(line) + "\n")
 		}
 
-		sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 移动  Space 切换  a 全选  n 全不选  Enter 确认  Esc 取消  q 退出"))
+		sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 移动  Space 切换  a 全选  n 全不选  Enter 确认  Esc 取消  q 退出"))
 
 		if viewport.TotalRows > viewport.VisibleRows {
 			sb.WriteString("\n" + viewport.RenderScrollIndicator())
 		}
 
-		return baseStyle.Render(sb.String())
+		return BaseStyle.Render(sb.String())
 	} else {
 		var sb strings.Builder
-		sb.WriteString(titleStyle.Render("  No Differences") + "\n\n")
+		sb.WriteString(TitleStyle.Render("  No Differences") + "\n\n")
 		sb.WriteString("All items are in sync.\n")
-		sb.WriteString("\n" + helpStyle.Render("  Esc 返回  q 退出"))
-		return baseStyle.Render(sb.String())
+		sb.WriteString("\n" + HelpStyle.Render("  Esc 返回  q 退出"))
+		return BaseStyle.Render(sb.String())
 	}
 }
 
@@ -508,10 +494,10 @@ func (m Model) renderServiceCleanup() string {
 
 	if m.ErrorMessage != "" {
 		var sb strings.Builder
-		sb.WriteString(titleStyle.Render("  Error") + "\n\n")
-		sb.WriteString(changeDeleteStyle.Render("  "+m.ErrorMessage) + "\n")
-		sb.WriteString("\n" + helpStyle.Render("  Esc 返回  q 退出"))
-		return baseStyle.Render(sb.String())
+		sb.WriteString(TitleStyle.Render("  Error") + "\n\n")
+		sb.WriteString(ChangeDeleteStyle.Render("  "+m.ErrorMessage) + "\n")
+		sb.WriteString("\n" + HelpStyle.Render("  Esc 返回  q 退出"))
+		return BaseStyle.Render(sb.String())
 	}
 
 	totalItems := m.countCleanupItems()
@@ -520,7 +506,7 @@ func (m Model) renderServiceCleanup() string {
 	viewport.EnsureCursorVisible()
 
 	var sb strings.Builder
-	title := titleStyle.Render("  Service Cleanup - Orphan Resources")
+	title := TitleStyle.Render("  Service Cleanup - Orphan Resources")
 	sb.WriteString(title + "\n\n")
 
 	if totalItems == 0 {
@@ -539,7 +525,7 @@ func (m Model) renderServiceCleanup() string {
 					checked = "x"
 				}
 				line := fmt.Sprintf("  %s [%s] container: %s", cursor, checked, container)
-				style := changeDeleteStyle
+				style := ChangeDeleteStyle
 				sb.WriteString(style.Render(line) + "\n")
 				itemIndex++
 			}
@@ -553,25 +539,25 @@ func (m Model) renderServiceCleanup() string {
 					checked = "x"
 				}
 				line := fmt.Sprintf("  %s [%s] directory: %s", cursor, checked, dir)
-				style := changeDeleteStyle
+				style := ChangeDeleteStyle
 				sb.WriteString(style.Render(line) + "\n")
 				itemIndex++
 			}
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 移动  Space 切换  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 移动  Space 切换  Enter 确认  Esc 返回  q 退出"))
 
 	if viewport.TotalRows > viewport.VisibleRows {
 		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
 	}
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }
 
 func (m Model) renderServiceCleanupConfirm() string {
 	var sb strings.Builder
-	title := titleStyle.Render("  Confirm Cleanup")
+	title := TitleStyle.Render("  Confirm Cleanup")
 	sb.WriteString(title + "\n\n")
 
 	selectedCount := 0
@@ -587,20 +573,20 @@ func (m Model) renderServiceCleanupConfirm() string {
 	options := []string{"Yes, proceed", "Cancel"}
 	for i, opt := range options {
 		if i == m.ConfirmSelected {
-			sb.WriteString(menuSelectedStyle.Render("> "+opt) + "\n")
+			sb.WriteString(MenuSelectedStyle.Render("> "+opt) + "\n")
 		} else {
-			sb.WriteString(menuItemStyle.Render("  "+opt) + "\n")
+			sb.WriteString(MenuItemStyle.Render("  "+opt) + "\n")
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }
 
 func (m Model) renderServiceCleanupComplete() string {
 	var sb strings.Builder
-	title := titleStyle.Render("  Cleanup Complete")
+	title := TitleStyle.Render("  Cleanup Complete")
 	sb.WriteString(title + "\n\n")
 
 	for _, result := range m.CleanupResults {
@@ -608,23 +594,23 @@ func (m Model) renderServiceCleanupComplete() string {
 			len(result.FailedContainers) > 0 || len(result.FailedDirs) > 0 {
 			sb.WriteString(fmt.Sprintf("  [%s]\n", result.ServerName))
 			for _, c := range result.RemovedContainers {
-				sb.WriteString(successStyle.Render(fmt.Sprintf("    ✓ removed container: %s", c)) + "\n")
+				sb.WriteString(SuccessStyle.Render(fmt.Sprintf("    ✓ removed container: %s", c)) + "\n")
 			}
 			for _, d := range result.RemovedDirs {
-				sb.WriteString(successStyle.Render(fmt.Sprintf("    ✓ removed directory: %s", d)) + "\n")
+				sb.WriteString(SuccessStyle.Render(fmt.Sprintf("    ✓ removed directory: %s", d)) + "\n")
 			}
 			for _, c := range result.FailedContainers {
-				sb.WriteString(changeDeleteStyle.Render(fmt.Sprintf("    ✗ failed container: %s", c)) + "\n")
+				sb.WriteString(ChangeDeleteStyle.Render(fmt.Sprintf("    ✗ failed container: %s", c)) + "\n")
 			}
 			for _, d := range result.FailedDirs {
-				sb.WriteString(changeDeleteStyle.Render(fmt.Sprintf("    ✗ failed directory: %s", d)) + "\n")
+				sb.WriteString(ChangeDeleteStyle.Render(fmt.Sprintf("    ✗ failed directory: %s", d)) + "\n")
 			}
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  Enter 返回主菜单  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  Enter 返回主菜单  q 退出"))
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }
 
 func (m Model) countCleanupItems() int {
@@ -1064,7 +1050,7 @@ func (m Model) renderServiceStop() string {
 	m.ScrollOffset = viewport.Offset
 
 	var sb strings.Builder
-	sb.WriteString(titleStyle.Render("  Service Stop") + "\n\n")
+	sb.WriteString(TitleStyle.Render("  Service Stop") + "\n\n")
 
 	selected := m.countSelectedForStop()
 	total := m.countTotalForStop()
@@ -1080,21 +1066,21 @@ func (m Model) renderServiceStop() string {
 		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  Space 选择  Enter 展开  a 当前  n 取消  A 全选  N 全不选  p 确认停止  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  Space 选择  Enter 展开  a 当前  n 取消  A 全选  N 全不选  p 确认停止  Esc 返回  q 退出"))
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }
 
 func formatNodeStatus(status NodeStatus) string {
 	switch status {
 	case StatusRunning:
-		return successStyle.Render("[运行中]")
+		return SuccessStyle.Render("[运行中]")
 	case StatusStopped:
-		return warningStyle.Render("[已停止]")
+		return WarningStyle.Render("[已停止]")
 	case StatusNeedsUpdate:
-		return changeUpdateStyle.Render("[需更新]")
+		return ChangeUpdateStyle.Render("[需更新]")
 	case StatusError:
-		return changeDeleteStyle.Render("[错误]")
+		return ChangeDeleteStyle.Render("[错误]")
 	default:
 		return ""
 	}
@@ -1136,7 +1122,7 @@ func (m Model) renderNodeToLinesForStop(node *TreeNode, depth int, idx *int, lin
 		line = fmt.Sprintf("%s %s", line, statusStr)
 	}
 	if *idx == m.CursorIndex {
-		line = selectedStyle.Render(line)
+		line = SelectedStyle.Render(line)
 	}
 	*lines = append(*lines, line)
 	*idx++
@@ -1187,7 +1173,7 @@ func (m Model) renderNodeLastChildToLinesForStop(node *TreeNode, depth int, idx 
 		line = fmt.Sprintf("%s %s", line, statusStr)
 	}
 	if *idx == m.CursorIndex {
-		line = selectedStyle.Render(line)
+		line = SelectedStyle.Render(line)
 	}
 	*lines = append(*lines, line)
 	*idx++
@@ -1220,7 +1206,7 @@ func (m Model) countTotalForStop() int {
 
 func (m Model) renderServiceStopConfirm() string {
 	var sb strings.Builder
-	sb.WriteString(titleStyle.Render("  Confirm Stop Services") + "\n\n")
+	sb.WriteString(TitleStyle.Render("  Confirm Stop Services") + "\n\n")
 
 	selectedCount := m.countSelectedForStop()
 	if selectedCount == 0 {
@@ -1233,20 +1219,20 @@ func (m Model) renderServiceStopConfirm() string {
 	options := []string{"Yes, proceed", "Cancel"}
 	for i, opt := range options {
 		if i == m.ConfirmSelected {
-			sb.WriteString(menuSelectedStyle.Render("  > "+opt) + "\n")
+			sb.WriteString(MenuSelectedStyle.Render("  > "+opt) + "\n")
 		} else {
-			sb.WriteString(menuItemStyle.Render("    "+opt) + "\n")
+			sb.WriteString(MenuItemStyle.Render("    "+opt) + "\n")
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }
 
 func (m Model) renderServiceStopComplete() string {
 	var sb strings.Builder
-	sb.WriteString(titleStyle.Render("  Stop Complete") + "\n\n")
+	sb.WriteString(TitleStyle.Render("  Stop Complete") + "\n\n")
 
 	if len(m.StopResults) > 0 {
 		for _, result := range m.StopResults {
@@ -1254,16 +1240,16 @@ func (m Model) renderServiceStopComplete() string {
 				sb.WriteString(fmt.Sprintf("  [%s]\n", result.ServerName))
 				for _, svc := range result.Services {
 					if svc.Success {
-						sb.WriteString(successStyle.Render(fmt.Sprintf("    ✓ stopped: %s", svc.Name)) + "\n")
+						sb.WriteString(SuccessStyle.Render(fmt.Sprintf("    ✓ stopped: %s", svc.Name)) + "\n")
 					} else {
-						sb.WriteString(changeDeleteStyle.Render(fmt.Sprintf("    ✗ failed: %s - %s", svc.Name, svc.Error)) + "\n")
+						sb.WriteString(ChangeDeleteStyle.Render(fmt.Sprintf("    ✗ failed: %s - %s", svc.Name, svc.Error)) + "\n")
 					}
 				}
 			}
 		}
 	}
 
-	sb.WriteString("\n" + helpStyle.Render("  Enter 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  Enter 返回  q 退出"))
 
-	return baseStyle.Render(sb.String())
+	return BaseStyle.Render(sb.String())
 }

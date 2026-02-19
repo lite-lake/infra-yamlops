@@ -2,7 +2,6 @@ package cli
 
 import (
 	"github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/litelake/yamlops/internal/application/handler"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
@@ -198,53 +197,6 @@ func (n *TreeNode) GetSelectedLeaves() []*TreeNode {
 	}
 	return leaves
 }
-
-var baseStyle = lipgloss.NewStyle().Padding(1, 2)
-
-var titleStyle = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(lipgloss.Color("#7C3AED")).
-	Padding(0, 1)
-
-var envStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#10B981")).
-	Bold(true)
-
-var selectedStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#7C3AED")).
-	Bold(true)
-
-var helpStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#6B7280"))
-
-var changeCreateStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#10B981"))
-
-var changeUpdateStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#F59E0B"))
-
-var changeDeleteStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#EF4444"))
-
-var warningStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#F59E0B"))
-
-var changeNoopStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#6B7280"))
-
-var progressBarStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#7C3AED"))
-
-var successStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#10B981"))
-
-var tabActiveStyle = lipgloss.NewStyle().
-	Bold(true).
-	Foreground(lipgloss.Color("#7C3AED")).
-	Underline(true)
-
-var tabInactiveStyle = lipgloss.NewStyle().
-	Foreground(lipgloss.Color("#6B7280"))
 
 type Model struct {
 	ViewState          ViewState
