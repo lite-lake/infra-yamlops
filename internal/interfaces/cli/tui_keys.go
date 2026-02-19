@@ -44,18 +44,18 @@ func joinParts(parts []string, sep string) string {
 }
 
 var (
-	HelpNavUp       = HelpItem{Key: "↑/↓", Desc: "选择"}
-	HelpEnter       = HelpItem{Key: "Enter", Desc: "确认"}
-	HelpEsc         = HelpItem{Key: "Esc", Desc: "返回"}
-	HelpQuit        = HelpItem{Key: "q", Desc: "退出"}
-	HelpSpace       = HelpItem{Key: "Space", Desc: "选择"}
-	HelpTab         = HelpItem{Key: "Tab", Desc: "切换"}
-	HelpSelectAll   = HelpItem{Key: "a", Desc: "全选"}
-	HelpDeselectAll = HelpItem{Key: "n", Desc: "全不选"}
-	HelpPlanItem    = HelpItem{Key: "p", Desc: "计划"}
-	HelpRefresh     = HelpItem{Key: "r", Desc: "刷新"}
-	HelpCurrent     = HelpItem{Key: "a", Desc: "当前"}
-	HelpCancel      = HelpItem{Key: "n", Desc: "取消"}
+	HelpNavUp       = HelpItem{Key: "↑/↓", Desc: "navigate"}
+	HelpEnter       = HelpItem{Key: "Enter", Desc: "select"}
+	HelpEsc         = HelpItem{Key: "Esc", Desc: "back"}
+	HelpQuit        = HelpItem{Key: "q", Desc: "quit"}
+	HelpSpace       = HelpItem{Key: "Space", Desc: "toggle"}
+	HelpTab         = HelpItem{Key: "Tab", Desc: "switch"}
+	HelpSelectAll   = HelpItem{Key: "a", Desc: "all"}
+	HelpDeselectAll = HelpItem{Key: "n", Desc: "none"}
+	HelpPlanItem    = HelpItem{Key: "p", Desc: "plan"}
+	HelpRefresh     = HelpItem{Key: "r", Desc: "refresh"}
+	HelpCurrent     = HelpItem{Key: "a", Desc: "current"}
+	HelpCancel      = HelpItem{Key: "n", Desc: "cancel"}
 )
 
 func HelpMenu() string {
@@ -69,22 +69,22 @@ func HelpMenuWithEsc() string {
 func HelpTree() string {
 	return BuildHelpText([]HelpItem{
 		HelpSpace,
-		{Key: "Enter", Desc: "展开"},
-		{Key: "a", Desc: "当前"},
-		{Key: "n", Desc: "取消"},
-		{Key: "A", Desc: "全选"},
-		{Key: "N", Desc: "全不选"},
+		{Key: "Enter", Desc: "expand"},
+		{Key: "a", Desc: "current"},
+		{Key: "n", Desc: "cancel"},
+		{Key: "A", Desc: "all"},
+		{Key: "N", Desc: "none"},
 		HelpPlanItem,
 		HelpRefresh,
 		HelpTab,
-		{Key: "Esc", Desc: "主菜单"},
+		{Key: "Esc", Desc: "menu"},
 		HelpQuit,
 	})
 }
 
 func HelpPlan() string {
 	return BuildHelpText([]HelpItem{
-		{Key: "Enter", Desc: "执行"},
+		{Key: "Enter", Desc: "apply"},
 		HelpEsc,
 		HelpQuit,
 	})
@@ -94,14 +94,14 @@ func HelpConfirm() string {
 	return BuildHelpText([]HelpItem{
 		HelpNavUp,
 		HelpEnter,
-		{Key: "Esc", Desc: "取消"},
+		{Key: "Esc", Desc: "cancel"},
 		HelpQuit,
 	})
 }
 
 func HelpComplete() string {
 	return BuildHelpText([]HelpItem{
-		{Key: "Enter", Desc: "返回"},
+		{Key: "Enter", Desc: "back"},
 		HelpQuit,
 	})
 }
@@ -109,11 +109,11 @@ func HelpComplete() string {
 func HelpSelectList() string {
 	return BuildHelpText([]HelpItem{
 		HelpNavUp,
-		{Key: "Space", Desc: "切换"},
+		{Key: "Space", Desc: "toggle"},
 		HelpSelectAll,
 		HelpDeselectAll,
 		HelpEnter,
-		{Key: "Esc", Desc: "取消"},
+		{Key: "Esc", Desc: "cancel"},
 		HelpQuit,
 	})
 }
@@ -121,12 +121,12 @@ func HelpSelectList() string {
 func HelpStop() string {
 	return BuildHelpText([]HelpItem{
 		HelpSpace,
-		{Key: "Enter", Desc: "展开"},
-		{Key: "a", Desc: "当前"},
-		{Key: "n", Desc: "取消"},
-		{Key: "A", Desc: "全选"},
-		{Key: "N", Desc: "全不选"},
-		{Key: "p", Desc: "确认停止"},
+		{Key: "Enter", Desc: "expand"},
+		{Key: "a", Desc: "current"},
+		{Key: "n", Desc: "cancel"},
+		{Key: "A", Desc: "all"},
+		{Key: "N", Desc: "none"},
+		{Key: "p", Desc: "stop"},
 		HelpEsc,
 		HelpQuit,
 	})

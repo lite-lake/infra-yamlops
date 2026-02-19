@@ -63,7 +63,7 @@ func (m Model) renderHeader() string {
 	header.WriteString(EnvStyle.Render(fmt.Sprintf("[%s]", strings.ToUpper(string(m.Environment)))))
 	selected := m.countSelected()
 	total := m.countTotal()
-	header.WriteString(fmt.Sprintf("    选中: %d/%d", selected, total))
+	header.WriteString(fmt.Sprintf("    Selected: %d/%d", selected, total))
 	header.WriteString("\n")
 	return header.String()
 }
@@ -170,11 +170,11 @@ func (m Model) renderNodeToLines(node *TreeNode, depth int, idx *int, lines *[]s
 	case NodeTypeDNSRecord:
 	}
 	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
-	if node.Info != "" {
-		line = fmt.Sprintf("%-50s %s", line, node.Info)
-	}
 	if statusStr := formatNodeStatus(node.Status); statusStr != "" {
 		line = fmt.Sprintf("%s %s", line, statusStr)
+	}
+	if node.Info != "" {
+		line = fmt.Sprintf("%s  %s", line, node.Info)
 	}
 	if *idx == m.CursorIndex {
 		line = SelectedStyle.Render(line)
@@ -224,11 +224,11 @@ func (m Model) renderNodeLastChildToLines(node *TreeNode, depth int, idx *int, l
 		typePrefix = "[biz] "
 	}
 	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
-	if node.Info != "" {
-		line = fmt.Sprintf("%-50s %s", line, node.Info)
-	}
 	if statusStr := formatNodeStatus(node.Status); statusStr != "" {
 		line = fmt.Sprintf("%s %s", line, statusStr)
+	}
+	if node.Info != "" {
+		line = fmt.Sprintf("%s  %s", line, node.Info)
 	}
 	if *idx == m.CursorIndex {
 		line = SelectedStyle.Render(line)
@@ -262,12 +262,12 @@ func (m Model) renderTabs() string {
 
 func (m Model) renderPlan() string {
 	var lines []string
-	lines = append(lines, TitleStyle.Render("执行计划"))
+	lines = append(lines, TitleStyle.Render("Execution Plan"))
 	lines = append(lines, "")
 	if m.ErrorMessage != "" {
 		lines = append(lines, ChangeDeleteStyle.Render("Error: "+m.ErrorMessage))
 		lines = append(lines, "")
-		lines = append(lines, HelpStyle.Render("Esc 返回  q 退出"))
+		lines = append(lines, HelpStyle.Render("Esc back  q quit"))
 		return strings.Join(lines, "\n")
 	}
 	if m.PlanResult == nil || len(m.PlanResult.Changes) == 0 {
@@ -290,16 +290,16 @@ func (m Model) renderPlan() string {
 			line := fmt.Sprintf("%s %s: %s", prefix, ch.Entity, ch.Name)
 			if ch.Entity == "service" || ch.Entity == "infra_service" {
 				if ch.RemoteExists {
-					line += " [远程存在]"
+					line += " [remote]"
 				} else {
-					line += " [新建]"
+					line += " [new]"
 				}
 			}
 			lines = append(lines, style.Render(line))
 		}
 	}
 	lines = append(lines, "")
-	lines = append(lines, ChangeCreateStyle.Render("按 Enter 执行变更"))
+	lines = append(lines, ChangeCreateStyle.Render("Press Enter to apply"))
 
 	availableHeight := m.Height - 6
 	if availableHeight < 5 {
@@ -326,9 +326,9 @@ func (m Model) renderPlan() string {
 
 func (m Model) renderApplyConfirm() string {
 	var content strings.Builder
-	content.WriteString(TitleStyle.Render("确认执行"))
+	content.WriteString(TitleStyle.Render("Confirm Apply"))
 	content.WriteString("\n\n")
-	content.WriteString("是否执行以下变更?\n\n")
+	content.WriteString("Apply the following changes?\n\n")
 	if m.PlanResult != nil {
 		nonNoopCount := 0
 		for _, ch := range m.PlanResult.Changes {
@@ -336,10 +336,10 @@ func (m Model) renderApplyConfirm() string {
 				nonNoopCount++
 			}
 		}
-		content.WriteString(fmt.Sprintf("变更项数: %d\n", nonNoopCount))
+		content.WriteString(fmt.Sprintf("Changes: %d\n", nonNoopCount))
 	}
 	content.WriteString("\n")
-	options := []string{"确认执行", "取消"}
+	options := []string{"Confirm", "Cancel"}
 	for i, opt := range options {
 		if i == m.ConfirmSelected {
 			content.WriteString(SelectedStyle.Render("▸ " + opt))
@@ -353,7 +353,7 @@ func (m Model) renderApplyConfirm() string {
 
 func (m Model) renderApplyProgress() string {
 	var content strings.Builder
-	content.WriteString(TitleStyle.Render("执行中..."))
+	content.WriteString(TitleStyle.Render("Applying..."))
 	content.WriteString("\n\n")
 	progress := float64(m.ApplyProgress) / float64(m.ApplyTotal)
 	barWidth := 30
@@ -366,7 +366,7 @@ func (m Model) renderApplyProgress() string {
 
 func (m Model) renderApplyComplete() string {
 	var lines []string
-	lines = append(lines, TitleStyle.Render("执行完成"))
+	lines = append(lines, TitleStyle.Render("Complete"))
 	lines = append(lines, "")
 
 	if m.ApplyResults != nil {
@@ -385,10 +385,10 @@ func (m Model) renderApplyComplete() string {
 			}
 		}
 		lines = append(lines, "")
-		lines = append(lines, fmt.Sprintf("成功: %d  失败: %d", successCount, failCount))
+		lines = append(lines, fmt.Sprintf("Success: %d  Failed: %d", successCount, failCount))
 	}
 	lines = append(lines, "")
-	lines = append(lines, HelpStyle.Render("Enter 返回  q 退出"))
+	lines = append(lines, HelpStyle.Render("Enter back  q quit"))
 
 	availableHeight := m.Height - 6
 	if availableHeight < 5 {

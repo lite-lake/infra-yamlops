@@ -13,9 +13,9 @@ import (
 
 func (m Model) renderMainMenu() string {
 	items := []string{
-		"服务管理",
-		"域名/DNS管理",
-		"退出",
+		"Service Management",
+		"Domain/DNS Management",
+		"Exit",
 	}
 
 	availableHeight := m.Height - 6
@@ -39,22 +39,22 @@ func (m Model) renderMainMenu() string {
 		}
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Enter select  q quit"))
 
 	return BaseStyle.Render(sb.String())
 }
 
 func (m Model) renderServiceManagement() string {
 	items := []string{
-		"服务部署",
-		"服务停止",
-		"服务清理",
-		"服务器环境维护",
-		"返回主菜单",
+		"Service Deploy",
+		"Service Stop",
+		"Service Cleanup",
+		"Server Environment",
+		"Back to Main Menu",
 	}
 
 	var sb strings.Builder
-	title := TitleStyle.Render("  服务管理")
+	title := TitleStyle.Render("  Service Management")
 	sb.WriteString(title + "\n\n")
 
 	for i, item := range items {
@@ -65,7 +65,7 @@ func (m Model) renderServiceManagement() string {
 		}
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Enter select  Esc back  q quit"))
 
 	return BaseStyle.Render(sb.String())
 }
@@ -117,7 +117,7 @@ func (m Model) renderServerSetup() string {
 		sb.WriteString(fmt.Sprintf("  %s%s%s\n", focusPrefix, prefix, action))
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Tab 切换面板  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Tab switch  Enter select  Esc back  q quit"))
 
 	return BaseStyle.Render(sb.String())
 }
@@ -142,7 +142,7 @@ func (m Model) renderServerCheck() string {
 	}
 
 	lines = append(lines, "")
-	lines = append(lines, HelpStyle.Render("  Esc 返回  q 退出"))
+	lines = append(lines, HelpStyle.Render("  Esc back  q quit"))
 
 	availableHeight := m.Height - 4
 	if availableHeight < 5 {
@@ -261,10 +261,10 @@ func (m Model) renderDNSManagement() string {
 	sb.WriteString(title + "\n\n")
 
 	items := []string{
-		"Pull Domains        从ISP拉取域名列表",
-		"Pull Records        从域名拉取DNS记录",
-		"Plan & Apply        DNS变更计划/执行",
-		"Back to Menu        返回主菜单",
+		"Pull Domains        Pull domain list from ISP",
+		"Pull Records        Pull DNS records from domain",
+		"Plan & Apply        DNS change plan/apply",
+		"Back to Menu        Return to main menu",
 	}
 
 	for i, item := range items {
@@ -275,7 +275,7 @@ func (m Model) renderDNSManagement() string {
 		}
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Enter select  Esc back  q quit"))
 
 	return BaseStyle.Render(sb.String())
 }
@@ -308,7 +308,7 @@ func (m Model) renderDNSPullDomains() string {
 		}
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Enter select  Esc back  q quit"))
 
 	if viewport.TotalRows > viewport.VisibleRows {
 		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
@@ -366,7 +366,7 @@ func (m Model) renderDNSPullRecords() string {
 		}
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Enter select  Esc back  q quit"))
 
 	if viewport.TotalRows > viewport.VisibleRows {
 		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
@@ -385,7 +385,7 @@ func (m Model) renderDNSPullDiff() string {
 		var sb strings.Builder
 		sb.WriteString(TitleStyle.Render("  Error") + "\n\n")
 		sb.WriteString(ChangeDeleteStyle.Render("  "+m.ErrorMessage) + "\n")
-		sb.WriteString("\n" + HelpStyle.Render("  Esc 返回  q 退出"))
+		sb.WriteString("\n" + HelpStyle.Render("  Esc back  q quit"))
 		return BaseStyle.Render(sb.String())
 	}
 
@@ -424,7 +424,7 @@ func (m Model) renderDNSPullDiff() string {
 			sb.WriteString(style.Render(line) + "\n")
 		}
 
-		sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 移动  Space 切换  a 全选  n 全不选  Enter 确认  Esc 取消  q 退出"))
+		sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ move  Space toggle  a all  n none  Enter confirm  Esc cancel  q quit"))
 
 		if viewport.TotalRows > viewport.VisibleRows {
 			sb.WriteString("\n" + viewport.RenderScrollIndicator())
@@ -470,7 +470,7 @@ func (m Model) renderDNSPullDiff() string {
 			sb.WriteString(style.Render(line) + "\n")
 		}
 
-		sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 移动  Space 切换  a 全选  n 全不选  Enter 确认  Esc 取消  q 退出"))
+		sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ move  Space toggle  a all  n none  Enter confirm  Esc cancel  q quit"))
 
 		if viewport.TotalRows > viewport.VisibleRows {
 			sb.WriteString("\n" + viewport.RenderScrollIndicator())
@@ -481,7 +481,7 @@ func (m Model) renderDNSPullDiff() string {
 		var sb strings.Builder
 		sb.WriteString(TitleStyle.Render("  No Differences") + "\n\n")
 		sb.WriteString("All items are in sync.\n")
-		sb.WriteString("\n" + HelpStyle.Render("  Esc 返回  q 退出"))
+		sb.WriteString("\n" + HelpStyle.Render("  Esc back  q quit"))
 		return BaseStyle.Render(sb.String())
 	}
 }
@@ -496,7 +496,7 @@ func (m Model) renderServiceCleanup() string {
 		var sb strings.Builder
 		sb.WriteString(TitleStyle.Render("  Error") + "\n\n")
 		sb.WriteString(ChangeDeleteStyle.Render("  "+m.ErrorMessage) + "\n")
-		sb.WriteString("\n" + HelpStyle.Render("  Esc 返回  q 退出"))
+		sb.WriteString("\n" + HelpStyle.Render("  Esc back  q quit"))
 		return BaseStyle.Render(sb.String())
 	}
 
@@ -546,7 +546,7 @@ func (m Model) renderServiceCleanup() string {
 		}
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 移动  Space 切换  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ move  Space toggle  Enter confirm  Esc back  q quit"))
 
 	if viewport.TotalRows > viewport.VisibleRows {
 		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
@@ -579,7 +579,7 @@ func (m Model) renderServiceCleanupConfirm() string {
 		}
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Enter select  Esc back  q quit"))
 
 	return BaseStyle.Render(sb.String())
 }
@@ -608,7 +608,7 @@ func (m Model) renderServiceCleanupComplete() string {
 		}
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  Enter 返回主菜单  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  Enter back to menu  q quit"))
 
 	return BaseStyle.Render(sb.String())
 }
@@ -1066,7 +1066,7 @@ func (m Model) renderServiceStop() string {
 		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  Space 选择  Enter 展开  a 当前  n 取消  A 全选  N 全不选  p 确认停止  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  Space select  Enter expand  a current  n cancel  A all  N none  p confirm stop  Esc back  q quit"))
 
 	return BaseStyle.Render(sb.String())
 }
@@ -1074,13 +1074,13 @@ func (m Model) renderServiceStop() string {
 func formatNodeStatus(status NodeStatus) string {
 	switch status {
 	case StatusRunning:
-		return SuccessStyle.Render("[运行中]")
+		return SuccessStyle.Render("[running]")
 	case StatusStopped:
-		return WarningStyle.Render("[已停止]")
+		return WarningStyle.Render("[stopped]")
 	case StatusNeedsUpdate:
-		return ChangeUpdateStyle.Render("[需更新]")
+		return ChangeUpdateStyle.Render("[needs update]")
 	case StatusError:
-		return ChangeDeleteStyle.Render("[错误]")
+		return ChangeDeleteStyle.Render("[error]")
 	default:
 		return ""
 	}
@@ -1225,7 +1225,7 @@ func (m Model) renderServiceStopConfirm() string {
 		}
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Enter select  Esc back  q quit"))
 
 	return BaseStyle.Render(sb.String())
 }
@@ -1249,7 +1249,7 @@ func (m Model) renderServiceStopComplete() string {
 		}
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  Enter 返回  q 退出"))
+	sb.WriteString("\n" + HelpStyle.Render("  Enter back  q quit"))
 
 	return BaseStyle.Render(sb.String())
 }

@@ -140,8 +140,8 @@ func TestModel_RenderPlan(t *testing.T) {
 
 	view := m.View()
 
-	if !strings.Contains(view, "执行计划") {
-		t.Error("Plan view should contain '执行计划'")
+	if !strings.Contains(view, "Execution Plan") {
+		t.Error("Plan view should contain 'Execution Plan'")
 	}
 }
 
@@ -154,8 +154,8 @@ func TestModel_RenderApplyConfirm(t *testing.T) {
 
 	view := m.View()
 
-	if !strings.Contains(view, "确认执行") {
-		t.Error("Apply confirm view should contain '确认执行'")
+	if !strings.Contains(view, "Confirm Apply") {
+		t.Error("Apply confirm view should contain 'Confirm Apply'")
 	}
 }
 
@@ -169,8 +169,8 @@ func TestModel_RenderApplyProgress(t *testing.T) {
 
 	view := m.View()
 
-	if !strings.Contains(view, "执行中") {
-		t.Error("Apply progress view should contain '执行中'")
+	if !strings.Contains(view, "Applying") {
+		t.Error("Apply progress view should contain 'Applying'")
 	}
 }
 
@@ -183,8 +183,8 @@ func TestModel_RenderApplyComplete(t *testing.T) {
 
 	view := m.View()
 
-	if !strings.Contains(view, "执行完成") {
-		t.Error("Apply complete view should contain '执行完成'")
+	if !strings.Contains(view, "Complete") {
+		t.Error("Apply complete view should contain 'Complete'")
 	}
 }
 
