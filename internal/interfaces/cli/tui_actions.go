@@ -228,6 +228,7 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		switch m.ServiceMenuIndex {
 		case 0:
 			m.ViewState = ViewStateTree
+			m.TreeSource = ViewStateServiceManagement
 			m.fetchServiceStatus()
 			m.applyServiceStatusToTree()
 			return m, nil
@@ -266,6 +267,7 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 			return m, nil
 		case 2:
 			m.ViewState = ViewStateTree
+			m.TreeSource = ViewStateDNSManagement
 			m.ViewMode = ViewModeDNS
 			return m, nil
 		case 3:
@@ -328,7 +330,7 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		case 2:
 			m.executeServerFullSetup()
 		case 3:
-			m.ViewState = ViewStateMainMenu
+			m.ViewState = ViewStateServiceManagement
 		}
 		return m, nil
 	case ViewStateServerCheck:
@@ -374,7 +376,7 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case ViewStateServiceCleanupComplete:
-		m.ViewState = ViewStateMainMenu
+		m.ViewState = ViewStateServiceManagement
 		m.CleanupResults = nil
 		m.CleanupSelected = nil
 		return m, nil

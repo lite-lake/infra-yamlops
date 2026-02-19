@@ -201,6 +201,7 @@ func (n *TreeNode) GetSelectedLeaves() []*TreeNode {
 type Model struct {
 	ViewState          ViewState
 	ViewMode           ViewMode
+	TreeSource         ViewState
 	Environment        Environment
 	ConfigDir          string
 	Config             *entity.Config

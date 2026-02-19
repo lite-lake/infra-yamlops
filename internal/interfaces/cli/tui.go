@@ -73,7 +73,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) handleEscape() (tea.Model, tea.Cmd) {
 	switch m.ViewState {
 	case ViewStateTree:
-		m.ViewState = ViewStateServiceManagement
+		if m.TreeSource == ViewStateDNSManagement {
+			m.ViewState = ViewStateDNSManagement
+		} else {
+			m.ViewState = ViewStateServiceManagement
+		}
 		m.ErrorMessage = ""
 	case ViewStateServiceManagement:
 		m.ViewState = ViewStateMainMenu
