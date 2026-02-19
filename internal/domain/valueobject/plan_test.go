@@ -173,6 +173,32 @@ func TestScope_Matches(t *testing.T) {
 			server:   "srv2",
 			expected: false,
 		},
+		{
+			name:     "services slice match",
+			scope:    &Scope{Services: []string{"svc1", "svc2"}},
+			service:  "svc1",
+			expected: true,
+		},
+		{
+			name:     "services slice no match",
+			scope:    &Scope{Services: []string{"svc1", "svc2"}},
+			service:  "svc3",
+			expected: false,
+		},
+		{
+			name:     "services slice with zone match",
+			scope:    &Scope{Zone: "zone1", Services: []string{"svc1"}},
+			zone:     "zone1",
+			service:  "svc1",
+			expected: true,
+		},
+		{
+			name:     "services slice with zone no match service",
+			scope:    &Scope{Zone: "zone1", Services: []string{"svc1"}},
+			zone:     "zone1",
+			service:  "svc2",
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {

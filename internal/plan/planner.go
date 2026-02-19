@@ -59,15 +59,23 @@ func (p *Planner) Plan(scope *valueobject.Scope) (*valueobject.Plan, error) {
 
 	plan := valueobject.NewPlanWithScope(scope)
 
-	p.plannerService.PlanISPs(plan, p.config.GetISPMap(), scope)
-	p.plannerService.PlanZones(plan, p.config.GetZoneMap(), scope)
-	p.plannerService.PlanDomains(plan, p.config.GetDomainMap(), scope)
-	p.plannerService.PlanRecords(plan, p.config.GetAllDNSRecords(), scope)
-	p.plannerService.PlanCertificates(plan, p.config.GetCertificateMap(), scope)
-	p.plannerService.PlanRegistries(plan, p.config.GetRegistryMap(), scope)
-	p.plannerService.PlanServers(plan, p.config.GetServerMap(), p.config.GetZoneMap(), scope)
-	p.plannerService.PlanGateways(plan, p.config.GetGatewayMap(), p.config.GetServerMap(), scope)
-	p.plannerService.PlanServices(plan, p.config.GetServiceMap(), p.config.GetServerMap(), scope)
+	if !scope.HasAnyServiceSelection() {
+		p.plannerService.PlanISPs(plan, p.config.GetISPMap(), scope)
+		p.plannerService.PlanZones(plan, p.config.GetZoneMap(), scope)
+		p.plannerService.PlanDomains(plan, p.config.GetDomainMap(), scope)
+		p.plannerService.PlanRecords(plan, p.config.GetAllDNSRecords(), scope)
+		p.plannerService.PlanCertificates(plan, p.config.GetCertificateMap(), scope)
+		p.plannerService.PlanRegistries(plan, p.config.GetRegistryMap(), scope)
+		p.plannerService.PlanServers(plan, p.config.GetServerMap(), p.config.GetZoneMap(), scope)
+	}
+
+	if len(scope.Services) > 0 || !scope.HasAnyServiceSelection() {
+		p.plannerService.PlanServices(plan, p.config.GetServiceMap(), p.config.GetServerMap(), scope)
+	}
+
+	if len(scope.InfraServices) > 0 || !scope.HasAnyServiceSelection() {
+		p.plannerService.PlanInfraServices(plan, p.config.GetInfraServiceMap(), p.config.GetServerMap(), scope)
+	}
 
 	return plan, nil
 }
@@ -104,8 +112,8 @@ func (p *Planner) LoadStateFromFile(path string) error {
 	for i := range cfg.Services {
 		state.Services[cfg.Services[i].Name] = &cfg.Services[i]
 	}
-	for i := range cfg.Gateways {
-		state.Gateways[cfg.Gateways[i].Name] = &cfg.Gateways[i]
+	for i := range cfg.InfraServices {
+		state.InfraServices[cfg.InfraServices[i].Name] = &cfg.InfraServices[i]
 	}
 	for i := range cfg.Servers {
 		state.Servers[cfg.Servers[i].Name] = &cfg.Servers[i]
@@ -138,21 +146,21 @@ func (p *Planner) LoadStateFromFile(path string) error {
 func (p *Planner) SaveStateToFile(path string) error {
 	state := p.plannerService.GetState()
 	cfg := &entity.Config{
-		Services:     make([]entity.BizService, 0, len(state.Services)),
-		Gateways:     make([]entity.Gateway, 0, len(state.Gateways)),
-		Servers:      make([]entity.Server, 0, len(state.Servers)),
-		Zones:        make([]entity.Zone, 0, len(state.Zones)),
-		Domains:      make([]entity.Domain, 0, len(state.Domains)),
-		Certificates: make([]entity.Certificate, 0, len(state.Certs)),
-		Registries:   make([]entity.Registry, 0, len(state.Registries)),
-		ISPs:         make([]entity.ISP, 0, len(state.ISPs)),
+		Services:      make([]entity.BizService, 0, len(state.Services)),
+		InfraServices: make([]entity.InfraService, 0, len(state.InfraServices)),
+		Servers:       make([]entity.Server, 0, len(state.Servers)),
+		Zones:         make([]entity.Zone, 0, len(state.Zones)),
+		Domains:       make([]entity.Domain, 0, len(state.Domains)),
+		Certificates:  make([]entity.Certificate, 0, len(state.Certs)),
+		Registries:    make([]entity.Registry, 0, len(state.Registries)),
+		ISPs:          make([]entity.ISP, 0, len(state.ISPs)),
 	}
 
 	for _, svc := range state.Services {
 		cfg.Services = append(cfg.Services, *svc)
 	}
-	for _, gw := range state.Gateways {
-		cfg.Gateways = append(cfg.Gateways, *gw)
+	for _, infra := range state.InfraServices {
+		cfg.InfraServices = append(cfg.InfraServices, *infra)
 	}
 	for _, srv := range state.Servers {
 		cfg.Servers = append(cfg.Servers, *srv)

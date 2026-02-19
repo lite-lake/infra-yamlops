@@ -30,6 +30,10 @@ func (m Model) handleUp() Model {
 		if m.MainMenuIndex > 0 {
 			m.MainMenuIndex--
 		}
+	case ViewStateServiceManagement:
+		if m.ServiceMenuIndex > 0 {
+			m.ServiceMenuIndex--
+		}
 	case ViewStateServerSetup:
 		if m.ServerFocusPanel == 0 {
 			if m.ServerIndex > 0 {
@@ -64,6 +68,22 @@ func (m Model) handleUp() Model {
 		if m.ConfirmSelected > 0 {
 			m.ConfirmSelected--
 		}
+	case ViewStateServiceCleanup:
+		if m.CleanupCursor > 0 {
+			m.CleanupCursor--
+		}
+	case ViewStateServiceCleanupConfirm:
+		if m.ConfirmSelected > 0 {
+			m.ConfirmSelected--
+		}
+	case ViewStateServiceStop:
+		if m.CursorIndex > 0 {
+			m.CursorIndex--
+		}
+	case ViewStateServiceStopConfirm:
+		if m.ConfirmSelected > 0 {
+			m.ConfirmSelected--
+		}
 	}
 	return m
 }
@@ -71,8 +91,12 @@ func (m Model) handleUp() Model {
 func (m Model) handleDown() Model {
 	switch m.ViewState {
 	case ViewStateMainMenu:
-		if m.MainMenuIndex < 3 {
+		if m.MainMenuIndex < 2 {
 			m.MainMenuIndex++
+		}
+	case ViewStateServiceManagement:
+		if m.ServiceMenuIndex < 4 {
+			m.ServiceMenuIndex++
 		}
 	case ViewStateServerSetup:
 		if m.ServerFocusPanel == 0 {
@@ -115,6 +139,24 @@ func (m Model) handleDown() Model {
 		if m.ConfirmSelected < 1 {
 			m.ConfirmSelected++
 		}
+	case ViewStateServiceCleanup:
+		totalItems := m.countCleanupItems()
+		if m.CleanupCursor < totalItems-1 {
+			m.CleanupCursor++
+		}
+	case ViewStateServiceCleanupConfirm:
+		if m.ConfirmSelected < 1 {
+			m.ConfirmSelected++
+		}
+	case ViewStateServiceStop:
+		totalNodes := m.countVisibleNodes()
+		if m.CursorIndex < totalNodes-1 {
+			m.CursorIndex++
+		}
+	case ViewStateServiceStopConfirm:
+		if m.ConfirmSelected < 1 {
+			m.ConfirmSelected++
+		}
 	}
 	return m
 }
@@ -124,6 +166,21 @@ func (m Model) handleSpace() Model {
 		if len(m.DNSPullDiffs) > 0 || len(m.DNSRecordDiffs) > 0 {
 			m.DNSPullSelected[m.DNSPullCursor] = !m.DNSPullSelected[m.DNSPullCursor]
 		}
+		return m
+	}
+	if m.ViewState == ViewStateServiceCleanup {
+		if m.CleanupSelected != nil {
+			m.CleanupSelected[m.CleanupCursor] = !m.CleanupSelected[m.CleanupCursor]
+		}
+		return m
+	}
+	if m.ViewState == ViewStateServiceStop {
+		node := m.getNodeAtIndex(m.CursorIndex)
+		if node == nil || len(node.Children) > 0 {
+			return m
+		}
+		node.Selected = !node.Selected
+		node.UpdateParentSelection()
 		return m
 	}
 	if m.ViewState != ViewStateTree {
@@ -157,20 +214,43 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 	case ViewStateMainMenu:
 		switch m.MainMenuIndex {
 		case 0:
+			m.ViewState = ViewStateServiceManagement
+			m.ServiceMenuIndex = 0
+			return m, nil
+		case 1:
+			m.ViewState = ViewStateDNSManagement
+			m.DNSMenuIndex = 0
+			return m, nil
+		case 2:
+			return m, tea.Quit
+		}
+	case ViewStateServiceManagement:
+		switch m.ServiceMenuIndex {
+		case 0:
 			m.ViewState = ViewStateTree
 			return m, nil
 		case 1:
+			m.ViewState = ViewStateServiceStop
+			m.StopCursor = 0
+			m.buildStopTree()
+			return m, nil
+		case 2:
+			m.scanOrphanServices()
+			if m.ErrorMessage == "" {
+				m.ViewState = ViewStateServiceCleanup
+				m.CleanupCursor = 0
+				m.buildCleanupSelected()
+			}
+			return m, nil
+		case 3:
 			m.ViewState = ViewStateServerSetup
 			m.ServerIndex = 0
 			m.ServerAction = 0
 			m.ServerFocusPanel = 0
 			return m, nil
-		case 2:
-			m.ViewState = ViewStateDNSManagement
-			m.DNSMenuIndex = 0
+		case 4:
+			m.ViewState = ViewStateMainMenu
 			return m, nil
-		case 3:
-			return m, tea.Quit
 		}
 	case ViewStateDNSManagement:
 		switch m.DNSMenuIndex {
@@ -277,6 +357,45 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 	case ViewStateApplyComplete:
 		m.ViewState = ViewStateTree
 		return m, nil
+	case ViewStateServiceCleanup:
+		if m.hasSelectedCleanupItems() {
+			m.ViewState = ViewStateServiceCleanupConfirm
+			m.ConfirmSelected = 0
+		}
+		return m, nil
+	case ViewStateServiceCleanupConfirm:
+		if m.ConfirmSelected == 0 {
+			m.executeServiceCleanup()
+			m.ViewState = ViewStateServiceCleanupComplete
+		} else {
+			m.ViewState = ViewStateServiceCleanup
+		}
+		return m, nil
+	case ViewStateServiceCleanupComplete:
+		m.ViewState = ViewStateMainMenu
+		m.CleanupResults = nil
+		m.CleanupSelected = nil
+		return m, nil
+	case ViewStateServiceStop:
+		node := m.getNodeAtIndex(m.CursorIndex)
+		if node == nil {
+			return m, nil
+		}
+		node.Expanded = !node.Expanded
+		return m, nil
+	case ViewStateServiceStopConfirm:
+		if m.ConfirmSelected == 0 {
+			m.executeServiceStop()
+			m.ViewState = ViewStateServiceStopComplete
+		} else {
+			m.ViewState = ViewStateServiceStop
+		}
+		return m, nil
+	case ViewStateServiceStopComplete:
+		m.ViewState = ViewStateServiceManagement
+		m.StopResults = nil
+		m.StopSelected = nil
+		return m, nil
 	}
 	return m, nil
 }
@@ -301,7 +420,7 @@ func (m Model) handleTab() Model {
 }
 
 func (m Model) handleSelectCurrent(selected bool) Model {
-	if m.ViewState != ViewStateTree {
+	if m.ViewState != ViewStateTree && m.ViewState != ViewStateServiceStop {
 		return m
 	}
 	node := m.getNodeAtIndex(m.CursorIndex)
@@ -314,7 +433,7 @@ func (m Model) handleSelectCurrent(selected bool) Model {
 }
 
 func (m Model) handleSelectAll(selected bool) Model {
-	if m.ViewState != ViewStateTree {
+	if m.ViewState != ViewStateTree && m.ViewState != ViewStateServiceStop {
 		return m
 	}
 	nodes := m.getCurrentTree()
@@ -325,12 +444,19 @@ func (m Model) handleSelectAll(selected bool) Model {
 }
 
 func (m Model) handlePlan() (tea.Model, tea.Cmd) {
-	if m.ViewState != ViewStateTree {
+	if m.ViewState == ViewStateTree {
+		m.generatePlan()
+		if m.ErrorMessage == "" {
+			m.ViewState = ViewStatePlan
+		}
 		return m, nil
 	}
-	m.generatePlan()
-	if m.ErrorMessage == "" {
-		m.ViewState = ViewStatePlan
+	if m.ViewState == ViewStateServiceStop {
+		if m.hasSelectedStopServices() {
+			m.ViewState = ViewStateServiceStopConfirm
+			m.ConfirmSelected = 0
+		}
+		return m, nil
 	}
 	return m, nil
 }

@@ -54,8 +54,8 @@ func runShow(ctx *Context, entity, name string) {
 		if m := cfg.GetZoneMap(); m[name] != nil {
 			found = m[name]
 		}
-	case "gateway":
-		if m := cfg.GetGatewayMap(); m[name] != nil {
+	case "infra_service":
+		if m := cfg.GetInfraServiceMap(); m[name] != nil {
 			found = m[name]
 		}
 	case "server":

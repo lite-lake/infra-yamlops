@@ -345,38 +345,6 @@ func TestRegistryEquals(t *testing.T) {
 	}
 }
 
-func TestGatewayEquals(t *testing.T) {
-	tests := []struct {
-		name     string
-		a, b     *entity.Gateway
-		expected bool
-	}{
-		{
-			name: "equal gateways",
-			a: &entity.Gateway{Name: "gw1", Zone: "z1", Server: "srv1", Image: "nginx",
-				Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}},
-			b: &entity.Gateway{Name: "gw1", Zone: "z1", Server: "srv1", Image: "nginx",
-				Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}},
-			expected: true,
-		},
-		{
-			name:     "different ports",
-			a:        &entity.Gateway{Name: "gw1", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}},
-			b:        &entity.Gateway{Name: "gw1", Ports: entity.GatewayPorts{HTTP: 8080, HTTPS: 8443}},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := GatewayEquals(tt.a, tt.b)
-			if result != tt.expected {
-				t.Errorf("GatewayEquals() = %v, expected %v", result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestServiceEquals(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -517,25 +485,6 @@ func TestPlannerService_PlanServers(t *testing.T) {
 	}
 
 	svc.PlanServers(plan, cfgMap, zoneMap, scope)
-
-	if len(plan.Changes) != 1 {
-		t.Errorf("expected 1 change, got %d", len(plan.Changes))
-	}
-}
-
-func TestPlannerService_PlanGateways(t *testing.T) {
-	svc := NewPlannerService(nil)
-	plan := valueobject.NewPlan()
-	scope := &valueobject.Scope{}
-
-	cfgMap := map[string]*entity.Gateway{
-		"gw1": {Name: "gw1", Server: "srv1"},
-	}
-	serverMap := map[string]*entity.Server{
-		"srv1": {Name: "srv1", Zone: "zone1"},
-	}
-
-	svc.PlanGateways(plan, cfgMap, serverMap, scope)
 
 	if len(plan.Changes) != 1 {
 		t.Errorf("expected 1 change, got %d", len(plan.Changes))

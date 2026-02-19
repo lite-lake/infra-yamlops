@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -26,10 +27,9 @@ var menuSelectedStyle = lipgloss.NewStyle().
 
 func (m Model) renderMainMenu() string {
 	items := []string{
-		"Plan & Apply        基础设施部署",
-		"Server Setup        服务器环境设置",
-		"DNS Management      域名/DNS管理",
-		"Exit                退出",
+		"服务管理",
+		"域名/DNS管理",
+		"退出",
 	}
 
 	availableHeight := m.Height - 6
@@ -54,6 +54,32 @@ func (m Model) renderMainMenu() string {
 	}
 
 	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  q 退出"))
+
+	return baseStyle.Render(sb.String())
+}
+
+func (m Model) renderServiceManagement() string {
+	items := []string{
+		"服务部署",
+		"服务停止",
+		"服务清理",
+		"服务器环境维护",
+		"返回主菜单",
+	}
+
+	var sb strings.Builder
+	title := titleStyle.Render("  服务管理")
+	sb.WriteString(title + "\n\n")
+
+	for i, item := range items {
+		if i == m.ServiceMenuIndex {
+			sb.WriteString(menuSelectedStyle.Render("> "+item) + "\n")
+		} else {
+			sb.WriteString(menuItemStyle.Render("  "+item) + "\n")
+		}
+	}
+
+	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
 
 	return baseStyle.Render(sb.String())
 }
@@ -472,4 +498,655 @@ func (m Model) renderDNSPullDiff() string {
 		sb.WriteString("\n" + helpStyle.Render("  Esc 返回  q 退出"))
 		return baseStyle.Render(sb.String())
 	}
+}
+
+func (m Model) renderServiceCleanup() string {
+	availableHeight := m.Height - 10
+	if availableHeight < 5 {
+		availableHeight = 5
+	}
+
+	if m.ErrorMessage != "" {
+		var sb strings.Builder
+		sb.WriteString(titleStyle.Render("  Error") + "\n\n")
+		sb.WriteString(changeDeleteStyle.Render("  "+m.ErrorMessage) + "\n")
+		sb.WriteString("\n" + helpStyle.Render("  Esc 返回  q 退出"))
+		return baseStyle.Render(sb.String())
+	}
+
+	totalItems := m.countCleanupItems()
+	viewport := NewViewport(0, totalItems, availableHeight)
+	viewport.CursorIndex = m.CleanupCursor
+	viewport.EnsureCursorVisible()
+
+	var sb strings.Builder
+	title := titleStyle.Render("  Service Cleanup - Orphan Resources")
+	sb.WriteString(title + "\n\n")
+
+	if totalItems == 0 {
+		sb.WriteString("  No orphan services found on any server.\n")
+	} else {
+		itemIndex := 0
+		for _, result := range m.CleanupResults {
+			sb.WriteString(fmt.Sprintf("  [%s]\n", result.ServerName))
+			for _, container := range result.OrphanContainers {
+				cursor := " "
+				if m.CleanupCursor == itemIndex {
+					cursor = ">"
+				}
+				checked := " "
+				if m.CleanupSelected[itemIndex] {
+					checked = "x"
+				}
+				line := fmt.Sprintf("  %s [%s] container: %s", cursor, checked, container)
+				style := changeDeleteStyle
+				sb.WriteString(style.Render(line) + "\n")
+				itemIndex++
+			}
+			for _, dir := range result.OrphanDirs {
+				cursor := " "
+				if m.CleanupCursor == itemIndex {
+					cursor = ">"
+				}
+				checked := " "
+				if m.CleanupSelected[itemIndex] {
+					checked = "x"
+				}
+				line := fmt.Sprintf("  %s [%s] directory: %s", cursor, checked, dir)
+				style := changeDeleteStyle
+				sb.WriteString(style.Render(line) + "\n")
+				itemIndex++
+			}
+		}
+	}
+
+	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 移动  Space 切换  Enter 确认  Esc 返回  q 退出"))
+
+	if viewport.TotalRows > viewport.VisibleRows {
+		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
+	}
+
+	return baseStyle.Render(sb.String())
+}
+
+func (m Model) renderServiceCleanupConfirm() string {
+	var sb strings.Builder
+	title := titleStyle.Render("  Confirm Cleanup")
+	sb.WriteString(title + "\n\n")
+
+	selectedCount := 0
+	for _, selected := range m.CleanupSelected {
+		if selected {
+			selectedCount++
+		}
+	}
+
+	sb.WriteString(fmt.Sprintf("  You are about to remove %d orphan resource(s).\n", selectedCount))
+	sb.WriteString("  This action cannot be undone.\n\n")
+
+	options := []string{"Yes, proceed", "Cancel"}
+	for i, opt := range options {
+		if i == m.ConfirmSelected {
+			sb.WriteString(menuSelectedStyle.Render("> "+opt) + "\n")
+		} else {
+			sb.WriteString(menuItemStyle.Render("  "+opt) + "\n")
+		}
+	}
+
+	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+
+	return baseStyle.Render(sb.String())
+}
+
+func (m Model) renderServiceCleanupComplete() string {
+	var sb strings.Builder
+	title := titleStyle.Render("  Cleanup Complete")
+	sb.WriteString(title + "\n\n")
+
+	for _, result := range m.CleanupResults {
+		if len(result.RemovedContainers) > 0 || len(result.RemovedDirs) > 0 ||
+			len(result.FailedContainers) > 0 || len(result.FailedDirs) > 0 {
+			sb.WriteString(fmt.Sprintf("  [%s]\n", result.ServerName))
+			for _, c := range result.RemovedContainers {
+				sb.WriteString(successStyle.Render(fmt.Sprintf("    ✓ removed container: %s", c)) + "\n")
+			}
+			for _, d := range result.RemovedDirs {
+				sb.WriteString(successStyle.Render(fmt.Sprintf("    ✓ removed directory: %s", d)) + "\n")
+			}
+			for _, c := range result.FailedContainers {
+				sb.WriteString(changeDeleteStyle.Render(fmt.Sprintf("    ✗ failed container: %s", c)) + "\n")
+			}
+			for _, d := range result.FailedDirs {
+				sb.WriteString(changeDeleteStyle.Render(fmt.Sprintf("    ✗ failed directory: %s", d)) + "\n")
+			}
+		}
+	}
+
+	sb.WriteString("\n" + helpStyle.Render("  Enter 返回主菜单  q 退出"))
+
+	return baseStyle.Render(sb.String())
+}
+
+func (m Model) countCleanupItems() int {
+	count := 0
+	for _, result := range m.CleanupResults {
+		count += len(result.OrphanContainers) + len(result.OrphanDirs)
+	}
+	return count
+}
+
+func (m *Model) buildCleanupSelected() {
+	m.CleanupSelected = make(map[int]bool)
+	itemIndex := 0
+	for _, result := range m.CleanupResults {
+		for range result.OrphanContainers {
+			m.CleanupSelected[itemIndex] = true
+			itemIndex++
+		}
+		for range result.OrphanDirs {
+			m.CleanupSelected[itemIndex] = true
+			itemIndex++
+		}
+	}
+}
+
+func (m Model) hasSelectedCleanupItems() bool {
+	for _, selected := range m.CleanupSelected {
+		if selected {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *Model) scanOrphanServices() {
+	m.CleanupResults = nil
+	m.ErrorMessage = ""
+
+	secrets := m.Config.GetSecretsMap()
+	serviceMap := m.Config.GetServiceMap()
+	infraServiceMap := m.Config.GetInfraServiceMap()
+
+	for _, srv := range m.ServerList {
+		password, err := srv.SSH.Password.Resolve(secrets)
+		if err != nil {
+			m.ErrorMessage = fmt.Sprintf("[%s] Cannot resolve password: %v", srv.Name, err)
+			return
+		}
+
+		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		if err != nil {
+			m.ErrorMessage = fmt.Sprintf("[%s] Connection failed: %v", srv.Name, err)
+			return
+		}
+
+		containerStdout, _, err := client.Run("sudo docker ps -a --format '{{json .}}'")
+		if err != nil {
+			m.ErrorMessage = fmt.Sprintf("[%s] Failed to list containers: %v", srv.Name, err)
+			client.Close()
+			return
+		}
+
+		dirStdout, _, err := client.Run("sudo ls -1 /data/yamlops 2>/dev/null || true")
+		if err != nil {
+			m.ErrorMessage = fmt.Sprintf("[%s] Failed to list directories: %v", srv.Name, err)
+			client.Close()
+			return
+		}
+
+		client.Close()
+
+		result := CleanupResult{ServerName: srv.Name}
+
+		for _, line := range strings.Split(strings.TrimSpace(containerStdout), "\n") {
+			if line == "" {
+				continue
+			}
+			var container struct {
+				Name string `json:"Names"`
+			}
+			if err := json.Unmarshal([]byte(line), &container); err != nil {
+				continue
+			}
+
+			if !strings.HasPrefix(container.Name, "yo-"+string(m.Environment)+"-") {
+				continue
+			}
+			serviceName := strings.TrimPrefix(container.Name, "yo-"+string(m.Environment)+"-")
+			_, isService := serviceMap[serviceName]
+			_, isInfraService := infraServiceMap[serviceName]
+			if !isService && !isInfraService {
+				result.OrphanContainers = append(result.OrphanContainers, container.Name)
+			}
+		}
+
+		for _, line := range strings.Split(strings.TrimSpace(dirStdout), "\n") {
+			if line == "" {
+				continue
+			}
+			if !strings.HasPrefix(line, "yo-"+string(m.Environment)+"-") {
+				continue
+			}
+			serviceName := strings.TrimPrefix(line, "yo-"+string(m.Environment)+"-")
+			_, isService := serviceMap[serviceName]
+			_, isInfraService := infraServiceMap[serviceName]
+			if !isService && !isInfraService {
+				result.OrphanDirs = append(result.OrphanDirs, line)
+			}
+		}
+
+		if len(result.OrphanContainers) > 0 || len(result.OrphanDirs) > 0 {
+			m.CleanupResults = append(m.CleanupResults, result)
+		}
+	}
+}
+
+func (m *Model) executeServiceCleanup() {
+	secrets := m.Config.GetSecretsMap()
+
+	for i, result := range m.CleanupResults {
+		srv := m.findServerByName(result.ServerName)
+		if srv == nil {
+			continue
+		}
+
+		password, err := srv.SSH.Password.Resolve(secrets)
+		if err != nil {
+			for _, c := range result.OrphanContainers {
+				m.CleanupResults[i].FailedContainers = append(m.CleanupResults[i].FailedContainers, c)
+			}
+			for _, d := range result.OrphanDirs {
+				m.CleanupResults[i].FailedDirs = append(m.CleanupResults[i].FailedDirs, d)
+			}
+			continue
+		}
+
+		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		if err != nil {
+			for _, c := range result.OrphanContainers {
+				m.CleanupResults[i].FailedContainers = append(m.CleanupResults[i].FailedContainers, c)
+			}
+			for _, d := range result.OrphanDirs {
+				m.CleanupResults[i].FailedDirs = append(m.CleanupResults[i].FailedDirs, d)
+			}
+			continue
+		}
+
+		itemIndex := m.getServerCleanupStartIndex(i)
+		for _, container := range result.OrphanContainers {
+			if m.CleanupSelected[itemIndex] {
+				_, stderr, err := client.Run(fmt.Sprintf("sudo docker rm -f %s", container))
+				if err != nil {
+					m.CleanupResults[i].FailedContainers = append(m.CleanupResults[i].FailedContainers, container+": "+stderr)
+				} else {
+					m.CleanupResults[i].RemovedContainers = append(m.CleanupResults[i].RemovedContainers, container)
+				}
+			}
+			itemIndex++
+		}
+		for _, dir := range result.OrphanDirs {
+			if m.CleanupSelected[itemIndex] {
+				remoteDir := fmt.Sprintf("/data/yamlops/%s", dir)
+				_, stderr, err := client.Run(fmt.Sprintf("sudo rm -rf %s", remoteDir))
+				if err != nil {
+					m.CleanupResults[i].FailedDirs = append(m.CleanupResults[i].FailedDirs, dir+": "+stderr)
+				} else {
+					m.CleanupResults[i].RemovedDirs = append(m.CleanupResults[i].RemovedDirs, dir)
+				}
+			}
+			itemIndex++
+		}
+
+		client.Close()
+	}
+}
+
+func (m *Model) findServerByName(name string) *entity.Server {
+	for _, srv := range m.ServerList {
+		if srv.Name == name {
+			return srv
+		}
+	}
+	return nil
+}
+
+func (m *Model) getServerCleanupStartIndex(serverIndex int) int {
+	count := 0
+	for i := 0; i < serverIndex; i++ {
+		count += len(m.CleanupResults[i].OrphanContainers) + len(m.CleanupResults[i].OrphanDirs)
+	}
+	return count
+}
+
+func (m *Model) buildStopTree() {
+	m.loadConfig()
+	if m.Config == nil {
+		return
+	}
+	m.TreeNodes = m.buildAppTree()
+	m.StopSelected = make(map[int]bool)
+	for _, node := range m.TreeNodes {
+		node.SelectRecursive(false)
+	}
+}
+
+func (m *Model) executeServiceStop() {
+	m.StopResults = nil
+	secrets := m.Config.GetSecretsMap()
+
+	servicesToStop := m.getSelectedServicesForStop()
+	if len(servicesToStop) == 0 {
+		return
+	}
+
+	serverServices := make(map[string][]string)
+	for _, svc := range servicesToStop {
+		if svc.Server != "" {
+			serverServices[svc.Server] = append(serverServices[svc.Server], svc.Name)
+		}
+	}
+
+	for _, srv := range m.ServerList {
+		services, ok := serverServices[srv.Name]
+		if !ok || len(services) == 0 {
+			continue
+		}
+
+		result := StopResult{ServerName: srv.Name}
+
+		password, err := srv.SSH.Password.Resolve(secrets)
+		if err != nil {
+			for _, svcName := range services {
+				result.Services = append(result.Services, StopServiceResult{
+					Name:    svcName,
+					Success: false,
+					Error:   fmt.Sprintf("Cannot resolve password: %v", err),
+				})
+			}
+			m.StopResults = append(m.StopResults, result)
+			continue
+		}
+
+		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		if err != nil {
+			for _, svcName := range services {
+				result.Services = append(result.Services, StopServiceResult{
+					Name:    svcName,
+					Success: false,
+					Error:   fmt.Sprintf("Connection failed: %v", err),
+				})
+			}
+			m.StopResults = append(m.StopResults, result)
+			continue
+		}
+
+		for _, svcName := range services {
+			remoteDir := fmt.Sprintf("/data/yamlops/yo-%s-%s", m.Environment, svcName)
+			cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml down 2>/dev/null || true", remoteDir)
+			_, stderr, err := client.Run(cmd)
+			if err != nil {
+				result.Services = append(result.Services, StopServiceResult{
+					Name:    svcName,
+					Success: false,
+					Error:   stderr,
+				})
+			} else {
+				result.Services = append(result.Services, StopServiceResult{
+					Name:    svcName,
+					Success: true,
+				})
+			}
+		}
+
+		client.Close()
+		m.StopResults = append(m.StopResults, result)
+	}
+}
+
+type serviceInfo struct {
+	Name   string
+	Server string
+}
+
+func (m *Model) getSelectedServicesForStop() []serviceInfo {
+	var services []serviceInfo
+	serviceSet := make(map[string]bool)
+
+	for _, node := range m.TreeNodes {
+		leaves := node.GetSelectedLeaves()
+		for _, leaf := range leaves {
+			var serverName string
+			if leaf.Parent != nil {
+				serverName = leaf.Parent.Name
+			}
+			switch leaf.Type {
+			case NodeTypeInfra:
+				if !serviceSet[leaf.Name] {
+					services = append(services, serviceInfo{Name: leaf.Name, Server: serverName})
+					serviceSet[leaf.Name] = true
+				}
+			case NodeTypeBiz:
+				if !serviceSet[leaf.Name] {
+					services = append(services, serviceInfo{Name: leaf.Name, Server: serverName})
+					serviceSet[leaf.Name] = true
+				}
+			}
+		}
+	}
+	return services
+}
+
+func (m Model) hasSelectedStopServices() bool {
+	for _, node := range m.TreeNodes {
+		if node.CountSelected() > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func (m Model) renderServiceStop() string {
+	var lines []string
+	idx := 0
+	for _, node := range m.TreeNodes {
+		m.renderNodeToLinesForStop(node, 0, &idx, &lines)
+	}
+
+	availableHeight := m.Height - 10
+	if availableHeight < 5 {
+		availableHeight = 5
+	}
+
+	treeHeight := availableHeight - 2
+	if treeHeight < 3 {
+		treeHeight = 3
+	}
+
+	totalNodes := len(lines)
+	viewport := NewViewport(m.CursorIndex, totalNodes, treeHeight)
+	viewport.EnsureCursorVisible()
+	m.ScrollOffset = viewport.Offset
+
+	var sb strings.Builder
+	sb.WriteString(titleStyle.Render("  Service Stop") + "\n\n")
+
+	selected := m.countSelectedForStop()
+	total := m.countTotalForStop()
+	sb.WriteString(fmt.Sprintf("  Selected: %d/%d\n\n", selected, total))
+
+	start := viewport.VisibleStart()
+	end := viewport.VisibleEnd()
+	for i := start; i < end && i < len(lines); i++ {
+		sb.WriteString("  " + lines[i] + "\n")
+	}
+
+	if viewport.TotalRows > viewport.VisibleRows {
+		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
+	}
+
+	sb.WriteString("\n" + helpStyle.Render("  Space 选择  Enter 展开  a 当前  n 取消  A 全选  N 全不选  p 确认停止  Esc 返回  q 退出"))
+
+	return baseStyle.Render(sb.String())
+}
+
+func (m Model) renderNodeToLinesForStop(node *TreeNode, depth int, idx *int, lines *[]string) {
+	indent := strings.Repeat("  ", depth)
+	prefix := indent
+	if depth > 0 {
+		prefix = indent[:len(indent)-2] + "├─"
+	}
+	cursor := "  "
+	if *idx == m.CursorIndex {
+		cursor = "> "
+	}
+	selectIcon := "○"
+	if node.Selected {
+		selectIcon = "◉"
+	} else if node.IsPartiallySelected() {
+		selectIcon = "◐"
+	}
+	expandIcon := " "
+	if len(node.Children) > 0 {
+		if node.Expanded {
+			expandIcon = "▾"
+		} else {
+			expandIcon = "▸"
+		}
+	}
+	typePrefix := ""
+	switch node.Type {
+	case NodeTypeInfra:
+		typePrefix = "[infra] "
+	case NodeTypeBiz:
+		typePrefix = "[biz] "
+	}
+	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
+	if *idx == m.CursorIndex {
+		line = selectedStyle.Render(line)
+	}
+	*lines = append(*lines, line)
+	*idx++
+	if node.Expanded {
+		for i, child := range node.Children {
+			if i == len(node.Children)-1 {
+				m.renderNodeLastChildToLinesForStop(child, depth+1, idx, lines)
+			} else {
+				m.renderNodeToLinesForStop(child, depth+1, idx, lines)
+			}
+		}
+	}
+}
+
+func (m Model) renderNodeLastChildToLinesForStop(node *TreeNode, depth int, idx *int, lines *[]string) {
+	indent := strings.Repeat("  ", depth)
+	prefix := indent
+	if depth > 0 {
+		prefix = indent[:len(indent)-2] + "└─"
+	}
+	cursor := "  "
+	if *idx == m.CursorIndex {
+		cursor = "> "
+	}
+	selectIcon := "○"
+	if node.Selected {
+		selectIcon = "◉"
+	} else if node.IsPartiallySelected() {
+		selectIcon = "◐"
+	}
+	expandIcon := " "
+	if len(node.Children) > 0 {
+		if node.Expanded {
+			expandIcon = "▾"
+		} else {
+			expandIcon = "▸"
+		}
+	}
+	typePrefix := ""
+	switch node.Type {
+	case NodeTypeInfra:
+		typePrefix = "[infra] "
+	case NodeTypeBiz:
+		typePrefix = "[biz] "
+	}
+	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
+	if *idx == m.CursorIndex {
+		line = selectedStyle.Render(line)
+	}
+	*lines = append(*lines, line)
+	*idx++
+	if node.Expanded {
+		for i, child := range node.Children {
+			if i == len(node.Children)-1 {
+				m.renderNodeLastChildToLinesForStop(child, depth+1, idx, lines)
+			} else {
+				m.renderNodeToLinesForStop(child, depth+1, idx, lines)
+			}
+		}
+	}
+}
+
+func (m Model) countSelectedForStop() int {
+	count := 0
+	for _, node := range m.TreeNodes {
+		count += node.CountSelected()
+	}
+	return count
+}
+
+func (m Model) countTotalForStop() int {
+	count := 0
+	for _, node := range m.TreeNodes {
+		count += node.CountTotal()
+	}
+	return count
+}
+
+func (m Model) renderServiceStopConfirm() string {
+	var sb strings.Builder
+	sb.WriteString(titleStyle.Render("  Confirm Stop Services") + "\n\n")
+
+	selectedCount := m.countSelectedForStop()
+	if selectedCount == 0 {
+		sb.WriteString("  No services selected.\n")
+	} else {
+		sb.WriteString(fmt.Sprintf("  You are about to stop %d service(s).\n", selectedCount))
+	}
+	sb.WriteString("  This will only stop containers, data will be preserved.\n\n")
+
+	options := []string{"Yes, proceed", "Cancel"}
+	for i, opt := range options {
+		if i == m.ConfirmSelected {
+			sb.WriteString(menuSelectedStyle.Render("  > "+opt) + "\n")
+		} else {
+			sb.WriteString(menuItemStyle.Render("    "+opt) + "\n")
+		}
+	}
+
+	sb.WriteString("\n" + helpStyle.Render("  ↑/↓ 选择  Enter 确认  Esc 返回  q 退出"))
+
+	return baseStyle.Render(sb.String())
+}
+
+func (m Model) renderServiceStopComplete() string {
+	var sb strings.Builder
+	sb.WriteString(titleStyle.Render("  Stop Complete") + "\n\n")
+
+	if len(m.StopResults) > 0 {
+		for _, result := range m.StopResults {
+			if len(result.Services) > 0 {
+				sb.WriteString(fmt.Sprintf("  [%s]\n", result.ServerName))
+				for _, svc := range result.Services {
+					if svc.Success {
+						sb.WriteString(successStyle.Render(fmt.Sprintf("    ✓ stopped: %s", svc.Name)) + "\n")
+					} else {
+						sb.WriteString(changeDeleteStyle.Render(fmt.Sprintf("    ✗ failed: %s - %s", svc.Name, svc.Error)) + "\n")
+					}
+				}
+			}
+		}
+	}
+
+	sb.WriteString("\n" + helpStyle.Render("  Enter 返回  q 退出"))
+
+	return baseStyle.Render(sb.String())
 }

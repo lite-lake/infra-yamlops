@@ -25,10 +25,11 @@ func (ct ChangeType) String() string {
 }
 
 type Change struct {
-	Type     ChangeType
-	Entity   string
-	Name     string
-	OldState interface{}
-	NewState interface{}
-	Actions  []string
+	Type         ChangeType
+	Entity       string
+	Name         string
+	OldState     interface{}
+	NewState     interface{}
+	Actions      []string
+	RemoteExists bool
 }

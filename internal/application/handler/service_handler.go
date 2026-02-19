@@ -48,6 +48,13 @@ func (h *ServiceHandler) getClient(serverName string, deps *Deps) (SSHClient, er
 	if _, ok := deps.Servers[serverName]; !ok {
 		return nil, fmt.Errorf("server %s not registered", serverName)
 	}
+	if deps.SSHClient == nil {
+		errMsg := fmt.Sprintf("SSH client not available for server %s", serverName)
+		if deps.SSHError != nil {
+			errMsg = fmt.Sprintf("%s: %v", errMsg, deps.SSHError)
+		}
+		return nil, fmt.Errorf("%s", errMsg)
+	}
 	return deps.SSHClient, nil
 }
 
@@ -74,6 +81,12 @@ func (h *ServiceHandler) deployService(change *valueobject.Change, client SSHCli
 
 			networkCmd := fmt.Sprintf("sudo docker network create yamlops-%s 2>/dev/null || true", deps.Env)
 			_, _, _ = client.Run(networkCmd)
+
+			pullCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml pull", remoteDir)
+			_, pullStderr, pullErr := client.Run(pullCmd)
+			if pullErr != nil {
+				result.Warnings = append(result.Warnings, fmt.Sprintf("镜像拉取失败: %s", pullStderr))
+			}
 
 			cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d", remoteDir)
 			stdout, stderr, err := client.Run(cmd)

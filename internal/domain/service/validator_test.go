@@ -243,51 +243,6 @@ func TestValidator_CertificateReferences(t *testing.T) {
 	})
 }
 
-func TestValidator_GatewayReferences(t *testing.T) {
-	t.Run("valid gateway references", func(t *testing.T) {
-		cfg := &entity.Config{
-			ISPs:  []entity.ISP{{Name: "isp1", Services: []entity.ISPService{"server"}, Credentials: map[string]valueobject.SecretRef{"key": {Plain: "val"}}}},
-			Zones: []entity.Zone{{Name: "zone1", ISP: "isp1", Region: "us-east-1"}},
-			Servers: []entity.Server{{
-				Name: "server1",
-				Zone: "zone1",
-				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
-			}},
-			Gateways: []entity.Gateway{{
-				Name:   "gw1",
-				Zone:   "zone1",
-				Server: "server1",
-				Image:  "nginx",
-				Ports:  entity.GatewayPorts{HTTP: 80, HTTPS: 443},
-				SSL:    entity.GatewaySSLConfig{Mode: "local"},
-			}},
-		}
-		validator := NewValidator(cfg)
-		err := validator.Validate()
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("missing zone reference", func(t *testing.T) {
-		cfg := &entity.Config{
-			Gateways: []entity.Gateway{{
-				Name:   "gw1",
-				Zone:   "nonexistent",
-				Server: "server1",
-				Image:  "nginx",
-				Ports:  entity.GatewayPorts{HTTP: 80, HTTPS: 443},
-				SSL:    entity.GatewaySSLConfig{Mode: "local"},
-			}},
-		}
-		validator := NewValidator(cfg)
-		err := validator.Validate()
-		if err == nil || !strings.Contains(err.Error(), "zone 'nonexistent' referenced by gateway") {
-			t.Errorf("expected missing zone error, got %v", err)
-		}
-	})
-}
-
 func TestValidator_PortConflicts(t *testing.T) {
 	t.Run("no conflict different servers", func(t *testing.T) {
 		cfg := &entity.Config{
@@ -296,9 +251,9 @@ func TestValidator_PortConflicts(t *testing.T) {
 				{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}},
 				{Name: "server2", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.5", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}},
 			},
-			Gateways: []entity.Gateway{
-				{Name: "gw1", Zone: "zone1", Server: "server1", Image: "nginx", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}, SSL: entity.GatewaySSLConfig{Mode: "local"}},
-				{Name: "gw2", Zone: "zone1", Server: "server2", Image: "nginx", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}, SSL: entity.GatewaySSLConfig{Mode: "local"}},
+			InfraServices: []entity.InfraService{
+				{Name: "gw1", Type: entity.InfraServiceTypeGateway, Server: "server1", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
+				{Name: "gw2", Type: entity.InfraServiceTypeGateway, Server: "server2", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
 			},
 		}
 		validator := NewValidator(cfg)
@@ -314,9 +269,9 @@ func TestValidator_PortConflicts(t *testing.T) {
 			Servers: []entity.Server{
 				{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}},
 			},
-			Gateways: []entity.Gateway{
-				{Name: "gw1", Zone: "zone1", Server: "server1", Image: "nginx", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}, SSL: entity.GatewaySSLConfig{Mode: "local"}},
-				{Name: "gw2", Zone: "zone1", Server: "server1", Image: "nginx", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 8443}, SSL: entity.GatewaySSLConfig{Mode: "local"}},
+			InfraServices: []entity.InfraService{
+				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, Server: "server1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 80}, Auth: entity.SSLAuth{}, Storage: entity.SSLStorage{Type: "local"}, Defaults: entity.SSLDefaults{IssueProvider: "test", StorageProvider: "test"}}},
+				{Name: "ssl2", Type: entity.InfraServiceTypeSSL, Server: "server1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 80}, Auth: entity.SSLAuth{}, Storage: entity.SSLStorage{Type: "local"}, Defaults: entity.SSLDefaults{IssueProvider: "test", StorageProvider: "test"}}},
 			},
 		}
 		validator := NewValidator(cfg)

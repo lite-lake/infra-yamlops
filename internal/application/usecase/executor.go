@@ -74,7 +74,7 @@ func (e *Executor) registerHandlers() {
 	}{
 		{"dns_record", handler.NewDNSHandler()},
 		{"service", handler.NewServiceHandler()},
-		{"gateway", handler.NewGatewayHandler()},
+		{"infra_service", handler.NewInfraServiceHandler()},
 		{"server", handler.NewServerHandler()},
 		{"certificate", handler.NewCertificateHandler()},
 		{"registry", handler.NewRegistryHandler()},
@@ -110,9 +110,9 @@ func (e *Executor) buildDeps(ch *valueobject.Change) *handler.Deps {
 	}
 	if serverName := handler.ExtractServerFromChange(ch); serverName != "" {
 		if info, ok := e.servers[serverName]; ok {
-			if client, err := e.sshPool.Get(info); err == nil {
-				deps.SSHClient = client
-			}
+			client, err := e.sshPool.Get(info)
+			deps.SSHClient = client
+			deps.SSHError = err
 		}
 	}
 	return deps

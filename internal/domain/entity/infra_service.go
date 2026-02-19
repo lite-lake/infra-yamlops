@@ -3,6 +3,7 @@ package entity
 import (
 	"errors"
 	"fmt"
+	"net"
 
 	"github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
@@ -14,6 +15,55 @@ const (
 	InfraServiceTypeGateway InfraServiceType = "gateway"
 	InfraServiceTypeSSL     InfraServiceType = "ssl"
 )
+
+type GatewayPorts struct {
+	HTTP  int `yaml:"http"`
+	HTTPS int `yaml:"https"`
+}
+
+func (p *GatewayPorts) Validate() error {
+	if p.HTTP <= 0 || p.HTTP > 65535 {
+		return fmt.Errorf("%w: http port must be between 1 and 65535", domain.ErrInvalidPort)
+	}
+	if p.HTTPS <= 0 || p.HTTPS > 65535 {
+		return fmt.Errorf("%w: https port must be between 1 and 65535", domain.ErrInvalidPort)
+	}
+	return nil
+}
+
+type GatewaySSLConfig struct {
+	Mode     string `yaml:"mode"`
+	Endpoint string `yaml:"endpoint,omitempty"`
+}
+
+func (s *GatewaySSLConfig) Validate() error {
+	if s.Mode != "local" && s.Mode != "remote" {
+		return errors.New("ssl mode must be 'local' or 'remote'")
+	}
+	if s.Mode == "remote" && s.Endpoint == "" {
+		return errors.New("endpoint is required for remote ssl mode")
+	}
+	return nil
+}
+
+type GatewayWAFConfig struct {
+	Enabled   bool     `yaml:"enabled"`
+	Whitelist []string `yaml:"whitelist,omitempty"`
+}
+
+func (w *GatewayWAFConfig) Validate() error {
+	for _, cidr := range w.Whitelist {
+		if _, _, err := net.ParseCIDR(cidr); err != nil {
+			return fmt.Errorf("invalid CIDR %s: %w", cidr, err)
+		}
+	}
+	return nil
+}
+
+type GatewayConfig struct {
+	Source string `yaml:"source"`
+	Sync   bool   `yaml:"sync"`
+}
 
 type InfraService struct {
 	Name   string           `yaml:"name"`
@@ -157,11 +207,16 @@ func (s *InfraService) Validate() error {
 	return nil
 }
 
+func (s *InfraService) GetServer() string {
+	return s.Server
+}
+
 type SSLConfig struct {
 	Ports    SSLPorts    `yaml:"ports,omitempty"`
 	Auth     SSLAuth     `yaml:"auth"`
 	Storage  SSLStorage  `yaml:"storage"`
 	Defaults SSLDefaults `yaml:"defaults"`
+	Volumes  []string    `yaml:"volumes,omitempty"`
 }
 
 func (c *SSLConfig) Validate() error {

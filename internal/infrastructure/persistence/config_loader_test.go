@@ -219,8 +219,8 @@ func TestValidator_PortConflicts(t *testing.T) {
 				Zone: "zone1",
 				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
 			}},
-			Gateways: []entity.Gateway{
-				{Name: "gw1", Zone: "zone1", Server: "srv1", Image: "nginx", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}, SSL: entity.GatewaySSLConfig{Mode: "local"}},
+			InfraServices: []entity.InfraService{
+				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, Server: "srv1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 38567}, Auth: entity.SSLAuth{}, Storage: entity.SSLStorage{Type: "local"}, Defaults: entity.SSLDefaults{IssueProvider: "test", StorageProvider: "test"}}},
 			},
 		}
 		validator := service.NewValidator(cfg)
@@ -238,9 +238,9 @@ func TestValidator_PortConflicts(t *testing.T) {
 				Zone: "zone1",
 				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
 			}},
-			Gateways: []entity.Gateway{
-				{Name: "gw1", Zone: "zone1", Server: "srv1", Image: "nginx", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}, SSL: entity.GatewaySSLConfig{Mode: "local"}},
-				{Name: "gw2", Zone: "zone1", Server: "srv1", Image: "nginx", Ports: entity.GatewayPorts{HTTP: 80, HTTPS: 443}, SSL: entity.GatewaySSLConfig{Mode: "local"}},
+			InfraServices: []entity.InfraService{
+				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, Server: "srv1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 38567}, Auth: entity.SSLAuth{}, Storage: entity.SSLStorage{Type: "local"}, Defaults: entity.SSLDefaults{IssueProvider: "test", StorageProvider: "test"}}},
+				{Name: "ssl2", Type: entity.InfraServiceTypeSSL, Server: "srv1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 38567}, Auth: entity.SSLAuth{}, Storage: entity.SSLStorage{Type: "local"}, Defaults: entity.SSLDefaults{IssueProvider: "test", StorageProvider: "test"}}},
 			},
 		}
 		validator := service.NewValidator(cfg)

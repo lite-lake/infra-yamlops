@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 
@@ -17,11 +18,15 @@ type Client struct {
 }
 
 func NewClient(host string, port int, user, password string) (*Client, error) {
-	knownHosts := filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts")
-
-	hostKeyCallback, err := knownhosts.New(knownHosts)
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		return nil, fmt.Errorf("load known_hosts: %w", err)
+		homeDir = os.Getenv("HOME")
+	}
+	knownHosts := filepath.Join(homeDir, ".ssh", "known_hosts")
+
+	hostKeyCallback, err := createHostKeyCallback(knownHosts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create host key callback: %w", err)
 	}
 
 	config := &ssh.ClientConfig{
@@ -39,6 +44,49 @@ func NewClient(host string, port int, user, password string) (*Client, error) {
 	}
 
 	return &Client{client: client, user: user}, nil
+}
+
+func createHostKeyCallback(knownHostsPath string) (ssh.HostKeyCallback, error) {
+	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepath.Dir(knownHostsPath), 0700); err != nil {
+			return nil, err
+		}
+		if err := os.WriteFile(knownHostsPath, []byte{}, 0600); err != nil {
+			return nil, err
+		}
+	}
+
+	callback, err := knownhosts.New(knownHostsPath)
+	if err != nil {
+		return nil, err
+	}
+
+	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+		err := callback(hostname, remote, key)
+		if err == nil {
+			return nil
+		}
+
+		keyErr, ok := err.(*knownhosts.KeyError)
+		if !ok {
+			return err
+		}
+
+		if len(keyErr.Want) > 0 {
+			return fmt.Errorf("host key mismatch for %s: possible MITM attack", hostname)
+		}
+
+		line := knownhosts.Line([]string{hostname}, key)
+		f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, 0600)
+		if err != nil {
+			return fmt.Errorf("failed to open known_hosts: %w", err)
+		}
+		defer f.Close()
+		if _, err := fmt.Fprintln(f, line); err != nil {
+			return fmt.Errorf("failed to write to known_hosts: %w", err)
+		}
+		return nil
+	}, nil
 }
 
 func (c *Client) Close() error {

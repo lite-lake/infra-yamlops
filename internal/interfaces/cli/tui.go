@@ -73,10 +73,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) handleEscape() (tea.Model, tea.Cmd) {
 	switch m.ViewState {
 	case ViewStateTree:
-		m.ViewState = ViewStateMainMenu
+		m.ViewState = ViewStateServiceManagement
 		m.ErrorMessage = ""
-	case ViewStateServerSetup, ViewStateServerCheck:
+	case ViewStateServiceManagement:
 		m.ViewState = ViewStateMainMenu
+	case ViewStateServerSetup, ViewStateServerCheck:
+		m.ViewState = ViewStateServiceManagement
 		m.ErrorMessage = ""
 	case ViewStateDNSManagement:
 		m.ViewState = ViewStateMainMenu
@@ -87,6 +89,25 @@ func (m Model) handleEscape() (tea.Model, tea.Cmd) {
 		m.DNSRecordDiffs = nil
 		m.DNSPullSelected = nil
 		m.ViewState = ViewStateDNSManagement
+	case ViewStateServiceCleanup:
+		m.CleanupResults = nil
+		m.CleanupSelected = nil
+		m.ViewState = ViewStateServiceManagement
+	case ViewStateServiceCleanupConfirm:
+		m.ViewState = ViewStateServiceCleanup
+	case ViewStateServiceCleanupComplete:
+		m.CleanupResults = nil
+		m.CleanupSelected = nil
+		m.ViewState = ViewStateServiceManagement
+	case ViewStateServiceStop:
+		m.ViewState = ViewStateServiceManagement
+		m.StopSelected = nil
+	case ViewStateServiceStopConfirm:
+		m.ViewState = ViewStateServiceStop
+	case ViewStateServiceStopComplete:
+		m.StopResults = nil
+		m.StopSelected = nil
+		m.ViewState = ViewStateServiceManagement
 	case ViewStatePlan:
 		m.ViewState = ViewStateTree
 	case ViewStateApplyConfirm:

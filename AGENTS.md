@@ -222,7 +222,7 @@ Each environment: `yamlops-{env}` (e.g., `yamlops-prod`)
 
 ## Configuration Files
 
-User configs in `userdata/{env}/`: secrets.yaml, isps.yaml, zones.yaml, servers.yaml, services.yaml, gateways.yaml, infra_services.yaml, registries.yaml, dns.yaml, certificates.yaml
+User configs in `userdata/{env}/`: secrets.yaml, isps.yaml, zones.yaml, servers.yaml, services.yaml, infra_services.yaml, registries.yaml, dns.yaml, certificates.yaml
 
 ## Important Notes
 

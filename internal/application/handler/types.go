@@ -16,6 +16,7 @@ type Handler interface {
 
 type Deps struct {
 	SSHClient   SSHClient
+	SSHError    error
 	DNSProvider DNSProvider
 	DNSFactory  *dns.Factory
 	Secrets     map[string]string
@@ -34,10 +35,11 @@ type ServerInfo struct {
 }
 
 type Result struct {
-	Change  *valueobject.Change
-	Success bool
-	Error   error
-	Output  string
+	Change   *valueobject.Change
+	Success  bool
+	Error    error
+	Output   string
+	Warnings []string
 }
 
 type SSHClient interface {

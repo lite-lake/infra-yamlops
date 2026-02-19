@@ -36,7 +36,7 @@ func runClean(ctx *Context) {
 
 	secrets := cfg.GetSecretsMap()
 	serviceMap := cfg.GetServiceMap()
-	gatewayMap := cfg.GetGatewayMap()
+	infraServiceMap := cfg.GetInfraServiceMap()
 
 	for _, srv := range cfg.Servers {
 		password, err := srv.SSH.Password.Resolve(secrets)
@@ -86,8 +86,8 @@ func runClean(ctx *Context) {
 			}
 			serviceName := strings.TrimPrefix(container.Name, "yo-"+ctx.Env+"-")
 			_, isService := serviceMap[serviceName]
-			_, isGateway := gatewayMap[serviceName]
-			if !isService && !isGateway {
+			_, isInfraService := infraServiceMap[serviceName]
+			if !isService && !isInfraService {
 				orphanContainers[container.Name] = true
 			}
 		}
@@ -101,8 +101,8 @@ func runClean(ctx *Context) {
 			}
 			serviceName := strings.TrimPrefix(line, "yo-"+ctx.Env+"-")
 			_, isService := serviceMap[serviceName]
-			_, isGateway := gatewayMap[serviceName]
-			if !isService && !isGateway {
+			_, isInfraService := infraServiceMap[serviceName]
+			if !isService && !isInfraService {
 				orphanDirs[line] = true
 			}
 		}

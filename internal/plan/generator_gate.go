@@ -10,10 +10,12 @@ import (
 )
 
 func (g *deploymentGenerator) generateGatewayConfigs(config *entity.Config) error {
-	gatewayServers := make(map[string][]*entity.Gateway)
-	for i := range config.Gateways {
-		gw := &config.Gateways[i]
-		gatewayServers[gw.Server] = append(gatewayServers[gw.Server], gw)
+	gatewayServers := make(map[string][]*entity.InfraService)
+	for i := range config.InfraServices {
+		infra := &config.InfraServices[i]
+		if infra.Type == entity.InfraServiceTypeGateway {
+			gatewayServers[infra.Server] = append(gatewayServers[infra.Server], infra)
+		}
 	}
 
 	for serverName, gateways := range gatewayServers {
@@ -32,7 +34,7 @@ func (g *deploymentGenerator) generateGatewayConfigs(config *entity.Config) erro
 	return nil
 }
 
-func (g *deploymentGenerator) generateGatewayConfig(serverDir string, gw *entity.Gateway, config *entity.Config) error {
+func (g *deploymentGenerator) generateGatewayConfig(serverDir string, gw *entity.InfraService, config *entity.Config) error {
 	serverMap := config.GetServerMap()
 	var hosts []gate.HostRoute
 
@@ -79,8 +81,8 @@ func (g *deploymentGenerator) generateGatewayConfig(serverDir string, gw *entity
 			}
 
 			sslPort := 0
-			if route.HTTPS {
-				sslPort = gw.Ports.HTTPS
+			if route.HTTPS && gw.GatewayPorts != nil {
+				sslPort = gw.GatewayPorts.HTTPS
 			}
 
 			healthInterval := "30s"
@@ -94,9 +96,14 @@ func (g *deploymentGenerator) generateGatewayConfig(serverDir string, gw *entity
 				}
 			}
 
+			httpPort := 80
+			if gw.GatewayPorts != nil {
+				httpPort = gw.GatewayPorts.HTTP
+			}
+
 			hosts = append(hosts, gate.HostRoute{
 				Name:                hostname,
-				Port:                gw.Ports.HTTP,
+				Port:                httpPort,
 				SSLPort:             sslPort,
 				Backend:             []string{backend},
 				HealthCheck:         healthPath,
@@ -106,13 +113,36 @@ func (g *deploymentGenerator) generateGatewayConfig(serverDir string, gw *entity
 		}
 	}
 
+	wafEnabled := false
+	var whitelist []string
+	sslMode := ""
+	sslEndpoint := ""
+	logLevel := 0
+
+	if gw.GatewayWAF != nil {
+		wafEnabled = gw.GatewayWAF.Enabled
+		whitelist = gw.GatewayWAF.Whitelist
+	}
+	if gw.GatewaySSL != nil {
+		sslMode = gw.GatewaySSL.Mode
+		sslEndpoint = gw.GatewaySSL.Endpoint
+	}
+	logLevel = gw.GatewayLogLevel
+
+	httpPort := 80
+	httpsPort := 443
+	if gw.GatewayPorts != nil {
+		httpPort = gw.GatewayPorts.HTTP
+		httpsPort = gw.GatewayPorts.HTTPS
+	}
+
 	gatewayConfig := &gate.GatewayConfig{
-		Port:               gw.Ports.HTTP,
-		LogLevel:           gw.LogLevel,
-		WAFEnabled:         gw.WAF.Enabled,
-		Whitelist:          gw.WAF.Whitelist,
-		SSLMode:            gw.SSL.Mode,
-		SSLEndpoint:        gw.SSL.Endpoint,
+		Port:               httpPort,
+		LogLevel:           logLevel,
+		WAFEnabled:         wafEnabled,
+		Whitelist:          whitelist,
+		SSLMode:            sslMode,
+		SSLEndpoint:        sslEndpoint,
 		SSLAutoUpdate:      true,
 		SSLUpdateCheckTime: "00:00-00:59",
 	}
@@ -127,7 +157,7 @@ func (g *deploymentGenerator) generateGatewayConfig(serverDir string, gw *entity
 		return fmt.Errorf("failed to write gateway config file %s: %w", configFile, err)
 	}
 
-	composeContent, err := g.generateGatewayCompose(gw)
+	composeContent, err := g.generateGatewayCompose(gw, httpPort, httpsPort)
 	if err != nil {
 		return fmt.Errorf("failed to generate gateway compose for %s: %w", gw.Name, err)
 	}
@@ -140,7 +170,7 @@ func (g *deploymentGenerator) generateGatewayConfig(serverDir string, gw *entity
 	return nil
 }
 
-func (g *deploymentGenerator) generateGatewayCompose(gw *entity.Gateway) (string, error) {
+func (g *deploymentGenerator) generateGatewayCompose(gw *entity.InfraService, httpPort, httpsPort int) (string, error) {
 	serviceName := "yo-" + g.env + "-" + gw.Name
 	networkName := "yamlops-" + g.env
 
@@ -163,7 +193,7 @@ func (g *deploymentGenerator) generateGatewayCompose(gw *entity.Gateway) (string
 networks:
   %s:
     external: true
-`, serviceName, gw.Image, serviceName, gw.Ports.HTTP, gw.Ports.HTTP, gw.Ports.HTTPS, gw.Ports.HTTPS, networkName, networkName)
+`, serviceName, gw.Image, serviceName, httpPort, httpPort, httpsPort, httpsPort, networkName, networkName)
 
 	return compose, nil
 }

@@ -26,12 +26,21 @@ const (
 	ViewStateApplyProgress
 	ViewStateApplyComplete
 	ViewStateMainMenu
+	ViewStateServiceManagement
 	ViewStateServerSetup
 	ViewStateServerCheck
 	ViewStateDNSManagement
 	ViewStateDNSPullDomains
 	ViewStateDNSPullRecords
 	ViewStateDNSPullDiff
+	ViewStateServiceCleanup
+	ViewStateServiceCleanupConfirm
+	ViewStateServiceCleanupProgress
+	ViewStateServiceCleanupComplete
+	ViewStateServiceStop
+	ViewStateServiceStopConfirm
+	ViewStateServiceStopProgress
+	ViewStateServiceStopComplete
 )
 
 type ViewMode int
@@ -61,6 +70,33 @@ const (
 	StatusError       NodeStatus = "error"
 	StatusSynced      NodeStatus = "synced"
 )
+
+type OrphanItem struct {
+	Type        string
+	Name        string
+	ServerIndex int
+}
+
+type CleanupResult struct {
+	ServerName        string
+	OrphanContainers  []string
+	OrphanDirs        []string
+	RemovedContainers []string
+	RemovedDirs       []string
+	FailedContainers  []string
+	FailedDirs        []string
+}
+
+type StopResult struct {
+	ServerName string
+	Services   []StopServiceResult
+}
+
+type StopServiceResult struct {
+	Name    string
+	Success bool
+	Error   string
+}
 
 type TreeNode struct {
 	ID       string
@@ -190,6 +226,9 @@ var changeUpdateStyle = lipgloss.NewStyle().
 var changeDeleteStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#EF4444"))
 
+var warningStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("#F59E0B"))
+
 var changeNoopStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#6B7280"))
 
@@ -229,6 +268,7 @@ type Model struct {
 	PlanScope          *valueobject.Scope
 	ConfirmView        bool
 	MainMenuIndex      int
+	ServiceMenuIndex   int
 	ServerList         []*entity.Server
 	ServerIndex        int
 	ServerCheckResults []serverpkg.CheckResult
@@ -243,6 +283,12 @@ type Model struct {
 	DNSPullSelected    map[int]bool
 	DNSPullCursor      int
 	ScrollOffset       int
+	CleanupResults     []CleanupResult
+	CleanupSelected    map[int]bool
+	CleanupCursor      int
+	StopResults        []StopResult
+	StopSelected       map[int]bool
+	StopCursor         int
 }
 
 func NewModel(env string, configDir string) Model {

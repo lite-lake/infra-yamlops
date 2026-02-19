@@ -11,6 +11,8 @@ func (m Model) View() string {
 	switch m.ViewState {
 	case ViewStateMainMenu:
 		return m.renderMainMenu()
+	case ViewStateServiceManagement:
+		return m.renderServiceManagement()
 	case ViewStateServerSetup:
 		return m.renderServerSetup()
 	case ViewStateServerCheck:
@@ -23,6 +25,18 @@ func (m Model) View() string {
 		return m.renderDNSPullRecords()
 	case ViewStateDNSPullDiff:
 		return m.renderDNSPullDiff()
+	case ViewStateServiceCleanup:
+		return m.renderServiceCleanup()
+	case ViewStateServiceCleanupConfirm:
+		return m.renderServiceCleanupConfirm()
+	case ViewStateServiceCleanupComplete:
+		return m.renderServiceCleanupComplete()
+	case ViewStateServiceStop:
+		return m.renderServiceStop()
+	case ViewStateServiceStopConfirm:
+		return m.renderServiceStopConfirm()
+	case ViewStateServiceStopComplete:
+		return m.renderServiceStopComplete()
 	}
 	var content strings.Builder
 	content.WriteString(m.renderHeader())
@@ -268,6 +282,13 @@ func (m Model) renderPlan() string {
 				prefix = "-"
 			}
 			line := fmt.Sprintf("%s %s: %s", prefix, ch.Entity, ch.Name)
+			if ch.Entity == "service" || ch.Entity == "infra_service" {
+				if ch.RemoteExists {
+					line += " [远程存在]"
+				} else {
+					line += " [新建]"
+				}
+			}
 			lines = append(lines, style.Render(line))
 		}
 	}
@@ -349,6 +370,9 @@ func (m Model) renderApplyComplete() string {
 			if result.Success {
 				successCount++
 				lines = append(lines, changeCreateStyle.Render(fmt.Sprintf("✓ %s: %s", result.Change.Entity, result.Change.Name)))
+				for _, w := range result.Warnings {
+					lines = append(lines, warningStyle.Render(fmt.Sprintf("  ⚠ %s", w)))
+				}
 			} else {
 				failCount++
 				lines = append(lines, changeDeleteStyle.Render(fmt.Sprintf("✗ %s: %s - %v", result.Change.Entity, result.Change.Name, result.Error)))

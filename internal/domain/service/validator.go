@@ -55,10 +55,6 @@ func (v *Validator) Validate() error {
 		return err
 	}
 
-	if err := v.validateGatewayReferences(); err != nil {
-		return err
-	}
-
 	if err := v.validateServerReferences(); err != nil {
 		return err
 	}
@@ -125,18 +121,6 @@ func (v *Validator) validateInfraServiceReferences() error {
 	for _, infra := range v.cfg.InfraServices {
 		if _, ok := v.servers[infra.Server]; !ok {
 			return fmt.Errorf("%w: server '%s' referenced by infra_service '%s' does not exist", domain.ErrMissingReference, infra.Server, infra.Name)
-		}
-	}
-	return nil
-}
-
-func (v *Validator) validateGatewayReferences() error {
-	for _, gateway := range v.cfg.Gateways {
-		if _, ok := v.zones[gateway.Zone]; !ok {
-			return fmt.Errorf("%w: zone '%s' referenced by gateway '%s' does not exist", domain.ErrMissingReference, gateway.Zone, gateway.Name)
-		}
-		if _, ok := v.servers[gateway.Server]; !ok {
-			return fmt.Errorf("%w: server '%s' referenced by gateway '%s' does not exist", domain.ErrMissingReference, gateway.Server, gateway.Name)
 		}
 	}
 	return nil
@@ -223,21 +207,6 @@ func (v *Validator) validateCertificateReferences() error {
 
 func (v *Validator) validatePortConflicts() error {
 	serverPorts := make(map[string]map[int]string)
-
-	for _, gateway := range v.cfg.Gateways {
-		key := gateway.Server
-		if serverPorts[key] == nil {
-			serverPorts[key] = make(map[int]string)
-		}
-		if existing, ok := serverPorts[key][gateway.Ports.HTTP]; ok {
-			return fmt.Errorf("%w: http port %d on server '%s' is used by both '%s' and '%s'", domain.ErrPortConflict, gateway.Ports.HTTP, gateway.Server, existing, gateway.Name)
-		}
-		serverPorts[key][gateway.Ports.HTTP] = gateway.Name
-		if existing, ok := serverPorts[key][gateway.Ports.HTTPS]; ok {
-			return fmt.Errorf("%w: https port %d on server '%s' is used by both '%s' and '%s'", domain.ErrPortConflict, gateway.Ports.HTTPS, gateway.Server, existing, gateway.Name)
-		}
-		serverPorts[key][gateway.Ports.HTTPS] = gateway.Name
-	}
 
 	for _, infra := range v.cfg.InfraServices {
 		key := infra.Server

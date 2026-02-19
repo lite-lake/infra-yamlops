@@ -47,10 +47,6 @@ func runList(ctx *Context, entity string) {
 		for _, z := range cfg.Zones {
 			fmt.Printf("- %s (isp: %s, region: %s)\n", z.Name, z.ISP, z.Region)
 		}
-	case "gateways":
-		for _, g := range cfg.Gateways {
-			fmt.Printf("- %s (server: %s, ports: %d/%d)\n", g.Name, g.Server, g.Ports.HTTP, g.Ports.HTTPS)
-		}
 	case "servers":
 		for _, s := range cfg.Servers {
 			fmt.Printf("- %s (zone: %s, ip: %s)\n", s.Name, s.Zone, s.IP.Public)
@@ -84,7 +80,7 @@ func runList(ctx *Context, entity string) {
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown entity type: %s\n", entity)
-		fmt.Fprintf(os.Stderr, "Valid types: secrets, isps, zones, gateways, servers, services, registries, domains, records, certificates\n")
+		fmt.Fprintf(os.Stderr, "Valid types: secrets, isps, zones, servers, services, registries, domains, records, certificates\n")
 		os.Exit(1)
 	}
 }

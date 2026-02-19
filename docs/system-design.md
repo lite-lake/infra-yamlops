@@ -129,8 +129,7 @@ Config (聚合根)
 ├── Registries[]        # Docker 镜像仓库
 ├── Zones[]             # 网络区域
 ├── Servers[]           # 服务器
-├── InfraServices[]     # 基础设施服务
-├── Gateways[]          # 网关
+├── InfraServices[]     # 基础设施服务 (gateway/ssl)
 ├── Services[]          # 业务服务
 ├── Domains[]           # 域名
 └── Certificates[]      # SSL 证书
@@ -212,45 +211,48 @@ servers:
       registries: [dockerhub]
 ```
 
-#### 3.2.6 Gateway（网关）
+#### 3.2.6 InfraService（基础设施服务）
 
 ```yaml
-gateways:
+infra_services:
   - name: main-gateway
-    zone: cn-east
+    type: gateway              # gateway | ssl
     server: prod-server-1
     image: litelake/infra-gate:latest
     ports:
       http: 80
       https: 443
+    config:
+      source: volumes://infra-gate
+      sync: true
     ssl:
-      mode: remote           # local | remote
+      mode: remote             # local | remote
       endpoint: http://infra-ssl:38567
     waf:
       enabled: true
       whitelist:
         - 192.168.0.0/16
     log_level: 1
-```
 
-#### 3.2.7 InfraService（基础设施服务）
-
-```yaml
-infra_services:
   - name: infra-ssl
-    type: ssl                # gateway | ssl
+    type: ssl
     server: prod-server-1
     image: litelake/infra-ssl:latest
-    ssl_config:
-      ports:
-        http: 8080
-        acme: 38567
+    ports:
+      api: 38567
+    config:
       auth:
-        username: admin
-        password: {secret: ssl_admin_pwd}
+        enabled: true
+        apikey: {secret: ssl_api_key}
+      storage:
+        type: local
+        path: /data/certs
+      defaults:
+        issue_provider: letsencrypt_prod
+        storage_provider: local_default
 ```
 
-#### 3.2.8 BizService（业务服务）
+#### 3.2.7 BizService（业务服务）
 
 ```yaml
 services:
@@ -282,7 +284,7 @@ services:
     internal: false
 ```
 
-#### 3.2.9 Domain（域名）
+#### 3.2.8 Domain（域名）
 
 ```yaml
 domains:
@@ -301,7 +303,7 @@ domains:
 
 **DNS 记录类型**: A | AAAA | CNAME | MX | TXT | NS | SRV
 
-#### 3.2.10 Certificate（证书）
+#### 3.2.9 Certificate（证书）
 
 ```yaml
 certificates:
@@ -364,8 +366,7 @@ type Scope struct {
 ISP (底层基础设施提供商)
   └── Zone (网络区域)
         ├── Server (物理/虚拟服务器)
-        │     ├── Gateway (网关服务)
-        │     ├── InfraService (基础设施服务)
+        │     ├── InfraService (基础设施服务: gateway/ssl)
         │     └── BizService (业务服务)
         │           └── ServiceGatewayRoute (网关路由)
         └── Domain (域名)
@@ -389,7 +390,7 @@ ISP (底层基础设施提供商)
     │             │             │             │
     ▼             ▼             ▼             ▼
 ┌─────────┐  ┌─────────┐  ┌─────────┐  ┌─────────┐
-│DNSHandler│  │ServiceH.│  │GatewayH.│  │NoopH.   │ ...
+│DNSHandler│  │ServiceH.│  │InfraSvcH│  │NoopH.   │ ...
 └─────────┘  └─────────┘  └─────────┘  └─────────┘
 ```
 
@@ -424,7 +425,7 @@ type Deps struct {
 |---------|--------|------|
 | DNSHandler | dns_record | DNS 记录 CRUD |
 | ServiceHandler | service | Docker Compose 服务部署 |
-| GatewayHandler | gateway | 网关配置 + Compose 部署 |
+| InfraServiceHandler | infra_service | 基础设施服务部署 (gateway/ssl) |
 | ServerHandler | server | 服务器注册（无远程操作） |
 | CertificateHandler | certificate | 证书管理（标记跳过） |
 | RegistryHandler | registry | 镜像仓库（标记跳过） |
@@ -464,12 +465,11 @@ func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, er
 2. isps.yaml
 3. zones.yaml
 4. infra_services.yaml
-5. gateways.yaml
-6. servers.yaml
-7. services.yaml
-8. registries.yaml
-9. dns.yaml
-10. certificates.yaml
+5. servers.yaml
+6. services.yaml
+7. registries.yaml
+8. dns.yaml
+9. certificates.yaml
 
 ### 5.2 DNS 提供者
 
@@ -589,7 +589,7 @@ type Planner struct {
    ├─→ PlanCertificates()
    ├─→ PlanRegistries()
    ├─→ PlanServers()
-   ├─→ PlanGateways()
+   ├─→ PlanInfraServices()
    └─→ PlanServices()
 
 4. 生成部署文件 (deploymentGenerator)
@@ -716,7 +716,6 @@ userdata/
 │   ├── zones.yaml
 │   ├── servers.yaml
 │   ├── services.yaml
-│   ├── gateways.yaml
 │   ├── infra_services.yaml
 │   ├── registries.yaml
 │   ├── dns.yaml
@@ -753,7 +752,7 @@ password: {secret: db_password}
 
 - Zone 必须引用存在的 ISP
 - Server 必须引用存在的 Zone
-- Gateway 必须引用存在的 Zone 和 Server
+- InfraService 必须引用存在的 Server
 - BizService 必须引用存在的 Server
 - Domain 必须引用存在的 DNS ISP
 - Certificate 必须引用存在的 Domain
@@ -869,15 +868,15 @@ yamlops -e prod
 
 ```go
 type DeploymentState struct {
-    Services   map[string]*entity.BizService
-    Gateways   map[string]*entity.Gateway
-    Servers    map[string]*entity.Server
-    Zones      map[string]*entity.Zone
-    Domains    map[string]*entity.Domain
-    Records    map[string]*entity.DNSRecord
-    Certs      map[string]*entity.Certificate
-    Registries map[string]*entity.Registry
-    ISPs       map[string]*entity.ISP
+    Services      map[string]*entity.BizService
+    InfraServices map[string]*entity.InfraService
+    Servers       map[string]*entity.Server
+    Zones         map[string]*entity.Zone
+    Domains       map[string]*entity.Domain
+    Records       map[string]*entity.DNSRecord
+    Certs         map[string]*entity.Certificate
+    Registries    map[string]*entity.Registry
+    ISPs          map[string]*entity.ISP
 }
 ```
 

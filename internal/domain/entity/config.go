@@ -14,7 +14,6 @@ type Config struct {
 	Zones         []Zone         `yaml:"zones,omitempty"`
 	Servers       []Server       `yaml:"servers,omitempty"`
 	InfraServices []InfraService `yaml:"infra_services,omitempty"`
-	Gateways      []Gateway      `yaml:"gateways,omitempty"`
 	Services      []BizService   `yaml:"services,omitempty"`
 	Domains       []Domain       `yaml:"domains,omitempty"`
 	Certificates  []Certificate  `yaml:"certificates,omitempty"`
@@ -51,11 +50,7 @@ func (c *Config) Validate() error {
 			return fmt.Errorf("infra_services[%d]: %w", i, err)
 		}
 	}
-	for i, g := range c.Gateways {
-		if err := g.Validate(); err != nil {
-			return fmt.Errorf("gateways[%d]: %w", i, err)
-		}
-	}
+
 	for i, s := range c.Services {
 		if err := s.Validate(); err != nil {
 			return fmt.Errorf("services[%d]: %w", i, err)
@@ -102,14 +97,6 @@ func (c *Config) GetInfraServiceMap() map[string]*InfraService {
 	m := make(map[string]*InfraService)
 	for i := range c.InfraServices {
 		m[c.InfraServices[i].Name] = &c.InfraServices[i]
-	}
-	return m
-}
-
-func (c *Config) GetGatewayMap() map[string]*Gateway {
-	m := make(map[string]*Gateway)
-	for i := range c.Gateways {
-		m[c.Gateways[i].Name] = &c.Gateways[i]
 	}
 	return m
 }

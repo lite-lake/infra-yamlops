@@ -67,66 +67,6 @@ func ServerEquals(a, b *entity.Server) bool {
 		a.IP.Public == b.IP.Public && a.IP.Private == b.IP.Private
 }
 
-func (s *PlannerService) PlanGateways(plan *valueobject.Plan, cfgMap map[string]*entity.Gateway, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
-	for name, state := range s.state.Gateways {
-		if _, exists := cfgMap[name]; !exists {
-			serverName := state.Server
-			zoneName := ""
-			if srv, ok := serverMap[serverName]; ok {
-				zoneName = srv.Zone
-			}
-			if scope.Matches(zoneName, serverName, "", "") {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeDelete,
-					Entity:   "gateway",
-					Name:     name,
-					OldState: state,
-					NewState: nil,
-					Actions:  []string{fmt.Sprintf("delete gateway %s", name)},
-				})
-			}
-		}
-	}
-
-	for name, cfg := range cfgMap {
-		serverName := cfg.Server
-		zoneName := ""
-		if srv, ok := serverMap[serverName]; ok {
-			zoneName = srv.Zone
-		}
-		if state, exists := s.state.Gateways[name]; exists {
-			if !GatewayEquals(state, cfg) {
-				if scope.Matches(zoneName, serverName, "", "") {
-					plan.AddChange(&valueobject.Change{
-						Type:     valueobject.ChangeTypeUpdate,
-						Entity:   "gateway",
-						Name:     name,
-						OldState: state,
-						NewState: cfg,
-						Actions:  []string{fmt.Sprintf("update gateway %s", name)},
-					})
-				}
-			}
-		} else {
-			if scope.Matches(zoneName, serverName, "", "") {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeCreate,
-					Entity:   "gateway",
-					Name:     name,
-					OldState: nil,
-					NewState: cfg,
-					Actions:  []string{fmt.Sprintf("create gateway %s", name)},
-				})
-			}
-		}
-	}
-}
-
-func GatewayEquals(a, b *entity.Gateway) bool {
-	return a.Name == b.Name && a.Zone == b.Zone && a.Server == b.Server &&
-		a.Image == b.Image && a.Ports.HTTP == b.Ports.HTTP && a.Ports.HTTPS == b.Ports.HTTPS
-}
-
 func (s *PlannerService) PlanServices(plan *valueobject.Plan, cfgMap map[string]*entity.BizService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
 	for name, state := range s.state.Services {
 		if _, exists := cfgMap[name]; !exists {
@@ -137,12 +77,13 @@ func (s *PlannerService) PlanServices(plan *valueobject.Plan, cfgMap map[string]
 			}
 			if scope.Matches(zoneName, serverName, name, "") {
 				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeDelete,
-					Entity:   "service",
-					Name:     name,
-					OldState: state,
-					NewState: nil,
-					Actions:  []string{fmt.Sprintf("delete service %s", name)},
+					Type:         valueobject.ChangeTypeDelete,
+					Entity:       "service",
+					Name:         name,
+					OldState:     state,
+					NewState:     nil,
+					Actions:      []string{fmt.Sprintf("delete service %s", name)},
+					RemoteExists: true,
 				})
 			}
 		}
@@ -154,30 +95,36 @@ func (s *PlannerService) PlanServices(plan *valueobject.Plan, cfgMap map[string]
 		if srv, ok := serverMap[serverName]; ok {
 			zoneName = srv.Zone
 		}
+		if !scope.Matches(zoneName, serverName, name, "") {
+			continue
+		}
+
 		if state, exists := s.state.Services[name]; exists {
-			if !ServiceEquals(state, cfg) {
-				if scope.Matches(zoneName, serverName, name, "") {
-					plan.AddChange(&valueobject.Change{
-						Type:     valueobject.ChangeTypeUpdate,
-						Entity:   "service",
-						Name:     name,
-						OldState: state,
-						NewState: cfg,
-						Actions:  []string{fmt.Sprintf("update service %s", name)},
-					})
+			if scope.ForceDeploy || !ServiceEquals(state, cfg) {
+				changeType := valueobject.ChangeTypeUpdate
+				if scope.ForceDeploy && ServiceEquals(state, cfg) {
+					changeType = valueobject.ChangeTypeCreate
 				}
-			}
-		} else {
-			if scope.Matches(zoneName, serverName, name, "") {
 				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeCreate,
-					Entity:   "service",
-					Name:     name,
-					OldState: nil,
-					NewState: cfg,
-					Actions:  []string{fmt.Sprintf("create service %s", name)},
+					Type:         changeType,
+					Entity:       "service",
+					Name:         name,
+					OldState:     state,
+					NewState:     cfg,
+					Actions:      []string{fmt.Sprintf("deploy service %s", name)},
+					RemoteExists: true,
 				})
 			}
+		} else {
+			plan.AddChange(&valueobject.Change{
+				Type:         valueobject.ChangeTypeCreate,
+				Entity:       "service",
+				Name:         name,
+				OldState:     nil,
+				NewState:     cfg,
+				Actions:      []string{fmt.Sprintf("create service %s", name)},
+				RemoteExists: false,
+			})
 		}
 	}
 }
@@ -207,6 +154,168 @@ func ServiceEquals(a, b *entity.BizService) bool {
 	}
 	for i, gw := range a.Gateways {
 		if i >= len(b.Gateways) || gw != b.Gateways[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *PlannerService) PlanInfraServices(plan *valueobject.Plan, cfgMap map[string]*entity.InfraService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
+	for name, state := range s.state.InfraServices {
+		if _, exists := cfgMap[name]; !exists {
+			serverName := state.Server
+			zoneName := ""
+			if srv, ok := serverMap[serverName]; ok {
+				zoneName = srv.Zone
+			}
+			if scope.MatchesInfra(zoneName, serverName, name) {
+				plan.AddChange(&valueobject.Change{
+					Type:         valueobject.ChangeTypeDelete,
+					Entity:       "infra_service",
+					Name:         name,
+					OldState:     state,
+					NewState:     nil,
+					Actions:      []string{fmt.Sprintf("delete infra service %s", name)},
+					RemoteExists: true,
+				})
+			}
+		}
+	}
+
+	for name, cfg := range cfgMap {
+		serverName := cfg.Server
+		zoneName := ""
+		if srv, ok := serverMap[serverName]; ok {
+			zoneName = srv.Zone
+		}
+		if !scope.MatchesInfra(zoneName, serverName, name) {
+			continue
+		}
+
+		if state, exists := s.state.InfraServices[name]; exists {
+			if scope.ForceDeploy || !InfraServiceEquals(state, cfg) {
+				changeType := valueobject.ChangeTypeUpdate
+				if scope.ForceDeploy && InfraServiceEquals(state, cfg) {
+					changeType = valueobject.ChangeTypeCreate
+				}
+				plan.AddChange(&valueobject.Change{
+					Type:         changeType,
+					Entity:       "infra_service",
+					Name:         name,
+					OldState:     state,
+					NewState:     cfg,
+					Actions:      []string{fmt.Sprintf("deploy infra service %s", name)},
+					RemoteExists: true,
+				})
+			}
+		} else {
+			plan.AddChange(&valueobject.Change{
+				Type:         valueobject.ChangeTypeCreate,
+				Entity:       "infra_service",
+				Name:         name,
+				OldState:     nil,
+				NewState:     cfg,
+				Actions:      []string{fmt.Sprintf("create infra service %s", name)},
+				RemoteExists: false,
+			})
+		}
+	}
+}
+
+func InfraServiceEquals(a, b *entity.InfraService) bool {
+	if a.Name != b.Name || a.Server != b.Server || a.Image != b.Image || a.Type != b.Type {
+		return false
+	}
+	if a.GatewayLogLevel != b.GatewayLogLevel {
+		return false
+	}
+	if !gatewayPortsEqual(a.GatewayPorts, b.GatewayPorts) {
+		return false
+	}
+	if !gatewayConfigEqual(a.GatewayConfig, b.GatewayConfig) {
+		return false
+	}
+	if !gatewaySSLConfigEqual(a.GatewaySSL, b.GatewaySSL) {
+		return false
+	}
+	if !gatewayWAFConfigEqual(a.GatewayWAF, b.GatewayWAF) {
+		return false
+	}
+	if !sslConfigEqual(a.SSLConfig, b.SSLConfig) {
+		return false
+	}
+	return true
+}
+
+func gatewayPortsEqual(a, b *entity.GatewayPorts) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.HTTP == b.HTTP && a.HTTPS == b.HTTPS
+}
+
+func gatewayConfigEqual(a, b *entity.GatewayConfig) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Source == b.Source && a.Sync == b.Sync
+}
+
+func gatewaySSLConfigEqual(a, b *entity.GatewaySSLConfig) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Mode == b.Mode && a.Endpoint == b.Endpoint
+}
+
+func gatewayWAFConfigEqual(a, b *entity.GatewayWAFConfig) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if a.Enabled != b.Enabled {
+		return false
+	}
+	if len(a.Whitelist) != len(b.Whitelist) {
+		return false
+	}
+	for i, w := range a.Whitelist {
+		if i >= len(b.Whitelist) || w != b.Whitelist[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func sslConfigEqual(a, b *entity.SSLConfig) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	if a.Storage.Type != b.Storage.Type || a.Storage.Path != b.Storage.Path {
+		return false
+	}
+	if a.Defaults.IssueProvider != b.Defaults.IssueProvider || a.Defaults.StorageProvider != b.Defaults.StorageProvider {
+		return false
+	}
+	if len(a.Volumes) != len(b.Volumes) {
+		return false
+	}
+	for i, v := range a.Volumes {
+		if i >= len(b.Volumes) || v != b.Volumes[i] {
 			return false
 		}
 	}

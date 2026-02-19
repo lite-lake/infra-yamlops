@@ -31,7 +31,6 @@ func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, er
 		{"isps.yaml", loadISPs},
 		{"zones.yaml", loadZones},
 		{"infra_services.yaml", loadInfraServices},
-		{"gateways.yaml", loadGateways},
 		{"servers.yaml", loadServers},
 		{"services.yaml", loadServices},
 		{"registries.yaml", loadRegistries},
@@ -112,15 +111,6 @@ func loadInfraServices(fp string, cfg *entity.Config) error {
 		return err
 	}
 	cfg.InfraServices = items
-	return nil
-}
-
-func loadGateways(fp string, cfg *entity.Config) error {
-	items, err := loadEntity[entity.Gateway](fp, "gateways")
-	if err != nil {
-		return err
-	}
-	cfg.Gateways = items
 	return nil
 }
 

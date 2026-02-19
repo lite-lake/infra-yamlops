@@ -199,15 +199,15 @@ func (m *Model) generatePlan() {
 
 func (m *Model) fetchDNSRemoteState() *plan.DeploymentState {
 	state := &plan.DeploymentState{
-		Services:   make(map[string]*entity.BizService),
-		Gateways:   make(map[string]*entity.Gateway),
-		Servers:    make(map[string]*entity.Server),
-		Zones:      make(map[string]*entity.Zone),
-		Domains:    make(map[string]*entity.Domain),
-		Records:    make(map[string]*entity.DNSRecord),
-		Certs:      make(map[string]*entity.Certificate),
-		Registries: make(map[string]*entity.Registry),
-		ISPs:       make(map[string]*entity.ISP),
+		Services:      make(map[string]*entity.BizService),
+		InfraServices: make(map[string]*entity.InfraService),
+		Servers:       make(map[string]*entity.Server),
+		Zones:         make(map[string]*entity.Zone),
+		Domains:       make(map[string]*entity.Domain),
+		Records:       make(map[string]*entity.DNSRecord),
+		Certs:         make(map[string]*entity.Certificate),
+		Registries:    make(map[string]*entity.Registry),
+		ISPs:          make(map[string]*entity.ISP),
 	}
 
 	selectedDomains := m.getSelectedDomains()
@@ -285,24 +285,38 @@ func (m *Model) getSelectedDomains() []string {
 
 func (m *Model) buildScopeFromSelection() {
 	m.PlanScope = &valueobject.Scope{}
+	services := make(map[string]bool)
+	infraServices := make(map[string]bool)
+	domains := make(map[string]bool)
 	currentTree := m.getCurrentTree()
 	for _, node := range currentTree {
 		leaves := node.GetSelectedLeaves()
 		for _, leaf := range leaves {
 			switch leaf.Type {
-			case NodeTypeInfra, NodeTypeBiz:
-				if m.PlanScope.Service == "" {
-					m.PlanScope.Service = leaf.Name
-				}
+			case NodeTypeInfra:
+				infraServices[leaf.Name] = true
+			case NodeTypeBiz:
+				services[leaf.Name] = true
 			case NodeTypeDNSRecord:
-				if m.PlanScope.Domain == "" {
-					parts := strings.Split(leaf.ID, ":")
-					if len(parts) >= 2 {
-						m.PlanScope.Domain = parts[1]
-					}
+				parts := strings.Split(leaf.ID, ":")
+				if len(parts) >= 2 {
+					domains[parts[1]] = true
 				}
 			}
 		}
+	}
+	for svc := range services {
+		m.PlanScope.Services = append(m.PlanScope.Services, svc)
+	}
+	for infra := range infraServices {
+		m.PlanScope.InfraServices = append(m.PlanScope.InfraServices, infra)
+	}
+	if len(m.PlanScope.Services) > 0 || len(m.PlanScope.InfraServices) > 0 {
+		m.PlanScope.ForceDeploy = true
+	}
+	for d := range domains {
+		m.PlanScope.Domain = d
+		break
 	}
 }
 

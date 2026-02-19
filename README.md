@@ -90,8 +90,7 @@ go build -o yamlops ./cmd/yamlops
     │   ├── zones.yaml       # 网区
     │   ├── servers.yaml     # 服务器
     │   ├── services.yaml    # 业务服务
-    │   ├── gateways.yaml    # 网关
-    │   ├── infra_services.yaml  # 基础设施服务
+    │   ├── infra_services.yaml  # 基础设施服务 (gateway/ssl)
     │   ├── registries.yaml  # Docker Registry
     │   ├── dns.yaml         # 域名和 DNS 记录
     │   ├── certificates.yaml # SSL 证书
@@ -350,31 +349,6 @@ servers:
       registries: [registry-aliyun]
 ```
 
-### gateways.yaml - 网关配置
-
-```yaml
-gateways:
-  - name: gw-east-1
-    zone: cn-east
-    server: srv-east-01
-    image: infra-gate:latest
-    ports:
-      http: 80
-      https: 443
-    config:
-      source: volumes://infra-gate
-      sync: true
-    ssl:
-      mode: remote                  # local | remote
-      endpoint: http://infra-ssl:38567
-    waf:
-      enabled: true
-      whitelist:
-        - 10.0.0.0/8
-        - 192.168.0.0/16
-    log_level: 1
-```
-
 ### services.yaml - 服务配置
 
 ```yaml
@@ -421,17 +395,42 @@ services:
 
 ```yaml
 infra_services:
+  - name: gateway-east-1
+    type: gateway                  # gateway | ssl
+    server: srv-east-01
+    image: infra-gate:latest
+    ports:
+      http: 80
+      https: 443
+    config:
+      source: volumes://infra-gate
+      sync: true
+    ssl:
+      mode: remote                  # local | remote
+      endpoint: http://infra-ssl:38567
+    waf:
+      enabled: true
+      whitelist:
+        - 10.0.0.0/8
+        - 192.168.0.0/16
+    log_level: 1
+
   - name: infra-ssl
-    type: ssl                      # gateway | ssl
+    type: ssl
     server: srv-east-01
     image: infra-ssl:latest
-    ssl_config:
-      ports:
-        http: 8080
-        acme: 38567
+    ports:
+      api: 38567
+    config:
       auth:
-        username: admin
-        password: {secret: ssl_admin_pwd}
+        enabled: true
+        apikey: {secret: ssl_api_key}
+      storage:
+        type: local
+        path: /data/certs
+      defaults:
+        issue_provider: letsencrypt_prod
+        storage_provider: local_default
 ```
 
 ### registries.yaml - Docker Registry

@@ -228,6 +228,9 @@ func runAppApply(ctx *Context, filters AppFilters, autoApprove bool) {
 		}
 		if result.Success {
 			fmt.Printf("✓ %s: %s\n", result.Change.Entity, result.Change.Name)
+			for _, w := range result.Warnings {
+				fmt.Printf("  ⚠ %s\n", w)
+			}
 		} else {
 			fmt.Printf("✗ %s: %s - %v\n", result.Change.Entity, result.Change.Name, result.Error)
 			hasError = true
