@@ -95,7 +95,7 @@ internal/
 │   ├── entity/                     # 实体定义
 │   ├── valueobject/                # 值对象
 │   ├── repository/                 # 仓储接口
-│   ├── service/                    # 领域服务
+│   ├── service/                    # 领域服务（DifferService, Validator）
 │   └── errors.go                   # 领域错误（统一定义）
 ├── application/                    # 应用层
 │   ├── handler/                    # 变更处理器（策略模式）
@@ -104,16 +104,30 @@ internal/
 │   │   ├── service_handler.go      # 业务服务处理器
 │   │   ├── infra_service_handler.go # 基础设施服务处理器
 │   │   ├── server_handler.go       # 服务器处理器
-│   │   ├── certificate_handler.go  # 证书处理器
-│   │   ├── registry_handler.go     # 镜像仓库处理器
-│   │   ├── noop_handler.go         # 空操作处理器
+│   │   ├── noop_handler.go         # 空操作处理器（isp/zone/domain/certificate/registry）
 │   │   ├── registry.go             # 处理器注册表
 │   │   └── utils.go                # 工具函数
-│   └── usecase/                    # 用例执行器
-│       ├── executor.go             # 执行器（支持依赖注入）
-│       └── ssh_pool.go             # SSH 连接池
+│   ├── usecase/                    # 用例执行器
+│   │   ├── executor.go             # 执行器（支持依赖注入）
+│   │   └── ssh_pool.go             # SSH 连接池
+│   ├── deployment/                 # 部署文件生成器
+│   │   ├── generator.go            # 生成器主入口
+│   │   ├── compose_service.go      # 业务服务 Compose 生成
+│   │   ├── compose_infra.go        # 基础设施服务 Compose 生成
+│   │   ├── gateway.go              # Gateway 配置生成
+│   │   ├── ssl.go                  # SSL 配置生成
+│   │   └── utils.go                # 工具函数
+│   └── orchestrator/               # 工作流编排器
+│       ├── workflow.go             # 工作流主入口
+│       ├── state_fetcher.go        # 状态获取器
+│       └── utils.go                # 工具函数
 ├── infrastructure/                 # 基础设施层
-│   └── persistence/                # 配置加载实现
+│   ├── persistence/                # 配置加载实现
+│   │   └── config_loader.go        # 配置加载器
+│   ├── state/                      # 状态存储实现
+│   │   └── file_store.go           # 文件状态存储
+│   └── dns/                        # DNS 工厂
+│       └── factory.go              # DNS Provider 工厂
 ├── interfaces/                     # 接口层
 │   └── cli/                        # CLI 命令
 │       ├── root.go                 # 根命令
@@ -147,7 +161,9 @@ internal/
 ├── constants/                      # 常量定义
 │   └── constants.go                # 路径、格式等常量
 ├── plan/                           # 规划协调层
-├── config/                         # 配置工具
+│   └── planner.go                  # Planner 主入口
+├── secrets/                        # 密钥解析器
+│   └── resolver.go                 # SecretResolver 实现
 ├── providers/                      # 外部服务提供者
 │   ├── dns/                        # DNS 提供者
 │   │   ├── provider.go             # DNS Provider 接口
@@ -157,14 +173,22 @@ internal/
 │   │   ├── aliyun.go               # 阿里云实现
 │   │   └── tencent.go              # 腾讯云实现
 │   └── ssl/                        # SSL 提供者
+│       ├── provider.go             # SSL Provider 接口
+│       ├── acme.go                 # ACME 基础实现
+│       ├── letsencrypt.go          # Let's Encrypt 实现
+│       └── zerossl.go              # ZeroSSL 实现
 ├── ssh/                            # SSH 客户端
 │   ├── client.go                   # SSH 客户端
 │   └── sftp.go                     # SFTP 文件传输
 ├── compose/                        # Docker Compose 工具
+│   ├── generator.go                # Compose 生成器
+│   └── types.go                    # 类型定义
 ├── gate/                           # infra-gate 工具
-└── server/                         # 服务器管理
-    ├── checker.go                  # 服务器检查
-    ├── syncer.go                   # 服务器同步
+│   ├── generator.go                # Gate 配置生成器
+│   └── types.go                    # 类型定义
+└── environment/                    # 服务器环境管理
+    ├── checker.go                  # 环境检查器
+    ├── syncer.go                   # 环境同步器
     ├── templates.go                # 配置模板
     └── types.go                    # 类型定义
 userdata/{env}/                     # 用户配置文件
@@ -515,9 +539,7 @@ type BaseDeps struct {
 | ServiceHandler | service | Docker Compose 服务部署 |
 | InfraServiceHandler | infra_service | 基础设施服务部署 (gateway/ssl) |
 | ServerHandler | server | 服务器注册（无远程操作） |
-| CertificateHandler | certificate | 证书管理（标记跳过） |
-| RegistryHandler | registry | 镜像仓库（标记跳过） |
-| NoopHandler | isp/zone/domain | 空操作 |
+| NoopHandler | isp/zone/domain/certificate/registry | 空操作（非部署实体，跳过） |
 
 ### 4.6 Executor 执行器
 
@@ -600,7 +622,9 @@ type DNSFactoryInterface interface {
 ```go
 type ConfigLoader struct{ baseDir string }
 
+func NewConfigLoader(baseDir string) *ConfigLoader
 func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, error)
+func (l *ConfigLoader) Validate(cfg *entity.Config) error
 ```
 
 **加载顺序**：
@@ -614,21 +638,42 @@ func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, er
 8. dns.yaml
 9. certificates.yaml
 
-### 5.2 DNS 提供者
+### 5.2 状态存储
 
-#### 5.2.1 Provider 接口
+```go
+type FileStore struct {
+    path string
+}
+
+func NewFileStore(path string) *FileStore
+func (s *FileStore) Load() (*repository.DeploymentState, error)
+func (s *FileStore) Save(state *repository.DeploymentState) error
+```
+
+### 5.3 DNS 提供者
+
+#### 5.3.1 Provider 接口
 
 ```go
 type Provider interface {
     Name() string
+    ListDomains() ([]string, error)
     ListRecords(domain string) ([]DNSRecord, error)
     CreateRecord(domain string, record *DNSRecord) error
     UpdateRecord(domain string, recordID string, record *DNSRecord) error
     DeleteRecord(domain string, recordID string) error
 }
+
+type DNSRecord struct {
+    ID    string
+    Name  string
+    Type  string
+    Value string
+    TTL   int
+}
 ```
 
-#### 5.2.2 公共逻辑 (common.go)
+#### 5.3.2 公共逻辑 (common.go)
 
 ```go
 // 确保记录存在，自动判断创建或更新
@@ -650,7 +695,7 @@ func EnsureRecord(provider Provider, domain string, desired *DNSRecord) error {
 }
 ```
 
-#### 5.2.3 提供商实现
+#### 5.3.3 提供商实现
 
 | Provider | 特性 |
 |----------|------|
@@ -658,14 +703,14 @@ func EnsureRecord(provider Provider, domain string, desired *DNSRecord) error {
 | Aliyun | 按名称查询、模糊匹配 |
 | Tencent | 域名 CRUD、状态控制 |
 
-### 5.3 SSL 提供者
+### 5.4 SSL 提供者
 
 | Provider | 特性 |
 |----------|------|
 | Let's Encrypt | 无需 EAB、支持 Staging 环境 |
 | ZeroSSL | 必须提供 EAB 凭据 |
 
-### 5.4 SSH 客户端
+### 5.5 SSH 客户端
 
 ```go
 type Client struct {
@@ -681,7 +726,7 @@ func (c *Client) UploadFileSudo(localPath, remotePath string) error
 func (c *Client) MkdirAllSudoWithPerm(path, perm string) error
 ```
 
-### 5.5 Compose 生成器
+### 5.6 Compose 生成器
 
 生成 Docker Compose 文件格式：
 
@@ -743,11 +788,12 @@ hosts:
 
 ```go
 type Planner struct {
-    config         *entity.Config
-    plannerService *service.PlannerService
-    deployGen      *deploymentGenerator
-    outputDir      string
-    env            string
+    config        *entity.Config
+    differService *service.DifferService  // 变更检测服务
+    deployGen     *deployment.Generator   // 部署文件生成器
+    stateStore    *state.FileStore        // 状态存储
+    outputDir     string
+    env           string
 }
 ```
 
@@ -760,7 +806,12 @@ type Planner struct {
 2. 验证配置 (Validator)
    └─→ 引用完整性检查、端口冲突检测、域名冲突检测
 
-3. 生成计划 (PlannerService)
+3. 生成部署文件 (Generator)
+   ├─→ generateServiceComposes()
+   ├─→ generateInfraServiceComposes()
+   └─→ generateGatewayConfigs()
+
+4. 生成计划 (DifferService)
    ├─→ PlanISPs()
    ├─→ PlanZones()
    ├─→ PlanDomains()
@@ -770,10 +821,6 @@ type Planner struct {
    ├─→ PlanServers()
    ├─→ PlanInfraServices()
    └─→ PlanServices()
-
-4. 生成部署文件 (deploymentGenerator)
-   ├─→ generateServiceComposes()
-   └─→ generateGatewayConfigs()
 ```
 
 ### 6.3 变更检测算法
@@ -1127,24 +1174,71 @@ type ExecutorConfig struct {
 func NewExecutor(cfg *ExecutorConfig) *Executor
 ```
 
-#### D.3 CLI 工作流模块
+#### D.3 Orchestrator 工作流模块
 
-独立的 Workflow 模块封装 CLI 命令的通用流程：
+`internal/application/orchestrator/` 封装工作流编排逻辑：
 
 ```go
 type Workflow struct {
-    env       string
-    configDir string
-    loader    repository.ConfigLoader
+    env          string
+    configDir    string
+    loader       repository.ConfigLoader
+    stateFetcher *StateFetcher
 }
 
+func (w *Workflow) LoadConfig(ctx context.Context) (*entity.Config, error)
 func (w *Workflow) LoadAndValidate(ctx context.Context) (*entity.Config, error)
 func (w *Workflow) ResolveSecrets(cfg *entity.Config) error
 func (w *Workflow) CreatePlanner(cfg *entity.Config, outputDir string) *plan.Planner
 func (w *Workflow) Plan(ctx context.Context, outputDir string, scope *valueobject.Scope) (*valueobject.Plan, *entity.Config, error)
+func (w *Workflow) GenerateDeployments(cfg *entity.Config, outputDir string) error
 ```
 
-#### D.4 TUI 模块拆分
+#### D.4 Deployment 生成器模块
+
+`internal/application/deployment/` 负责生成部署文件：
+
+```go
+type Generator struct {
+    composeGen *compose.Generator
+    gateGen    *gate.Generator
+    outputDir  string
+    env        string
+}
+
+func (g *Generator) Generate(config *entity.Config) error
+```
+
+生成内容：
+- Docker Compose 文件（业务服务 + 基础设施服务）
+- Gateway 配置文件
+
+#### D.5 Secrets 解析器
+
+`internal/secrets/` 负责密钥引用解析：
+
+```go
+type SecretResolver struct {
+    secrets map[string]string
+}
+
+func NewSecretResolver(secrets []*entity.Secret) *SecretResolver
+func (r *SecretResolver) Resolve(ref valueobject.SecretRef) (string, error)
+func (r *SecretResolver) ResolveAll(cfg *entity.Config) error
+```
+
+#### D.6 Environment 管理模块
+
+`internal/environment/` 负责服务器环境检查和同步：
+
+| 文件 | 职责 |
+|------|------|
+| checker.go | 检查 Docker、Docker Compose、APT 源、Registry 登录状态 |
+| syncer.go | 同步服务器环境配置 |
+| templates.go | 配置模板（Docker daemon.json 等） |
+| types.go | 类型定义（CheckResult、CheckStatus） |
+
+#### D.7 TUI 模块拆分
 
 TUI 按功能拆分为独立文件，提高可维护性：
 
@@ -1158,7 +1252,7 @@ TUI 按功能拆分为独立文件，提高可维护性：
 | tui_cleanup.go | 服务清理（孤立资源） |
 | tui_stop.go | 服务停止 |
 
-#### D.5 常量集中管理
+#### D.8 常量集中管理
 
 应用级常量统一在 `internal/constants/constants.go` 定义：
 
@@ -1173,7 +1267,7 @@ const (
 )
 ```
 
-#### D.6 统一 Domain 错误
+#### D.9 统一 Domain 错误
 
 所有领域错误集中在 `internal/domain/errors.go` 定义，便于统一管理和复用：
 

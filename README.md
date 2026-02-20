@@ -4,7 +4,7 @@
 
 ## 特性
 
-- **多环境支持**：prod / staging / dev 环境隔离
+- **多环境支持**：prod / staging / dev / demo 环境隔离
 - **Plan/Apply 工作流**：类似 Terraform 的预览+执行模式
 - **声明式配置**：通过 YAML 描述期望状态
 - **密钥管理**：支持明文和密钥引用两种方式
@@ -98,7 +98,8 @@ go build -o yamlops ./cmd/yamlops
     │       ├── infra-gate/
     │       └── api-server/
     ├── staging/             # 预发环境
-    └── dev/                 # 开发环境
+    ├── dev/                 # 开发环境
+    └── demo/                # 演示环境
 ```
 
 ## CLI 命令
@@ -107,7 +108,7 @@ go build -o yamlops ./cmd/yamlops
 
 | 参数 | 简写 | 默认值 | 说明 |
 |------|------|--------|------|
-| `--env` | `-e` | dev | 环境 (prod/staging/dev) |
+| `--env` | `-e` | dev | 环境 (prod/staging/dev/demo) |
 | `--config` | `-c` | . | 配置目录 |
 | `--version` | `-v` | - | 显示版本 |
 | `--help` | `-h` | - | 显示帮助 |
@@ -138,7 +139,7 @@ yamlops
 │       ├── domains          # 从 ISP 拉取域名
 │       └── records          # 从域名拉取记录
 ├── config
-│   ├── list [type]          # 列出配置项
+│   ├── list [secrets|isps|registries]  # 列出配置项
 │   └── show <type> <name>   # 显示配置详情
 └── app
     ├── plan                 # 应用部署计划
@@ -165,9 +166,6 @@ yamlops
 ```bash
 # 应用所有变更（需确认）
 ./yamlops apply -e prod
-
-# 自动确认
-./yamlops apply -e prod --auto-approve
 
 # 按作用域应用
 ./yamlops apply -e prod --zone cn-east
@@ -216,10 +214,10 @@ yamlops
 
 ```bash
 # 查看 DNS 变更计划
-./yamlops dns plan -e prod --domain example.com
+./yamlops dns plan -e prod -d example.com
 
 # 应用 DNS 变更
-./yamlops dns apply -e prod --domain example.com --auto-approve
+./yamlops dns apply -e prod -d example.com --auto-approve
 
 # 列出 DNS 资源
 ./yamlops dns list domains -e prod
@@ -229,24 +227,24 @@ yamlops
 ./yamlops dns show domain example.com -e prod
 
 # 从 ISP 拉取域名
-./yamlops dns pull domains -e prod --isp aliyun
+./yamlops dns pull domains -e prod -i aliyun
 
 # 从域名拉取 DNS 记录
-./yamlops dns pull records -e prod --domain example.com
+./yamlops dns pull records -e prod -d example.com
 ```
 
 ### app - 应用部署
 
 ```bash
 # 生成部署计划
-./yamlops app plan -e prod --server srv-east-01
+./yamlops app plan -e prod -s srv-east-01
 
 # 应用部署
 ./yamlops app apply -e prod --auto-approve
 
 # 列出资源
 ./yamlops app list -e prod
-./yamlops app list biz -e prod --server srv-east-01
+./yamlops app list biz -e prod -s srv-east-01
 ```
 
 ### config - 配置管理
@@ -282,10 +280,12 @@ yamlops
 | ↑/k, ↓/j | 上下移动 |
 | Space | 切换选择 |
 | Enter | 确认/展开 |
+| Tab | 切换视图 |
 | a/n | 选择/取消当前项 |
 | A/N | 全选/全不选 |
 | p | 生成计划 |
 | r | 刷新配置 |
+| x | 取消操作 |
 | Esc | 返回 |
 | q/Ctrl+C | 退出 |
 
@@ -530,8 +530,8 @@ vim userdata/prod/services.yaml
 
 ```bash
 # 从远程拉取到本地
-./yamlops dns pull domains -e prod --isp aliyun
-./yamlops dns pull records -e prod --domain example.com
+./yamlops dns pull domains -e prod -i aliyun
+./yamlops dns pull records -e prod -d example.com
 
 # 从本地推送到远程
 ./yamlops dns plan -e prod

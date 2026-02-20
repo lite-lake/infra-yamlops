@@ -22,7 +22,6 @@ go mod tidy && go mod download          # Download dependencies
 ```bash
 go test ./...                                    # Run all tests
 go test ./internal/domain/entity/...             # Run package tests
-go test ./internal/domain/entity -run TestSecretRef  # Run single test
 go test ./internal/domain/entity -run TestServer -v  # Single test, verbose
 go test -v -cover ./...                          # With coverage
 go test -race ./...                              # With race detection
@@ -45,12 +44,17 @@ internal/
 │   ├── entity/                 # Entity definitions
 │   ├── valueobject/            # Value objects (SecretRef, Change, Scope, Plan)
 │   ├── repository/             # Repository interfaces
-│   ├── service/                # Domain services (PlannerService, Validator)
+│   ├── service/                # Domain services (Validator)
 │   └── errors.go               # Domain errors
 ├── application/                # Application layer
 │   ├── handler/                # Change handlers (Strategy Pattern)
-│   └── usecase/                # Executor, SSHPool
-├── infrastructure/persistence/ # Config loader
+│   ├── usecase/                # Executor, SSHPool
+│   ├── deployment/             # Deployment generators (SSL, utils)
+│   └── orchestrator/           # Workflow orchestration, state fetcher
+├── infrastructure/
+│   ├── persistence/            # Config loader
+│   ├── dns/                    # DNS provider factory
+│   └── state/                  # File-based state storage
 ├── interfaces/cli/             # Cobra commands, BubbleTea TUI
 │   ├── workflow.go             # CLI workflow orchestration
 │   ├── tui_server.go           # TUI server operations
@@ -59,17 +63,19 @@ internal/
 │   └── tui_stop.go             # TUI stop operations
 ├── constants/                  # Shared constants
 │   └── constants.go            # Application-wide constants
+├── environment/                # Environment setup (checker, syncer, templates)
 ├── plan/                       # Planner, Compose/Gate generators
 ├── providers/dns/              # Cloudflare, Aliyun, Tencent DNS
+│   ├── provider.go             # Provider interface
 │   ├── common.go               # Shared DNS logic
-│   ├── factory.go              # DNS provider factory
-│   └── provider.go             # Provider interface
-├── providers/ssl/              # Let's Encrypt, ZeroSSL
+│   ├── cloudflare.go           # Cloudflare implementation
+│   ├── aliyun.go               # Aliyun implementation
+│   └── tencent.go              # Tencent implementation
 ├── ssh/                        # SSH client, SFTP
 ├── compose/                    # Docker Compose generator
 ├── gate/                       # infra-gate config generator
-└── config/                     # SecretResolver
-userdata/{env}/                 # User configs (prod/staging/dev)
+└── secrets/                    # SecretResolver
+userdata/{env}/                 # User configs (prod/staging/dev/demo)
 deployments/                    # Generated files (git-ignored)
 ```
 
@@ -101,14 +107,26 @@ import (
 
 ### Error Handling
 
-Define errors as package-level variables. Wrap with `fmt.Errorf` and `%w`:
+Define errors in `internal/domain/errors.go`. Use `fmt.Errorf` with `%w` for wrapping:
 
 ```go
-var ErrInvalidName = errors.New("invalid name")
+// In internal/domain/errors.go
+var (
+    ErrInvalidName = errors.New("invalid name")
+    ErrRequired    = errors.New("required field missing")
+)
 
+func RequiredField(field string) error {
+    return fmt.Errorf("%w: %s", ErrRequired, field)
+}
+
+// In entity validation
 func (s *Server) Validate() error {
     if s.Name == "" {
-        return fmt.Errorf("%w: server name is required", ErrInvalidName)
+        return fmt.Errorf("%w: server name is required", domain.ErrInvalidName)
+    }
+    if s.Zone == "" {
+        return domain.RequiredField("zone")
     }
     return nil
 }
@@ -150,19 +168,6 @@ func NewLoader(env, baseDir string) *Loader {
 }
 ```
 
-### Validation Pattern
-
-Each entity implements `Validate() error`:
-
-```go
-func (s *Server) Validate() error {
-    if s.Name == "" {
-        return fmt.Errorf("%w: server name is required", ErrInvalidName)
-    }
-    return nil
-}
-```
-
 ### YAML Custom Deserialization
 
 Support both shorthand and full forms:
@@ -174,30 +179,42 @@ func (s *SecretRef) UnmarshalYAML(unmarshal func(interface{}) error) error {
         s.Plain = plain
         return nil
     }
+
     type alias SecretRef
-    return unmarshal((*alias)(s))
+    var ref alias
+    if err := unmarshal(&ref); err != nil {
+        return err
+    }
+    s.Plain = ref.Plain
+    s.Secret = ref.Secret
+    return nil
 }
 ```
 
 ## Test Guidelines
 
-Place tests next to source. Use table-driven tests:
+Place tests next to source. Use table-driven tests with `errors.Is()` for error checking:
 
 ```go
 func TestServer_Validate(t *testing.T) {
     tests := []struct {
         name    string
         server  Server
-        wantErr bool
+        wantErr error
     }{
-        {"valid", Server{Name: "test", Zone: "zone1"}, false},
-        {"missing name", Server{}, true},
+        {"missing name", Server{}, domain.ErrInvalidName},
+        {"missing zone", Server{Name: "server-1"}, domain.ErrRequired},
+        {"valid", Server{Name: "server-1", Zone: "zone-1", ...}, nil},
     }
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
             err := tt.server.Validate()
-            if (err != nil) != tt.wantErr {
-                t.Errorf("Validate() error = %v, wantErr %v", err, tt.wantErr)
+            if tt.wantErr != nil {
+                if !errors.Is(err, tt.wantErr) {
+                    t.Errorf("Validate() error = %v, want %v", err, tt.wantErr)
+                }
+            } else if err != nil {
+                t.Errorf("Validate() unexpected error = %v", err)
             }
         })
     }
@@ -237,14 +254,27 @@ Each environment: `yamlops-{env}` (e.g., `yamlops-prod`)
 Handler dependencies are split into focused interfaces:
 
 ```go
-type DNSReader interface {
-    GetDNSRecords(zone, name string) ([]DNSRecord, error)
+type DNSDeps interface {
+    DNSProvider(ispName string) (DNSProvider, error)
+    Domain(name string) (*entity.Domain, bool)
+    ISP(name string) (*entity.ISP, bool)
 }
 
-type DNSWriter interface {
-    CreateDNSRecord(record DNSRecord) error
-    UpdateDNSRecord(record DNSRecord) error
-    DeleteDNSRecord(record DNSRecord) error
+type ServiceDeps interface {
+    SSHClient(server string) (SSHClient, error)
+    ServerInfo(name string) (*ServerInfo, bool)
+    WorkDir() string
+    Env() string
+}
+
+type CommonDeps interface {
+    ResolveSecret(ref *valueobject.SecretRef) (string, error)
+}
+
+type DepsProvider interface {
+    DNSDeps
+    ServiceDeps
+    CommonDeps
 }
 ```
 
@@ -253,8 +283,23 @@ type DNSWriter interface {
 Executor receives dependencies via constructor injection:
 
 ```go
-func NewExecutor(sshPool SSHPool, dnsWriter DNSWriter) *Executor {
-    return &Executor{sshPool: sshPool, dnsWriter: dnsWriter}
+func NewExecutor(cfg *ExecutorConfig) *Executor {
+    if cfg.Registry == nil {
+        cfg.Registry = handler.NewRegistry()
+    }
+    if cfg.SSHPool == nil {
+        cfg.SSHPool = NewSSHPool()
+    }
+    if cfg.DNSFactory == nil {
+        cfg.DNSFactory = infra.NewFactory()
+    }
+    return &Executor{
+        plan:       cfg.Plan,
+        registry:   cfg.Registry,
+        sshPool:    cfg.SSHPool,
+        dnsFactory: cfg.DNSFactory,
+        ...
+    }
 }
 ```
 
@@ -264,30 +309,35 @@ All domain errors defined in `internal/domain/errors.go`:
 
 ```go
 var (
-    ErrNotFound      = errors.New("not found")
-    ErrAlreadyExists = errors.New("already exists")
-    ErrValidation    = errors.New("validation failed")
+    ErrInvalidName     = errors.New("invalid name")
+    ErrInvalidIP       = errors.New("invalid IP address")
+    ErrInvalidPort     = errors.New("invalid port")
+    ErrRequired        = errors.New("required field missing")
+    ErrMissingSecret   = errors.New("missing secret reference")
+    ErrPortConflict    = errors.New("port conflict")
 )
+
+func RequiredField(field string) error {
+    return fmt.Errorf("%w: %s", ErrRequired, field)
+}
 ```
 
-### Thread-Safe Registry
+### Handler Registry Pattern
 
-Registry uses `sync.RWMutex` for concurrent access:
+Registry manages handlers by entity type:
 
 ```go
 type Registry struct {
-    mu    sync.RWMutex
-    items map[string]Item
+    handlers map[string]Handler
 }
 
-func (r *Registry) Get(name string) (Item, error) {
-    r.mu.RLock()
-    defer r.mu.RUnlock()
-    item, ok := r.items[name]
-    if !ok {
-        return Item{}, ErrNotFound
-    }
-    return item, nil
+func (r *Registry) Register(h Handler) {
+    r.handlers[h.EntityType()] = h
+}
+
+func (r *Registry) Get(entityType string) (Handler, bool) {
+    h, ok := r.handlers[entityType]
+    return h, ok
 }
 ```
 
