@@ -290,7 +290,7 @@ func (m Model) renderPlan() string {
 			line := fmt.Sprintf("%s %s: %s", prefix, ch.Entity, ch.Name)
 			if ch.Entity == "service" || ch.Entity == "infra_service" {
 				if ch.RemoteExists {
-					line += " [remote]"
+					line += " [update]"
 				} else {
 					line += " [new]"
 				}

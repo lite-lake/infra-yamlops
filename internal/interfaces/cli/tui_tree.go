@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	"github.com/litelake/yamlops/internal/application/orchestrator"
 	"github.com/litelake/yamlops/internal/application/usecase"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
@@ -182,6 +184,9 @@ func (m *Model) generatePlan() {
 	var state *plan.DeploymentState
 	if m.ViewMode == ViewModeDNS {
 		state = m.fetchDNSRemoteState()
+	} else {
+		fetcher := orchestrator.NewStateFetcher(string(m.Environment), m.ConfigDir)
+		state = fetcher.Fetch(context.Background(), m.Config)
 	}
 
 	planner := plan.NewPlannerWithState(m.Config, state, string(m.Environment))
