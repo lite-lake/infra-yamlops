@@ -5,7 +5,7 @@ import (
 	"github.com/litelake/yamlops/internal/application/handler"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
-	serverpkg "github.com/litelake/yamlops/internal/server"
+	serverpkg "github.com/litelake/yamlops/internal/environment"
 )
 
 type Environment string

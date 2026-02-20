@@ -6,6 +6,18 @@ import (
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
+var NoopEntities = []string{"isp", "zone", "domain", "certificate", "registry"}
+
+type HandlerRegistry interface {
+	Register(h Handler)
+}
+
+func RegisterNoopHandlers(r HandlerRegistry) {
+	for _, et := range NoopEntities {
+		r.Register(NewNoopHandler(et))
+	}
+}
+
 type NoopHandler struct {
 	entityType string
 }

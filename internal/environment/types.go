@@ -1,4 +1,4 @@
-package server
+package environment
 
 type CheckStatus int
 

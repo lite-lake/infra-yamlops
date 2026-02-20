@@ -7,8 +7,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/environment"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
-	"github.com/litelake/yamlops/internal/server"
 	"github.com/litelake/yamlops/internal/ssh"
 )
 
@@ -102,13 +102,13 @@ func runServerSetup(ctx *Context, serverName, zone string, checkOnly, syncOnly b
 		}
 
 		if !syncOnly {
-			checker := server.NewChecker(client, srv, registries, secrets)
+			checker := environment.NewChecker(client, srv, registries, secrets)
 			results := checker.CheckAll()
-			fmt.Print(server.FormatResults(srv.Name, results))
+			fmt.Print(environment.FormatResults(srv.Name, results))
 		}
 
 		if !checkOnly {
-			syncer := server.NewSyncer(client, srv, ctx.Env, registries, secrets)
+			syncer := environment.NewSyncer(client, srv, ctx.Env, registries, secrets)
 			results := syncer.SyncAll()
 			printSyncResults(srv.Name, results)
 		}
@@ -133,7 +133,7 @@ func runServerSync(ctx *Context, serverName, zone string) {
 	runServerSetup(ctx, serverName, zone, false, true)
 }
 
-func printSyncResults(serverName string, results []server.SyncResult) {
+func printSyncResults(serverName string, results []environment.SyncResult) {
 	fmt.Printf("[%s] Sync Results\n", serverName)
 	for _, r := range results {
 		if r.Success {

@@ -10,11 +10,11 @@ type EntityComparer[T any] interface {
 	Equals(a, b *T) bool
 }
 
-type PlannerService struct {
+type DifferService struct {
 	state *repository.DeploymentState
 }
 
-func NewPlannerService(state *repository.DeploymentState) *PlannerService {
+func NewDifferService(state *repository.DeploymentState) *DifferService {
 	if state == nil {
 		state = &repository.DeploymentState{
 			Services:      make(map[string]*entity.BizService),
@@ -28,18 +28,18 @@ func NewPlannerService(state *repository.DeploymentState) *PlannerService {
 			ISPs:          make(map[string]*entity.ISP),
 		}
 	}
-	return &PlannerService{state: state}
+	return &DifferService{state: state}
 }
 
-func (s *PlannerService) GetState() *repository.DeploymentState {
+func (s *DifferService) GetState() *repository.DeploymentState {
 	return s.state
 }
 
-func (s *PlannerService) SetState(state *repository.DeploymentState) {
+func (s *DifferService) SetState(state *repository.DeploymentState) {
 	s.state = state
 }
 
-func (s *PlannerService) PlanISPs(plan *valueobject.Plan, cfgMap map[string]*entity.ISP, scope *valueobject.Scope) {
+func (s *DifferService) PlanISPs(plan *valueobject.Plan, cfgMap map[string]*entity.ISP, scope *valueobject.Scope) {
 	planSimpleEntity(plan, cfgMap, s.state.ISPs, ISPEquals, "isp",
 		func(_ string) bool { return scope.Matches("", "", "", "") })
 }
@@ -59,7 +59,7 @@ func ISPEquals(a, b *entity.ISP) bool {
 	return true
 }
 
-func (s *PlannerService) PlanZones(plan *valueobject.Plan, cfgMap map[string]*entity.Zone, scope *valueobject.Scope) {
+func (s *DifferService) PlanZones(plan *valueobject.Plan, cfgMap map[string]*entity.Zone, scope *valueobject.Scope) {
 	planSimpleEntity(plan, cfgMap, s.state.Zones, ZoneEquals, "zone",
 		func(name string) bool { return scope.Matches(name, "", "", "") })
 }
@@ -68,7 +68,7 @@ func ZoneEquals(a, b *entity.Zone) bool {
 	return a.Name == b.Name && a.ISP == b.ISP && a.Region == b.Region
 }
 
-func (s *PlannerService) PlanDomains(plan *valueobject.Plan, cfgMap map[string]*entity.Domain, scope *valueobject.Scope) {
+func (s *DifferService) PlanDomains(plan *valueobject.Plan, cfgMap map[string]*entity.Domain, scope *valueobject.Scope) {
 	planSimpleEntity(plan, cfgMap, s.state.Domains, DomainEquals, "domain",
 		func(_ string) bool { return scope.Matches("", "", "", "") })
 }
@@ -77,7 +77,7 @@ func DomainEquals(a, b *entity.Domain) bool {
 	return a.Name == b.Name && a.ISP == b.ISP && a.Parent == b.Parent
 }
 
-func (s *PlannerService) PlanCertificates(plan *valueobject.Plan, cfgMap map[string]*entity.Certificate, scope *valueobject.Scope) {
+func (s *DifferService) PlanCertificates(plan *valueobject.Plan, cfgMap map[string]*entity.Certificate, scope *valueobject.Scope) {
 	planSimpleEntity(plan, cfgMap, s.state.Certs, CertificateEquals, "certificate",
 		func(_ string) bool { return scope.Matches("", "", "", "") })
 }
@@ -97,7 +97,7 @@ func CertificateEquals(a, b *entity.Certificate) bool {
 	return true
 }
 
-func (s *PlannerService) PlanRegistries(plan *valueobject.Plan, cfgMap map[string]*entity.Registry, scope *valueobject.Scope) {
+func (s *DifferService) PlanRegistries(plan *valueobject.Plan, cfgMap map[string]*entity.Registry, scope *valueobject.Scope) {
 	planSimpleEntity(plan, cfgMap, s.state.Registries, RegistryEquals, "registry",
 		func(_ string) bool { return scope.Matches("", "", "", "") })
 }

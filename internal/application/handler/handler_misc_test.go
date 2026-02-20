@@ -135,33 +135,6 @@ func TestServerHandler_Apply_Noop(t *testing.T) {
 	}
 }
 
-func TestRegistryHandler_EntityType(t *testing.T) {
-	h := NewRegistryHandler()
-	if h.EntityType() != "registry" {
-		t.Errorf("expected 'registry', got %s", h.EntityType())
-	}
-}
-
-func TestRegistryHandler_Apply(t *testing.T) {
-	h := NewRegistryHandler()
-	ctx := context.Background()
-	deps := newMockDeps()
-
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "registry",
-		Name:   "my-registry",
-	}
-
-	result, err := h.Apply(ctx, change, deps)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.Success {
-		t.Error("expected success")
-	}
-}
-
 func TestBaseDeps_New(t *testing.T) {
 	d := NewBaseDeps()
 	if d == nil {

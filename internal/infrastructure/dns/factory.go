@@ -5,9 +5,10 @@ import (
 
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
+	dnsprovider "github.com/litelake/yamlops/internal/providers/dns"
 )
 
-type CreatorFunc func(isp *entity.ISP, secrets map[string]string) (Provider, error)
+type CreatorFunc func(isp *entity.ISP, secrets map[string]string) (dnsprovider.Provider, error)
 
 type Factory struct {
 	creators map[string]CreatorFunc
@@ -23,7 +24,7 @@ func NewFactory() *Factory {
 	}
 }
 
-func (f *Factory) Create(isp *entity.ISP, secrets map[string]string) (Provider, error) {
+func (f *Factory) Create(isp *entity.ISP, secrets map[string]string) (dnsprovider.Provider, error) {
 	creator, ok := f.creators[string(isp.Type)]
 	if !ok {
 		return nil, fmt.Errorf("unsupported provider type: %s", isp.Type)
@@ -43,7 +44,7 @@ func resolveCredential(creds map[string]valueobject.SecretRef, key string, secre
 	return ref.Resolve(secrets)
 }
 
-func createCloudflare(isp *entity.ISP, secrets map[string]string) (Provider, error) {
+func createCloudflare(isp *entity.ISP, secrets map[string]string) (dnsprovider.Provider, error) {
 	apiToken, err := resolveCredential(isp.Credentials, "api_token", secrets)
 	if err != nil {
 		return nil, fmt.Errorf("resolve api_token: %w", err)
@@ -55,10 +56,10 @@ func createCloudflare(isp *entity.ISP, secrets map[string]string) (Provider, err
 			return nil, fmt.Errorf("resolve account_id: %w", err)
 		}
 	}
-	return NewCloudflareProvider(apiToken, accountID), nil
+	return dnsprovider.NewCloudflareProvider(apiToken, accountID), nil
 }
 
-func createAliyun(isp *entity.ISP, secrets map[string]string) (Provider, error) {
+func createAliyun(isp *entity.ISP, secrets map[string]string) (dnsprovider.Provider, error) {
 	accessKeyID, err := resolveCredential(isp.Credentials, "access_key_id", secrets)
 	if err != nil {
 		return nil, fmt.Errorf("resolve access_key_id: %w", err)
@@ -67,10 +68,10 @@ func createAliyun(isp *entity.ISP, secrets map[string]string) (Provider, error) 
 	if err != nil {
 		return nil, fmt.Errorf("resolve access_key_secret: %w", err)
 	}
-	return NewAliyunProvider(accessKeyID, accessKeySecret)
+	return dnsprovider.NewAliyunProvider(accessKeyID, accessKeySecret)
 }
 
-func createTencent(isp *entity.ISP, secrets map[string]string) (Provider, error) {
+func createTencent(isp *entity.ISP, secrets map[string]string) (dnsprovider.Provider, error) {
 	secretID, err := resolveCredential(isp.Credentials, "secret_id", secrets)
 	if err != nil {
 		return nil, fmt.Errorf("resolve secret_id: %w", err)
@@ -79,5 +80,5 @@ func createTencent(isp *entity.ISP, secrets map[string]string) (Provider, error)
 	if err != nil {
 		return nil, fmt.Errorf("resolve secret_key: %w", err)
 	}
-	return NewTencentProvider(secretID, secretKey)
+	return dnsprovider.NewTencentProvider(secretID, secretKey)
 }

@@ -8,9 +8,9 @@ import (
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
-func TestPlannerService_NewPlannerService(t *testing.T) {
+func TestDifferService_NewDifferService(t *testing.T) {
 	t.Run("with nil state", func(t *testing.T) {
-		svc := NewPlannerService(nil)
+		svc := NewDifferService(nil)
 		if svc == nil {
 			t.Fatal("expected non-nil service")
 		}
@@ -23,15 +23,15 @@ func TestPlannerService_NewPlannerService(t *testing.T) {
 		state := &repository.DeploymentState{
 			Services: map[string]*entity.BizService{"test": {}},
 		}
-		svc := NewPlannerService(state)
+		svc := NewDifferService(state)
 		if svc.state.Services["test"] == nil {
 			t.Fatal("expected existing state to be preserved")
 		}
 	})
 }
 
-func TestPlannerService_PlanISPs(t *testing.T) {
-	svc := NewPlannerService(nil)
+func TestDifferService_PlanISPs(t *testing.T) {
+	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
 	scope := &valueobject.Scope{}
 
@@ -47,13 +47,13 @@ func TestPlannerService_PlanISPs(t *testing.T) {
 	}
 }
 
-func TestPlannerService_PlanISPs_Update(t *testing.T) {
+func TestDifferService_PlanISPs_Update(t *testing.T) {
 	state := &repository.DeploymentState{
 		ISPs: map[string]*entity.ISP{
 			"isp1": {Name: "isp1", Type: "cloudflare", Services: []entity.ISPService{"server"}},
 		},
 	}
-	svc := NewPlannerService(state)
+	svc := NewDifferService(state)
 	plan := valueobject.NewPlan()
 	scope := &valueobject.Scope{}
 
@@ -71,13 +71,13 @@ func TestPlannerService_PlanISPs_Update(t *testing.T) {
 	}
 }
 
-func TestPlannerService_PlanISPs_Delete(t *testing.T) {
+func TestDifferService_PlanISPs_Delete(t *testing.T) {
 	state := &repository.DeploymentState{
 		ISPs: map[string]*entity.ISP{
 			"isp1": {Name: "isp1", Type: "cloudflare"},
 		},
 	}
-	svc := NewPlannerService(state)
+	svc := NewDifferService(state)
 	plan := valueobject.NewPlan()
 	scope := &valueobject.Scope{}
 
@@ -389,8 +389,8 @@ func TestServiceEquals(t *testing.T) {
 	}
 }
 
-func TestPlannerService_PlanZones(t *testing.T) {
-	svc := NewPlannerService(nil)
+func TestDifferService_PlanZones(t *testing.T) {
+	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
 	scope := &valueobject.Scope{}
 
@@ -408,8 +408,8 @@ func TestPlannerService_PlanZones(t *testing.T) {
 	}
 }
 
-func TestPlannerService_PlanDomains(t *testing.T) {
-	svc := NewPlannerService(nil)
+func TestDifferService_PlanDomains(t *testing.T) {
+	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
 	scope := &valueobject.Scope{}
 
@@ -424,8 +424,8 @@ func TestPlannerService_PlanDomains(t *testing.T) {
 	}
 }
 
-func TestPlannerService_PlanRecords(t *testing.T) {
-	svc := NewPlannerService(nil)
+func TestDifferService_PlanRecords(t *testing.T) {
+	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
 	scope := &valueobject.Scope{}
 
@@ -440,8 +440,8 @@ func TestPlannerService_PlanRecords(t *testing.T) {
 	}
 }
 
-func TestPlannerService_PlanCertificates(t *testing.T) {
-	svc := NewPlannerService(nil)
+func TestDifferService_PlanCertificates(t *testing.T) {
+	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
 	scope := &valueobject.Scope{}
 
@@ -456,8 +456,8 @@ func TestPlannerService_PlanCertificates(t *testing.T) {
 	}
 }
 
-func TestPlannerService_PlanRegistries(t *testing.T) {
-	svc := NewPlannerService(nil)
+func TestDifferService_PlanRegistries(t *testing.T) {
+	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
 	scope := &valueobject.Scope{}
 
@@ -472,8 +472,8 @@ func TestPlannerService_PlanRegistries(t *testing.T) {
 	}
 }
 
-func TestPlannerService_PlanServers(t *testing.T) {
-	svc := NewPlannerService(nil)
+func TestDifferService_PlanServers(t *testing.T) {
+	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
 	scope := &valueobject.Scope{}
 
@@ -491,8 +491,8 @@ func TestPlannerService_PlanServers(t *testing.T) {
 	}
 }
 
-func TestPlannerService_PlanServices(t *testing.T) {
-	svc := NewPlannerService(nil)
+func TestDifferService_PlanServices(t *testing.T) {
+	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
 	scope := &valueobject.Scope{}
 
@@ -510,8 +510,8 @@ func TestPlannerService_PlanServices(t *testing.T) {
 	}
 }
 
-func TestPlannerService_GetSetState(t *testing.T) {
-	svc := NewPlannerService(nil)
+func TestDifferService_GetSetState(t *testing.T) {
+	svc := NewDifferService(nil)
 
 	state := &repository.DeploymentState{
 		Servers: map[string]*entity.Server{"srv1": {Name: "srv1"}},

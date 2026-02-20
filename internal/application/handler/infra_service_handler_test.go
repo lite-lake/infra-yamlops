@@ -11,33 +11,6 @@ import (
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
-func TestCertificateHandler_EntityType(t *testing.T) {
-	h := NewCertificateHandler()
-	if h.EntityType() != "certificate" {
-		t.Errorf("expected 'certificate', got %s", h.EntityType())
-	}
-}
-
-func TestCertificateHandler_Apply(t *testing.T) {
-	h := NewCertificateHandler()
-	ctx := context.Background()
-	deps := newMockDeps()
-
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "certificate",
-		Name:   "my-cert",
-	}
-
-	result, err := h.Apply(ctx, change, deps)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.Success {
-		t.Error("expected success")
-	}
-}
-
 func TestInfraServiceHandler_EntityType(t *testing.T) {
 	h := NewInfraServiceHandler()
 	if h.EntityType() != "infra_service" {

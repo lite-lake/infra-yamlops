@@ -1,4 +1,4 @@
-package plan
+package deployment
 
 import (
 	"fmt"
@@ -9,7 +9,7 @@ import (
 	"github.com/litelake/yamlops/internal/gate"
 )
 
-func (g *deploymentGenerator) generateGatewayConfigs(config *entity.Config) error {
+func (g *Generator) generateGatewayConfigs(config *entity.Config) error {
 	gatewayServers := make(map[string][]*entity.InfraService)
 	for i := range config.InfraServices {
 		infra := &config.InfraServices[i]
@@ -21,7 +21,7 @@ func (g *deploymentGenerator) generateGatewayConfigs(config *entity.Config) erro
 	for serverName, gateways := range gatewayServers {
 		serverDir := filepath.Join(g.outputDir, serverName)
 		if err := os.MkdirAll(serverDir, 0755); err != nil {
-			return fmt.Errorf("failed to create server directory %s: %w", serverDir, err)
+			return fmt.Errorf("failed to create server directory %s: %w", serverName, err)
 		}
 
 		for _, gw := range gateways {
@@ -34,7 +34,7 @@ func (g *deploymentGenerator) generateGatewayConfigs(config *entity.Config) erro
 	return nil
 }
 
-func (g *deploymentGenerator) generateGatewayConfig(serverDir string, gw *entity.InfraService, config *entity.Config) error {
+func (g *Generator) generateGatewayConfig(serverDir string, gw *entity.InfraService, config *entity.Config) error {
 	serverMap := config.GetServerMap()
 	var hosts []gate.HostRoute
 
@@ -170,7 +170,7 @@ func (g *deploymentGenerator) generateGatewayConfig(serverDir string, gw *entity
 	return nil
 }
 
-func (g *deploymentGenerator) generateGatewayCompose(gw *entity.InfraService, httpPort, httpsPort int) (string, error) {
+func (g *Generator) generateGatewayCompose(gw *entity.InfraService, httpPort, httpsPort int) (string, error) {
 	serviceName := "yo-" + g.env + "-" + gw.Name
 	networkName := "yamlops-" + g.env
 
@@ -196,4 +196,105 @@ networks:
 `, serviceName, gw.Image, serviceName, httpPort, httpPort, httpsPort, httpsPort, networkName, networkName)
 
 	return compose, nil
+}
+
+func (g *Generator) generateInfraGatewayConfig(infra *entity.InfraService, config *entity.Config) (string, error) {
+	var hosts []gate.HostRoute
+
+	serverMap := config.GetServerMap()
+	containerPortToHostPort := make(map[string]int)
+	for _, svc := range config.Services {
+		if svc.Server == infra.Server {
+			for _, port := range svc.Ports {
+				key := fmt.Sprintf("%s:%d", svc.Name, port.Container)
+				containerPortToHostPort[key] = port.Host
+			}
+		}
+	}
+
+	for _, svc := range config.Services {
+		if svc.Server != infra.Server {
+			continue
+		}
+		for _, route := range svc.Gateways {
+			if !route.HasGateway() {
+				continue
+			}
+
+			var backendIP string
+			if server, ok := serverMap[svc.Server]; ok && server.IP.Private != "" {
+				backendIP = server.IP.Private
+			} else {
+				backendIP = "host.docker.internal"
+			}
+
+			hostPort := route.ContainerPort
+			if key := fmt.Sprintf("%s:%d", svc.Name, route.ContainerPort); containerPortToHostPort[key] > 0 {
+				hostPort = containerPortToHostPort[key]
+			}
+			backend := fmt.Sprintf("http://%s:%d", backendIP, hostPort)
+
+			hostname := route.Hostname
+			if hostname == "" {
+				hostname = svc.Name
+			}
+
+			healthPath := "/"
+			if svc.Healthcheck != nil && svc.Healthcheck.Path != "" {
+				healthPath = svc.Healthcheck.Path
+			}
+
+			sslPort := 0
+			if route.HTTPS && infra.GatewayPorts != nil {
+				sslPort = infra.GatewayPorts.HTTPS
+			}
+
+			healthInterval := "30s"
+			healthTimeout := "10s"
+			if svc.Healthcheck != nil {
+				if svc.Healthcheck.Interval != "" {
+					healthInterval = svc.Healthcheck.Interval
+				}
+				if svc.Healthcheck.Timeout != "" {
+					healthTimeout = svc.Healthcheck.Timeout
+				}
+			}
+
+			hosts = append(hosts, gate.HostRoute{
+				Name:                hostname,
+				Port:                infra.GatewayPorts.HTTP,
+				SSLPort:             sslPort,
+				Backend:             []string{backend},
+				HealthCheck:         healthPath,
+				HealthCheckInterval: healthInterval,
+				HealthCheckTimeout:  healthTimeout,
+			})
+		}
+	}
+
+	wafEnabled := false
+	var whitelist []string
+	sslMode := "local"
+	var sslEndpoint string
+	if infra.GatewayWAF != nil {
+		wafEnabled = infra.GatewayWAF.Enabled
+		whitelist = infra.GatewayWAF.Whitelist
+	}
+	if infra.GatewaySSL != nil {
+		sslMode = infra.GatewaySSL.Mode
+		sslEndpoint = infra.GatewaySSL.Endpoint
+	}
+
+	gatewayConfig := &gate.GatewayConfig{
+		Port:               infra.GatewayPorts.HTTP,
+		LogLevel:           infra.GatewayLogLevel,
+		WAFEnabled:         wafEnabled,
+		Whitelist:          whitelist,
+		SSLMode:            sslMode,
+		SSLEndpoint:        sslEndpoint,
+		SSLAutoUpdate:      true,
+		SSLUpdateCheckTime: "00:00-00:59",
+	}
+
+	return g.gateGen.Generate(gatewayConfig, hosts)
 }

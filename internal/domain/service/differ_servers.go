@@ -7,7 +7,7 @@ import (
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
-func (s *PlannerService) PlanServers(plan *valueobject.Plan, cfgMap map[string]*entity.Server, zoneMap map[string]*entity.Zone, scope *valueobject.Scope) {
+func (s *DifferService) PlanServers(plan *valueobject.Plan, cfgMap map[string]*entity.Server, zoneMap map[string]*entity.Zone, scope *valueobject.Scope) {
 	for name, state := range s.state.Servers {
 		if _, exists := cfgMap[name]; !exists {
 			zoneName := ""
@@ -67,7 +67,7 @@ func ServerEquals(a, b *entity.Server) bool {
 		a.IP.Public == b.IP.Public && a.IP.Private == b.IP.Private
 }
 
-func (s *PlannerService) PlanServices(plan *valueobject.Plan, cfgMap map[string]*entity.BizService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
+func (s *DifferService) PlanServices(plan *valueobject.Plan, cfgMap map[string]*entity.BizService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
 	for name, state := range s.state.Services {
 		if _, exists := cfgMap[name]; !exists {
 			serverName := state.Server
@@ -160,7 +160,7 @@ func ServiceEquals(a, b *entity.BizService) bool {
 	return true
 }
 
-func (s *PlannerService) PlanInfraServices(plan *valueobject.Plan, cfgMap map[string]*entity.InfraService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
+func (s *DifferService) PlanInfraServices(plan *valueobject.Plan, cfgMap map[string]*entity.InfraService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
 	for name, state := range s.state.InfraServices {
 		if _, exists := cfgMap[name]; !exists {
 			serverName := state.Server

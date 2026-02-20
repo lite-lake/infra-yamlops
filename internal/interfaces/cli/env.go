@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	serverpkg "github.com/litelake/yamlops/internal/environment"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
-	serverpkg "github.com/litelake/yamlops/internal/server"
 	"github.com/litelake/yamlops/internal/ssh"
 )
 

@@ -7,6 +7,7 @@ import (
 	"github.com/litelake/yamlops/internal/application/handler"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
+	infra "github.com/litelake/yamlops/internal/infrastructure/dns"
 	"github.com/litelake/yamlops/internal/providers/dns"
 )
 
@@ -59,7 +60,7 @@ func NewExecutor(cfg *ExecutorConfig) *Executor {
 		cfg.SSHPool = NewSSHPool()
 	}
 	if cfg.DNSFactory == nil {
-		cfg.DNSFactory = dns.NewFactory()
+		cfg.DNSFactory = infra.NewFactory()
 	}
 
 	return &Executor{
@@ -105,19 +106,13 @@ func (e *Executor) registerHandlers() {
 		{"service", handler.NewServiceHandler()},
 		{"infra_service", handler.NewInfraServiceHandler()},
 		{"server", handler.NewServerHandler()},
-		{"certificate", handler.NewCertificateHandler()},
-		{"registry", handler.NewRegistryHandler()},
 	}
 	for _, h := range defaultHandlers {
 		if _, ok := e.registry.Get(h.entity); !ok {
 			e.registry.Register(h.handler)
 		}
 	}
-	for _, et := range []string{"isp", "zone", "domain"} {
-		if _, ok := e.registry.Get(et); !ok {
-			e.registry.Register(handler.NewNoopHandler(et))
-		}
-	}
+	handler.RegisterNoopHandlers(e.registry)
 }
 
 func (e *Executor) applyChange(ctx context.Context, ch *valueobject.Change) *handler.Result {

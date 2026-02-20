@@ -7,7 +7,7 @@ import (
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
-func (s *PlannerService) PlanRecords(plan *valueobject.Plan, cfgRecords []entity.DNSRecord, scope *valueobject.Scope) {
+func (s *DifferService) PlanRecords(plan *valueobject.Plan, cfgRecords []entity.DNSRecord, scope *valueobject.Scope) {
 	recordKey := func(r *entity.DNSRecord) string {
 		return fmt.Sprintf("%s:%s:%s", r.Domain, r.Type, r.Name)
 	}

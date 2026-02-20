@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	serverpkg "github.com/litelake/yamlops/internal/server"
+	serverpkg "github.com/litelake/yamlops/internal/environment"
 	"github.com/litelake/yamlops/internal/ssh"
 )
 
