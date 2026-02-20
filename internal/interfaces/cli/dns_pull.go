@@ -328,7 +328,7 @@ func createDNSProvider(isp *entity.ISP, secrets map[string]string) (dns.Provider
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve access_key_secret: %w", err)
 		}
-		return dns.NewAliyunProvider(accessKeyID, accessKeySecret), nil
+		return dns.NewAliyunProvider(accessKeyID, accessKeySecret)
 	case entity.ISPTypeCloudflare:
 		apiTokenRef := isp.Credentials["api_token"]
 		apiToken, err := (&apiTokenRef).Resolve(secrets)
@@ -354,7 +354,7 @@ func createDNSProvider(isp *entity.ISP, secrets map[string]string) (dns.Provider
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve secret_key: %w", err)
 		}
-		return dns.NewTencentProvider(secretID, secretKey), nil
+		return dns.NewTencentProvider(secretID, secretKey)
 	default:
 		return nil, fmt.Errorf("unsupported DNS provider type: %s (ISP name: %s)", isp.Type, isp.Name)
 	}

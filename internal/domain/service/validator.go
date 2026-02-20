@@ -94,9 +94,6 @@ func (v *Validator) validateISPReferences() error {
 	for _, isp := range v.cfg.ISPs {
 		for _, ref := range isp.Credentials {
 			if ref.Secret != "" {
-				if _, ok := v.isps[ref.Secret]; ok {
-					continue
-				}
 				if _, ok := v.secrets[ref.Secret]; !ok {
 					return fmt.Errorf("%w: secret '%s' referenced by isp '%s' does not exist", domain.ErrMissingReference, ref.Secret, isp.Name)
 				}

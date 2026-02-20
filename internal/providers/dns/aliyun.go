@@ -14,7 +14,7 @@ type AliyunProvider struct {
 	client *alidns.Client
 }
 
-func NewAliyunProvider(accessKeyID, accessKeySecret string) Provider {
+func NewAliyunProvider(accessKeyID, accessKeySecret string) (*AliyunProvider, error) {
 	config := &openapi.Config{
 		AccessKeyId:     tea.String(accessKeyID),
 		AccessKeySecret: tea.String(accessKeySecret),
@@ -22,9 +22,9 @@ func NewAliyunProvider(accessKeyID, accessKeySecret string) Provider {
 	config.Endpoint = tea.String("dns.aliyuncs.com")
 	client, err := alidns.NewClient(config)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create aliyun dns client: %v", err))
+		return nil, fmt.Errorf("create aliyun dns client: %w", err)
 	}
-	return &AliyunProvider{client: client}
+	return &AliyunProvider{client: client}, nil
 }
 
 func (p *AliyunProvider) Name() string {
@@ -206,21 +206,7 @@ func (p *AliyunProvider) BatchDeleteRecords(domain string, recordIDs []string) e
 }
 
 func (p *AliyunProvider) EnsureRecord(domain string, record *DNSRecord) error {
-	records, err := p.ListRecords(domain)
-	if err != nil {
-		return err
-	}
-
-	for _, r := range records {
-		if r.Name == record.Name && r.Type == record.Type {
-			if r.Value == record.Value && r.TTL == record.TTL {
-				return nil
-			}
-			return p.UpdateRecord(domain, r.ID, record)
-		}
-	}
-
-	return p.CreateRecord(domain, record)
+	return EnsureRecord(p, domain, record)
 }
 
 func ParseAliyunTTL(ttlStr string) (int64, error) {

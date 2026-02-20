@@ -7,8 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/litelake/yamlops/internal/domain/valueobject"
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
-	"github.com/litelake/yamlops/internal/plan"
 )
 
 func newPlanCommand(ctx *Context) *cobra.Command {
@@ -37,19 +35,7 @@ func newPlanCommand(ctx *Context) *cobra.Command {
 }
 
 func runPlan(ctx *Context, scope string, filters Filters) {
-	loader := persistence.NewConfigLoader(ctx.ConfigDir)
-	cfg, err := loader.Load(nil, ctx.Env)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := loader.Validate(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "Validation error: %v\n", err)
-		os.Exit(1)
-	}
-
-	planner := plan.NewPlanner(cfg, ctx.Env)
+	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
 	planScope := &valueobject.Scope{
 		Domain:  filters.Domain,
 		Zone:    filters.Zone,
@@ -57,9 +43,9 @@ func runPlan(ctx *Context, scope string, filters Filters) {
 		Service: filters.Service,
 	}
 
-	executionPlan, err := planner.Plan(planScope)
+	executionPlan, _, err := wf.Plan(nil, "", planScope)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error generating plan: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
@@ -68,9 +54,13 @@ func runPlan(ctx *Context, scope string, filters Filters) {
 		return
 	}
 
+	displayPlan(executionPlan)
+}
+
+func displayPlan(p *valueobject.Plan) {
 	fmt.Println("Execution Plan:")
 	fmt.Println("===============")
-	for _, ch := range executionPlan.Changes {
+	for _, ch := range p.Changes {
 		var prefix string
 		switch ch.Type {
 		case valueobject.ChangeTypeCreate:

@@ -10,16 +10,16 @@ import (
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
-		m.Width = msg.Width
-		m.Height = msg.Height
+		m.UI.Width = msg.Width
+		m.UI.Height = msg.Height
 		return m, nil
 	case applyProgressMsg:
-		if m.ViewState == ViewStateApplyProgress && !m.ApplyComplete {
-			if m.ApplyInProgress {
-				m.ApplyProgress++
-				if m.ApplyProgress >= m.ApplyTotal {
+		if m.ViewState == ViewStateApplyProgress && !m.Action.ApplyComplete {
+			if m.Action.ApplyInProgress {
+				m.Action.ApplyProgress++
+				if m.Action.ApplyProgress >= m.Action.ApplyTotal {
 					m.executeApply()
-					m.ApplyInProgress = false
+					m.Action.ApplyInProgress = false
 					m.ViewState = ViewStateApplyComplete
 					return m, nil
 				}
@@ -78,39 +78,39 @@ func (m Model) handleEscape() (tea.Model, tea.Cmd) {
 		} else {
 			m.ViewState = ViewStateServiceManagement
 		}
-		m.ErrorMessage = ""
+		m.UI.ErrorMessage = ""
 	case ViewStateServiceManagement:
 		m.ViewState = ViewStateMainMenu
 	case ViewStateServerSetup, ViewStateServerCheck:
 		m.ViewState = ViewStateServiceManagement
-		m.ErrorMessage = ""
+		m.UI.ErrorMessage = ""
 	case ViewStateDNSManagement:
 		m.ViewState = ViewStateMainMenu
 	case ViewStateDNSPullDomains, ViewStateDNSPullRecords:
 		m.ViewState = ViewStateDNSManagement
 	case ViewStateDNSPullDiff:
-		m.DNSPullDiffs = nil
-		m.DNSRecordDiffs = nil
-		m.DNSPullSelected = nil
+		m.DNS.DNSPullDiffs = nil
+		m.DNS.DNSRecordDiffs = nil
+		m.DNS.DNSPullSelected = nil
 		m.ViewState = ViewStateDNSManagement
 	case ViewStateServiceCleanup:
-		m.CleanupResults = nil
-		m.CleanupSelected = nil
+		m.Cleanup.CleanupResults = nil
+		m.Cleanup.CleanupSelected = nil
 		m.ViewState = ViewStateServiceManagement
 	case ViewStateServiceCleanupConfirm:
 		m.ViewState = ViewStateServiceCleanup
 	case ViewStateServiceCleanupComplete:
-		m.CleanupResults = nil
-		m.CleanupSelected = nil
+		m.Cleanup.CleanupResults = nil
+		m.Cleanup.CleanupSelected = nil
 		m.ViewState = ViewStateServiceManagement
 	case ViewStateServiceStop:
 		m.ViewState = ViewStateServiceManagement
-		m.StopSelected = nil
+		m.Stop.StopSelected = nil
 	case ViewStateServiceStopConfirm:
 		m.ViewState = ViewStateServiceStop
 	case ViewStateServiceStopComplete:
-		m.StopResults = nil
-		m.StopSelected = nil
+		m.Stop.StopResults = nil
+		m.Stop.StopSelected = nil
 		m.ViewState = ViewStateServiceManagement
 	case ViewStatePlan:
 		m.ViewState = ViewStateTree
@@ -118,7 +118,7 @@ func (m Model) handleEscape() (tea.Model, tea.Cmd) {
 		m.ViewState = ViewStatePlan
 	default:
 		m.ViewState = ViewStateMainMenu
-		m.ErrorMessage = ""
+		m.UI.ErrorMessage = ""
 	}
 	return m, nil
 }
@@ -128,13 +128,13 @@ func (m Model) handleCancel() (tea.Model, tea.Cmd) {
 	case ViewStateApplyConfirm:
 		m.ViewState = ViewStatePlan
 	case ViewStateDNSPullDiff:
-		m.DNSPullDiffs = nil
-		m.DNSRecordDiffs = nil
-		m.DNSPullSelected = nil
+		m.DNS.DNSPullDiffs = nil
+		m.DNS.DNSRecordDiffs = nil
+		m.DNS.DNSPullSelected = nil
 		m.ViewState = ViewStateDNSManagement
 	default:
 		m.ViewState = ViewStateMainMenu
-		m.ErrorMessage = ""
+		m.UI.ErrorMessage = ""
 	}
 	return m, nil
 }

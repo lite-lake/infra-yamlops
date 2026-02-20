@@ -16,7 +16,7 @@ func (h *RegistryHandler) EntityType() string {
 	return "registry"
 }
 
-func (h *RegistryHandler) Apply(ctx context.Context, change *valueobject.Change, deps *Deps) (*Result, error) {
+func (h *RegistryHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
 	return &Result{
 		Change:  change,
 		Success: true,

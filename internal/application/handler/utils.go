@@ -1,10 +1,19 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"os"
 
+	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
+)
+
+var (
+	ErrSSHClientNotAvailable = errors.New("SSH client not available")
+	ErrISPNotFound           = errors.New("ISP not found")
+	ErrISPNoDNSService       = errors.New("ISP does not provide DNS service")
+	ErrServerNotRegistered   = errors.New("server not registered")
 )
 
 func ExtractServerFromChange(ch *valueobject.Change) string {
@@ -34,7 +43,7 @@ func ExtractServerFromChange(ch *valueobject.Change) string {
 }
 
 func SyncContent(client SSHClient, content, remotePath string) error {
-	tmpFile, err := os.CreateTemp("", "yamlops-*.yml")
+	tmpFile, err := os.CreateTemp("", constants.TempFilePattern)
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
 	}

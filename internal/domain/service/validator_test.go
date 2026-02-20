@@ -57,6 +57,21 @@ func TestValidator_ISPReferences(t *testing.T) {
 			t.Errorf("expected missing secret error, got %v", err)
 		}
 	})
+
+	t.Run("secret name same as isp name should fail", func(t *testing.T) {
+		cfg := &entity.Config{
+			ISPs: []entity.ISP{{
+				Name:        "my_secret",
+				Services:    []entity.ISPService{"server"},
+				Credentials: map[string]valueobject.SecretRef{"key": {Secret: "my_secret"}},
+			}},
+		}
+		validator := NewValidator(cfg)
+		err := validator.Validate()
+		if err == nil || !strings.Contains(err.Error(), "secret 'my_secret' referenced by isp") {
+			t.Errorf("expected missing secret error (bug: was checking isps instead of secrets), got %v", err)
+		}
+	})
 }
 
 func TestValidator_ZoneReferences(t *testing.T) {

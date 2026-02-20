@@ -91,7 +91,7 @@ func (m Model) renderTree() string {
 		m.renderNodeToLines(node, 0, &idx, &lines)
 	}
 
-	availableHeight := m.Height - 8
+	availableHeight := m.UI.Height - 8
 	if availableHeight < 5 {
 		availableHeight = 5
 	}
@@ -101,7 +101,7 @@ func (m Model) renderTree() string {
 		treeHeight = 3
 	}
 
-	if m.ErrorMessage != "" {
+	if m.UI.ErrorMessage != "" {
 		treeHeight -= 2
 		if treeHeight < 3 {
 			treeHeight = 3
@@ -109,16 +109,16 @@ func (m Model) renderTree() string {
 	}
 
 	totalNodes := len(lines)
-	viewport := NewViewport(m.CursorIndex, totalNodes, treeHeight)
+	viewport := NewViewport(m.Tree.CursorIndex, totalNodes, treeHeight)
 	viewport.EnsureCursorVisible()
-	m.ScrollOffset = viewport.Offset
+	m.UI.ScrollOffset = viewport.Offset
 
 	var content strings.Builder
 	content.WriteString(m.renderTabs())
 	content.WriteString("\n\n")
 
-	if m.ErrorMessage != "" {
-		content.WriteString(ChangeDeleteStyle.Render("Error: " + m.ErrorMessage))
+	if m.UI.ErrorMessage != "" {
+		content.WriteString(ChangeDeleteStyle.Render("Error: " + m.UI.ErrorMessage))
 		content.WriteString("\n\n")
 	}
 
@@ -144,7 +144,7 @@ func (m Model) renderNodeToLines(node *TreeNode, depth int, idx *int, lines *[]s
 		prefix = indent[:len(indent)-2] + "├─"
 	}
 	cursor := "  "
-	if *idx == m.CursorIndex {
+	if *idx == m.Tree.CursorIndex {
 		cursor = "> "
 	}
 	selectIcon := "○"
@@ -176,7 +176,7 @@ func (m Model) renderNodeToLines(node *TreeNode, depth int, idx *int, lines *[]s
 	if node.Info != "" {
 		line = fmt.Sprintf("%s  %s", line, node.Info)
 	}
-	if *idx == m.CursorIndex {
+	if *idx == m.Tree.CursorIndex {
 		line = SelectedStyle.Render(line)
 	}
 	*lines = append(*lines, line)
@@ -199,7 +199,7 @@ func (m Model) renderNodeLastChildToLines(node *TreeNode, depth int, idx *int, l
 		prefix = indent[:len(indent)-2] + "└─"
 	}
 	cursor := "  "
-	if *idx == m.CursorIndex {
+	if *idx == m.Tree.CursorIndex {
 		cursor = "> "
 	}
 	selectIcon := "○"
@@ -230,7 +230,7 @@ func (m Model) renderNodeLastChildToLines(node *TreeNode, depth int, idx *int, l
 	if node.Info != "" {
 		line = fmt.Sprintf("%s  %s", line, node.Info)
 	}
-	if *idx == m.CursorIndex {
+	if *idx == m.Tree.CursorIndex {
 		line = SelectedStyle.Render(line)
 	}
 	*lines = append(*lines, line)
@@ -264,16 +264,16 @@ func (m Model) renderPlan() string {
 	var lines []string
 	lines = append(lines, TitleStyle.Render("Execution Plan"))
 	lines = append(lines, "")
-	if m.ErrorMessage != "" {
-		lines = append(lines, ChangeDeleteStyle.Render("Error: "+m.ErrorMessage))
+	if m.UI.ErrorMessage != "" {
+		lines = append(lines, ChangeDeleteStyle.Render("Error: "+m.UI.ErrorMessage))
 		lines = append(lines, "")
 		lines = append(lines, HelpStyle.Render("Esc back  q quit"))
 		return strings.Join(lines, "\n")
 	}
-	if m.PlanResult == nil || len(m.PlanResult.Changes) == 0 {
+	if m.Action.PlanResult == nil || len(m.Action.PlanResult.Changes) == 0 {
 		lines = append(lines, "No changes detected.")
 	} else {
-		for _, ch := range m.PlanResult.Changes {
+		for _, ch := range m.Action.PlanResult.Changes {
 			style := ChangeNoopStyle
 			prefix := "~"
 			switch ch.Type {
@@ -301,14 +301,14 @@ func (m Model) renderPlan() string {
 	lines = append(lines, "")
 	lines = append(lines, ChangeCreateStyle.Render("Press Enter to apply"))
 
-	availableHeight := m.Height - 6
+	availableHeight := m.UI.Height - 6
 	if availableHeight < 5 {
 		availableHeight = 5
 	}
 
 	totalLines := len(lines)
 	viewport := NewViewport(0, totalLines, availableHeight)
-	m.ScrollOffset = viewport.Offset
+	m.UI.ScrollOffset = viewport.Offset
 
 	var content strings.Builder
 	for i := viewport.VisibleStart(); i < viewport.VisibleEnd() && i < len(lines); i++ {
@@ -329,9 +329,9 @@ func (m Model) renderApplyConfirm() string {
 	content.WriteString(TitleStyle.Render("Confirm Apply"))
 	content.WriteString("\n\n")
 	content.WriteString("Apply the following changes?\n\n")
-	if m.PlanResult != nil {
+	if m.Action.PlanResult != nil {
 		nonNoopCount := 0
-		for _, ch := range m.PlanResult.Changes {
+		for _, ch := range m.Action.PlanResult.Changes {
 			if ch.Type != valueobject.ChangeTypeNoop {
 				nonNoopCount++
 			}
@@ -341,7 +341,7 @@ func (m Model) renderApplyConfirm() string {
 	content.WriteString("\n")
 	options := []string{"Confirm", "Cancel"}
 	for i, opt := range options {
-		if i == m.ConfirmSelected {
+		if i == m.Action.ConfirmSelected {
 			content.WriteString(SelectedStyle.Render("▸ " + opt))
 		} else {
 			content.WriteString("  " + opt)
@@ -355,7 +355,7 @@ func (m Model) renderApplyProgress() string {
 	var content strings.Builder
 	content.WriteString(TitleStyle.Render("Applying..."))
 	content.WriteString("\n\n")
-	progress := float64(m.ApplyProgress) / float64(m.ApplyTotal)
+	progress := float64(m.Action.ApplyProgress) / float64(m.Action.ApplyTotal)
 	barWidth := 30
 	filled := int(progress * float64(barWidth))
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", barWidth-filled)
@@ -369,10 +369,10 @@ func (m Model) renderApplyComplete() string {
 	lines = append(lines, TitleStyle.Render("Complete"))
 	lines = append(lines, "")
 
-	if m.ApplyResults != nil {
+	if m.Action.ApplyResults != nil {
 		successCount := 0
 		failCount := 0
-		for _, result := range m.ApplyResults {
+		for _, result := range m.Action.ApplyResults {
 			if result.Success {
 				successCount++
 				lines = append(lines, ChangeCreateStyle.Render(fmt.Sprintf("✓ %s: %s", result.Change.Entity, result.Change.Name)))
@@ -390,14 +390,14 @@ func (m Model) renderApplyComplete() string {
 	lines = append(lines, "")
 	lines = append(lines, HelpStyle.Render("Enter back  q quit"))
 
-	availableHeight := m.Height - 6
+	availableHeight := m.UI.Height - 6
 	if availableHeight < 5 {
 		availableHeight = 5
 	}
 
 	totalLines := len(lines)
 	viewport := NewViewport(0, totalLines, availableHeight)
-	m.ScrollOffset = viewport.Offset
+	m.UI.ScrollOffset = viewport.Offset
 
 	var content strings.Builder
 	for i := viewport.VisibleStart(); i < viewport.VisibleEnd() && i < len(lines); i++ {

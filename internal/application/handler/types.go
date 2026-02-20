@@ -9,23 +9,129 @@ import (
 	"github.com/litelake/yamlops/internal/ssh"
 )
 
-type Handler interface {
-	EntityType() string
-	Apply(ctx context.Context, change *valueobject.Change, deps *Deps) (*Result, error)
+type DNSDeps interface {
+	DNSProvider(ispName string) (DNSProvider, error)
+	Domain(name string) (*entity.Domain, bool)
+	ISP(name string) (*entity.ISP, bool)
 }
 
-type Deps struct {
-	SSHClient   SSHClient
-	SSHError    error
-	DNSProvider DNSProvider
-	DNSFactory  *dns.Factory
-	Secrets     map[string]string
-	Domains     map[string]*entity.Domain
-	ISPs        map[string]*entity.ISP
-	Servers     map[string]*ServerInfo
-	WorkDir     string
-	Env         string
+type ServiceDeps interface {
+	SSHClient(server string) (SSHClient, error)
+	ServerInfo(name string) (*ServerInfo, bool)
+	WorkDir() string
+	Env() string
 }
+
+type CommonDeps interface {
+	ResolveSecret(ref *valueobject.SecretRef) (string, error)
+}
+
+type DepsProvider interface {
+	DNSDeps
+	ServiceDeps
+	CommonDeps
+}
+
+type DNSFactory interface {
+	Create(isp *entity.ISP, secrets map[string]string) (dns.Provider, error)
+}
+
+type Handler interface {
+	EntityType() string
+	Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error)
+}
+
+type BaseDeps struct {
+	sshClient  SSHClient
+	sshError   error
+	dnsFactory DNSFactory
+	secrets    map[string]string
+	domains    map[string]*entity.Domain
+	isps       map[string]*entity.ISP
+	servers    map[string]*ServerInfo
+	workDir    string
+	env        string
+}
+
+func NewBaseDeps() *BaseDeps {
+	return &BaseDeps{
+		secrets: make(map[string]string),
+		domains: make(map[string]*entity.Domain),
+		isps:    make(map[string]*entity.ISP),
+		servers: make(map[string]*ServerInfo),
+	}
+}
+
+func (d *BaseDeps) SetSSHClient(client SSHClient, err error) {
+	d.sshClient = client
+	d.sshError = err
+}
+
+func (d *BaseDeps) SetDNSFactory(f DNSFactory)     { d.dnsFactory = f }
+func (d *BaseDeps) SetSecrets(s map[string]string) { d.secrets = s }
+func (d *BaseDeps) SetDomains(domains map[string]*entity.Domain) {
+	d.domains = domains
+}
+func (d *BaseDeps) SetISPs(isps map[string]*entity.ISP) { d.isps = isps }
+func (d *BaseDeps) SetServers(servers map[string]*ServerInfo) {
+	d.servers = servers
+}
+func (d *BaseDeps) SetWorkDir(w string) { d.workDir = w }
+func (d *BaseDeps) SetEnv(e string)     { d.env = e }
+
+func (d *BaseDeps) DNSProvider(ispName string) (DNSProvider, error) {
+	isp, ok := d.isps[ispName]
+	if !ok {
+		return nil, ErrISPNotFound
+	}
+	if !isp.HasService(entity.ISPServiceDNS) {
+		return nil, ErrISPNoDNSService
+	}
+	provider, err := d.dnsFactory.Create(isp, d.secrets)
+	if err != nil {
+		return nil, err
+	}
+	return WrapDNSProvider(provider), nil
+}
+
+func (d *BaseDeps) Domain(name string) (*entity.Domain, bool) {
+	domain, ok := d.domains[name]
+	return domain, ok
+}
+
+func (d *BaseDeps) ISP(name string) (*entity.ISP, bool) {
+	isp, ok := d.isps[name]
+	return isp, ok
+}
+
+func (d *BaseDeps) SSHClient(server string) (SSHClient, error) {
+	if _, ok := d.servers[server]; !ok {
+		return nil, ErrServerNotRegistered
+	}
+	if d.sshClient == nil {
+		if d.sshError != nil {
+			return nil, d.sshError
+		}
+		return nil, ErrSSHClientNotAvailable
+	}
+	return d.sshClient, nil
+}
+
+func (d *BaseDeps) ServerInfo(name string) (*ServerInfo, bool) {
+	info, ok := d.servers[name]
+	return info, ok
+}
+
+func (d *BaseDeps) WorkDir() string { return d.workDir }
+func (d *BaseDeps) Env() string     { return d.env }
+
+func (d *BaseDeps) ResolveSecret(ref *valueobject.SecretRef) (string, error) {
+	return ref.Resolve(d.secrets)
+}
+
+func (d *BaseDeps) RawSSHClient() SSHClient    { return d.sshClient }
+func (d *BaseDeps) RawSSHError() error         { return d.sshError }
+func (d *BaseDeps) Secrets() map[string]string { return d.secrets }
 
 type ServerInfo struct {
 	Host     string

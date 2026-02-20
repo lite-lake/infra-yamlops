@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -17,10 +16,10 @@ type ServiceHealthcheck struct {
 
 func (h *ServiceHealthcheck) Validate() error {
 	if h.Path == "" {
-		return errors.New("healthcheck path is required")
+		return domain.RequiredField("healthcheck path")
 	}
 	if !strings.HasPrefix(h.Path, "/") {
-		return errors.New("healthcheck path must start with /")
+		return fmt.Errorf("%w: healthcheck path must start with /", domain.ErrInvalidDomain)
 	}
 	return nil
 }
@@ -41,7 +40,7 @@ func (v *ServiceVolume) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if err := unmarshal(&short); err == nil {
 		parts := strings.SplitN(short, ":", 2)
 		if len(parts) != 2 {
-			return errors.New("invalid volume format, expected source:target")
+			return fmt.Errorf("%w: invalid volume format, expected source:target", domain.ErrInvalidDomain)
 		}
 		v.Source = parts[0]
 		v.Target = parts[1]
@@ -61,10 +60,10 @@ func (v *ServiceVolume) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 func (v *ServiceVolume) Validate() error {
 	if v.Source == "" {
-		return errors.New("volume source is required")
+		return domain.RequiredField("volume source")
 	}
 	if v.Target == "" {
-		return errors.New("volume target is required")
+		return domain.RequiredField("volume target")
 	}
 	return nil
 }
@@ -83,7 +82,7 @@ func (p *ServicePort) Validate() error {
 		return fmt.Errorf("%w: host port must be between 1 and 65535", domain.ErrInvalidPort)
 	}
 	if p.Protocol != "" && p.Protocol != "tcp" && p.Protocol != "udp" {
-		return errors.New("protocol must be 'tcp' or 'udp'")
+		return fmt.Errorf("%w: protocol must be 'tcp' or 'udp'", domain.ErrInvalidProtocol)
 	}
 	return nil
 }
@@ -98,7 +97,7 @@ type ServiceGatewayRoute struct {
 
 func (r *ServiceGatewayRoute) Validate() error {
 	if r.Hostname == "" {
-		return errors.New("gateway hostname is required")
+		return domain.RequiredField("gateway hostname")
 	}
 	if r.ContainerPort <= 0 || r.ContainerPort > 65535 {
 		return fmt.Errorf("%w: container_port must be between 1 and 65535", domain.ErrInvalidPort)
@@ -133,10 +132,10 @@ func (s *BizService) Validate() error {
 		return fmt.Errorf("%w: service name is required", domain.ErrInvalidName)
 	}
 	if s.Server == "" {
-		return errors.New("server is required")
+		return domain.RequiredField("server")
 	}
 	if s.Image == "" {
-		return errors.New("image is required")
+		return domain.RequiredField("image")
 	}
 	for i, port := range s.Ports {
 		if err := port.Validate(); err != nil {

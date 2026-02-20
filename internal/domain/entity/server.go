@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
 	"net"
 
@@ -33,13 +32,13 @@ type ServerSSH struct {
 
 func (s *ServerSSH) Validate() error {
 	if s.Host == "" {
-		return errors.New("ssh host is required")
+		return domain.RequiredField("ssh host")
 	}
 	if s.Port <= 0 || s.Port > 65535 {
 		return fmt.Errorf("%w: ssh port must be between 1 and 65535", domain.ErrInvalidPort)
 	}
 	if s.User == "" {
-		return errors.New("ssh user is required")
+		return domain.RequiredField("ssh user")
 	}
 	if err := s.Password.Validate(); err != nil {
 		return fmt.Errorf("ssh password: %w", err)
@@ -67,7 +66,7 @@ func (s *Server) Validate() error {
 		return fmt.Errorf("%w: server name is required", domain.ErrInvalidName)
 	}
 	if s.Zone == "" {
-		return errors.New("zone is required")
+		return domain.RequiredField("zone")
 	}
 	if err := s.IP.Validate(); err != nil {
 		return err

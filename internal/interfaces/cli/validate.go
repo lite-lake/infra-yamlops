@@ -5,8 +5,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 )
 
 func newValidateCommand(ctx *Context) *cobra.Command {
@@ -24,17 +22,10 @@ func newValidateCommand(ctx *Context) *cobra.Command {
 }
 
 func runValidate(ctx *Context) {
-	loader := persistence.NewConfigLoader(ctx.ConfigDir)
-	cfg, err := loader.Load(nil, ctx.Env)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
+	if _, err := wf.LoadAndValidate(nil); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
-
-	if err := loader.Validate(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "Validation error: %v\n", err)
-		os.Exit(1)
-	}
-
 	fmt.Println("Configuration is valid.")
 }

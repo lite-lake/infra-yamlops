@@ -7,8 +7,8 @@ import (
 
 func TestModel_RenderTree(t *testing.T) {
 	m := NewModel("demo", "../../..")
-	m.Width = 80
-	m.Height = 24
+	m.UI.Width = 80
+	m.UI.Height = 24
 	m.ViewState = ViewStateTree
 
 	view := m.View()
@@ -54,8 +54,8 @@ func TestModel_Selection(t *testing.T) {
 
 	initialSelected := m.countSelected()
 
-	if len(m.TreeNodes) > 0 && len(m.TreeNodes[0].Children) > 0 {
-		leaf := m.TreeNodes[0].Children[0]
+	if len(m.Tree.TreeNodes) > 0 && len(m.Tree.TreeNodes[0].Children) > 0 {
+		leaf := m.Tree.TreeNodes[0].Children[0]
 		if len(leaf.Children) > 0 {
 			leaf = leaf.Children[0]
 		}
@@ -73,15 +73,15 @@ func TestModel_Navigation(t *testing.T) {
 	m := NewModel("demo", "../../..")
 	m.ViewState = ViewStateTree
 
-	initialCursor := m.CursorIndex
+	initialCursor := m.Tree.CursorIndex
 
 	m = m.handleDown()
-	if m.CursorIndex <= initialCursor {
+	if m.Tree.CursorIndex <= initialCursor {
 		t.Error("Cursor should move down")
 	}
 
 	m = m.handleUp()
-	if m.CursorIndex >= initialCursor+1 {
+	if m.Tree.CursorIndex >= initialCursor+1 {
 		t.Error("Cursor should move up")
 	}
 }
@@ -89,11 +89,11 @@ func TestModel_Navigation(t *testing.T) {
 func TestModel_DNSTree(t *testing.T) {
 	m := NewModel("demo", "../../..")
 
-	if len(m.DNSTreeNodes) == 0 {
+	if len(m.Tree.DNSTreeNodes) == 0 {
 		t.Error("DNS tree should be built")
 	}
 
-	for _, node := range m.DNSTreeNodes {
+	for _, node := range m.Tree.DNSTreeNodes {
 		if node.Type != NodeTypeDomain {
 			t.Errorf("DNS tree root should be domain type, got %s", node.Type)
 		}
@@ -104,12 +104,12 @@ func TestModel_GeneratePlan(t *testing.T) {
 	m := NewModel("demo", "../../..")
 	m.ViewState = ViewStateTree
 
-	for _, node := range m.TreeNodes {
+	for _, node := range m.Tree.TreeNodes {
 		node.SelectRecursive(false)
 	}
 
-	if len(m.TreeNodes) > 0 && len(m.TreeNodes[0].Children) > 0 {
-		server := m.TreeNodes[0].Children[0]
+	if len(m.Tree.TreeNodes) > 0 && len(m.Tree.TreeNodes[0].Children) > 0 {
+		server := m.Tree.TreeNodes[0].Children[0]
 		if len(server.Children) > 0 {
 			for _, child := range server.Children {
 				if child.Type == NodeTypeBiz || child.Type == NodeTypeInfra {
@@ -122,21 +122,21 @@ func TestModel_GeneratePlan(t *testing.T) {
 
 	m.generatePlan()
 
-	if m.ErrorMessage != "" {
-		t.Logf("Plan generation message: %s", m.ErrorMessage)
+	if m.UI.ErrorMessage != "" {
+		t.Logf("Plan generation message: %s", m.UI.ErrorMessage)
 	}
 
-	if m.PlanResult == nil {
+	if m.Action.PlanResult == nil {
 		t.Log("Plan result is nil (expected for empty state)")
 	}
 }
 
 func TestModel_RenderPlan(t *testing.T) {
 	m := NewModel("demo", "../../..")
-	m.Width = 80
-	m.Height = 24
+	m.UI.Width = 80
+	m.UI.Height = 24
 	m.ViewState = ViewStatePlan
-	m.PlanResult = nil
+	m.Action.PlanResult = nil
 
 	view := m.View()
 
@@ -147,10 +147,10 @@ func TestModel_RenderPlan(t *testing.T) {
 
 func TestModel_RenderApplyConfirm(t *testing.T) {
 	m := NewModel("demo", "../../..")
-	m.Width = 80
-	m.Height = 24
+	m.UI.Width = 80
+	m.UI.Height = 24
 	m.ViewState = ViewStateApplyConfirm
-	m.ConfirmSelected = 0
+	m.Action.ConfirmSelected = 0
 
 	view := m.View()
 
@@ -161,11 +161,11 @@ func TestModel_RenderApplyConfirm(t *testing.T) {
 
 func TestModel_RenderApplyProgress(t *testing.T) {
 	m := NewModel("demo", "../../..")
-	m.Width = 80
-	m.Height = 24
+	m.UI.Width = 80
+	m.UI.Height = 24
 	m.ViewState = ViewStateApplyProgress
-	m.ApplyProgress = 5
-	m.ApplyTotal = 10
+	m.Action.ApplyProgress = 5
+	m.Action.ApplyTotal = 10
 
 	view := m.View()
 
@@ -176,10 +176,10 @@ func TestModel_RenderApplyProgress(t *testing.T) {
 
 func TestModel_RenderApplyComplete(t *testing.T) {
 	m := NewModel("demo", "../../..")
-	m.Width = 80
-	m.Height = 24
+	m.UI.Width = 80
+	m.UI.Height = 24
 	m.ViewState = ViewStateApplyComplete
-	m.ApplyComplete = true
+	m.Action.ApplyComplete = true
 
 	view := m.View()
 
@@ -190,10 +190,10 @@ func TestModel_RenderApplyComplete(t *testing.T) {
 
 func TestModel_MainMenu(t *testing.T) {
 	m := NewModel("demo", "../../..")
-	m.Width = 80
-	m.Height = 24
+	m.UI.Width = 80
+	m.UI.Height = 24
 	m.ViewState = ViewStateMainMenu
-	m.MainMenuIndex = 0
+	m.UI.MainMenuIndex = 0
 
 	view := m.View()
 
@@ -205,7 +205,7 @@ func TestModel_MainMenu(t *testing.T) {
 func TestModel_HandleEnter(t *testing.T) {
 	m := NewModel("demo", "../../..")
 	m.ViewState = ViewStateMainMenu
-	m.MainMenuIndex = 0
+	m.UI.MainMenuIndex = 0
 
 	newModel, _ := m.handleEnter()
 	model := newModel.(Model)
@@ -218,7 +218,7 @@ func TestModel_HandleEnter(t *testing.T) {
 func TestModel_HandleEscape(t *testing.T) {
 	m := NewModel("demo", "../../..")
 	m.ViewState = ViewStateTree
-	m.ErrorMessage = "test error"
+	m.UI.ErrorMessage = "test error"
 
 	newModel, _ := m.handleEscape()
 	model := newModel.(Model)
@@ -226,7 +226,7 @@ func TestModel_HandleEscape(t *testing.T) {
 	if model.ViewState != ViewStateServiceManagement {
 		t.Errorf("Expected ViewStateServiceManagement, got %d", model.ViewState)
 	}
-	if model.ErrorMessage != "" {
+	if model.UI.ErrorMessage != "" {
 		t.Error("Error message should be cleared")
 	}
 }
@@ -235,7 +235,7 @@ func TestModel_SelectAll(t *testing.T) {
 	m := NewModel("demo", "../../..")
 	m.ViewState = ViewStateTree
 
-	for _, node := range m.TreeNodes {
+	for _, node := range m.Tree.TreeNodes {
 		node.SelectRecursive(false)
 	}
 
@@ -261,7 +261,7 @@ func TestModel_AppTreeHasServers(t *testing.T) {
 	hasInfra := false
 	hasBiz := false
 
-	for _, zone := range m.TreeNodes {
+	for _, zone := range m.Tree.TreeNodes {
 		for _, server := range zone.Children {
 			hasServer = true
 			for _, svc := range server.Children {

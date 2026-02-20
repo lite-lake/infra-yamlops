@@ -11,8 +11,6 @@ import (
 	"github.com/litelake/yamlops/internal/application/usecase"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
-	"github.com/litelake/yamlops/internal/plan"
 )
 
 type AppFilters struct {
@@ -92,28 +90,16 @@ func newAppCommand(ctx *Context) *cobra.Command {
 }
 
 func runAppPlan(ctx *Context, filters AppFilters) {
-	loader := persistence.NewConfigLoader(ctx.ConfigDir)
-	cfg, err := loader.Load(nil, ctx.Env)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := loader.Validate(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "Validation error: %v\n", err)
-		os.Exit(1)
-	}
-
-	planner := plan.NewPlanner(cfg, ctx.Env)
+	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
 	planScope := &valueobject.Scope{
 		Zone:    filters.Zone,
 		Server:  filters.Server,
 		Service: filters.Biz,
 	}
 
-	executionPlan, err := planner.Plan(planScope)
+	executionPlan, _, err := wf.Plan(nil, "", planScope)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error generating plan: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
@@ -150,28 +136,16 @@ func runAppPlan(ctx *Context, filters AppFilters) {
 }
 
 func runAppApply(ctx *Context, filters AppFilters, autoApprove bool) {
-	loader := persistence.NewConfigLoader(ctx.ConfigDir)
-	cfg, err := loader.Load(nil, ctx.Env)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := loader.Validate(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "Validation error: %v\n", err)
-		os.Exit(1)
-	}
-
-	planner := plan.NewPlanner(cfg, ctx.Env)
+	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
 	planScope := &valueobject.Scope{
 		Zone:    filters.Zone,
 		Server:  filters.Server,
 		Service: filters.Biz,
 	}
 
-	executionPlan, err := planner.Plan(planScope)
+	executionPlan, cfg, err := wf.Plan(nil, "", planScope)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error generating plan: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
@@ -190,12 +164,15 @@ func runAppApply(ctx *Context, filters AppFilters, autoApprove bool) {
 		}
 	}
 
-	if err := planner.GenerateDeployments(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error generating deployments: %v\n", err)
+	if err := wf.GenerateDeployments(cfg, ""); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
-	executor := usecase.NewExecutor(executionPlan, ctx.Env)
+	executor := usecase.NewExecutor(&usecase.ExecutorConfig{
+		Plan: executionPlan,
+		Env:  ctx.Env,
+	})
 	executor.SetSecrets(cfg.GetSecretsMap())
 	executor.SetDomains(cfg.GetDomainMap())
 	executor.SetISPs(cfg.GetISPMap())
@@ -243,10 +220,10 @@ func runAppApply(ctx *Context, filters AppFilters, autoApprove bool) {
 }
 
 func runAppList(ctx *Context, filters AppFilters, resource string) {
-	loader := persistence.NewConfigLoader(ctx.ConfigDir)
-	cfg, err := loader.Load(nil, ctx.Env)
+	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
+	cfg, err := wf.LoadConfig(nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
@@ -329,10 +306,10 @@ func listBizServices(filters AppFilters, cfg *entity.Config) {
 }
 
 func runAppShow(ctx *Context, resource, name string) {
-	loader := persistence.NewConfigLoader(ctx.ConfigDir)
-	cfg, err := loader.Load(nil, ctx.Env)
+	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
+	cfg, err := wf.LoadConfig(nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 

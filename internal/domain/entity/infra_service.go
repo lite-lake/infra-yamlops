@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
 	"net"
 
@@ -38,10 +37,10 @@ type GatewaySSLConfig struct {
 
 func (s *GatewaySSLConfig) Validate() error {
 	if s.Mode != "local" && s.Mode != "remote" {
-		return errors.New("ssl mode must be 'local' or 'remote'")
+		return fmt.Errorf("%w: ssl mode must be 'local' or 'remote'", domain.ErrInvalidType)
 	}
 	if s.Mode == "remote" && s.Endpoint == "" {
-		return errors.New("endpoint is required for remote ssl mode")
+		return domain.RequiredField("endpoint for remote ssl mode")
 	}
 	return nil
 }
@@ -54,7 +53,7 @@ type GatewayWAFConfig struct {
 func (w *GatewayWAFConfig) Validate() error {
 	for _, cidr := range w.Whitelist {
 		if _, _, err := net.ParseCIDR(cidr); err != nil {
-			return fmt.Errorf("invalid CIDR %s: %w", cidr, err)
+			return fmt.Errorf("%w: %s", domain.ErrInvalidCIDR, cidr)
 		}
 	}
 	return nil
@@ -183,22 +182,27 @@ func (s *InfraService) Validate() error {
 		return fmt.Errorf("%w: infra service name is required", domain.ErrInvalidName)
 	}
 	if s.Type != InfraServiceTypeGateway && s.Type != InfraServiceTypeSSL {
-		return fmt.Errorf("invalid infra service type: %s", s.Type)
+		return fmt.Errorf("%w: %s", domain.ErrInvalidType, s.Type)
 	}
 	if s.Server == "" {
-		return errors.New("server is required")
+		return domain.RequiredField("server")
 	}
 	if s.Image == "" {
-		return errors.New("image is required")
+		return domain.RequiredField("image")
 	}
 	switch s.Type {
 	case InfraServiceTypeGateway:
 		if s.GatewayConfig == nil {
-			return errors.New("gateway config is required for gateway type")
+			return domain.RequiredField("gateway config for gateway type")
+		}
+		if s.GatewayPorts != nil {
+			if err := s.GatewayPorts.Validate(); err != nil {
+				return err
+			}
 		}
 	case InfraServiceTypeSSL:
 		if s.SSLConfig == nil {
-			return errors.New("ssl config is required for ssl type")
+			return domain.RequiredField("ssl config for ssl type")
 		}
 		if err := s.SSLConfig.Validate(); err != nil {
 			return err
@@ -267,7 +271,7 @@ type SSLStorage struct {
 
 func (s *SSLStorage) Validate() error {
 	if s.Type == "" {
-		return errors.New("storage type is required")
+		return domain.RequiredField("storage type")
 	}
 	return nil
 }
@@ -279,10 +283,10 @@ type SSLDefaults struct {
 
 func (d *SSLDefaults) Validate() error {
 	if d.IssueProvider == "" {
-		return errors.New("issue_provider is required")
+		return domain.RequiredField("issue_provider")
 	}
 	if d.StorageProvider == "" {
-		return errors.New("storage_provider is required")
+		return domain.RequiredField("storage_provider")
 	}
 	return nil
 }

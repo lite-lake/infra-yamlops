@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
@@ -19,7 +20,7 @@ func (h *ServiceHandler) EntityType() string {
 	return "service"
 }
 
-func (h *ServiceHandler) Apply(ctx context.Context, change *valueobject.Change, deps *Deps) (*Result, error) {
+func (h *ServiceHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
 	serverName := ExtractServerFromChange(change)
@@ -28,37 +29,23 @@ func (h *ServiceHandler) Apply(ctx context.Context, change *valueobject.Change, 
 		return result, nil
 	}
 
-	client, err := h.getClient(serverName, deps)
+	client, err := deps.SSHClient(serverName)
 	if err != nil {
-		result.Error = fmt.Errorf("failed to get SSH client: %w", err)
+		result.Error = err
 		return result, nil
 	}
 
-	remoteDir := fmt.Sprintf("/data/yamlops/yo-%s-%s", deps.Env, change.Name)
+	remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, deps.Env(), change.Name))
 
 	switch change.Type {
 	case valueobject.ChangeTypeDelete:
-		return h.deleteService(change, client, remoteDir, deps)
+		return h.deleteService(change, client, remoteDir)
 	default:
 		return h.deployService(change, client, remoteDir, deps)
 	}
 }
 
-func (h *ServiceHandler) getClient(serverName string, deps *Deps) (SSHClient, error) {
-	if _, ok := deps.Servers[serverName]; !ok {
-		return nil, fmt.Errorf("server %s not registered", serverName)
-	}
-	if deps.SSHClient == nil {
-		errMsg := fmt.Sprintf("SSH client not available for server %s", serverName)
-		if deps.SSHError != nil {
-			errMsg = fmt.Sprintf("%s: %v", errMsg, deps.SSHError)
-		}
-		return nil, fmt.Errorf("%s", errMsg)
-	}
-	return deps.SSHClient, nil
-}
-
-func (h *ServiceHandler) deployService(change *valueobject.Change, client SSHClient, remoteDir string, deps *Deps) (*Result, error) {
+func (h *ServiceHandler) deployService(change *valueobject.Change, client SSHClient, remoteDir string, deps DepsProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
 	if err := client.MkdirAllSudoWithPerm(remoteDir, "750"); err != nil {
@@ -79,7 +66,7 @@ func (h *ServiceHandler) deployService(change *valueobject.Change, client SSHCli
 				return result, nil
 			}
 
-			networkCmd := fmt.Sprintf("sudo docker network create yamlops-%s 2>/dev/null || true", deps.Env)
+			networkCmd := fmt.Sprintf("sudo docker network create %s 2>/dev/null || true", fmt.Sprintf(constants.DockerNetworkFormat, deps.Env()))
 			_, _, _ = client.Run(networkCmd)
 
 			pullCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml pull", remoteDir)
@@ -103,7 +90,7 @@ func (h *ServiceHandler) deployService(change *valueobject.Change, client SSHCli
 	return result, nil
 }
 
-func (h *ServiceHandler) deleteService(change *valueobject.Change, client SSHClient, remoteDir string, deps *Deps) (*Result, error) {
+func (h *ServiceHandler) deleteService(change *valueobject.Change, client SSHClient, remoteDir string) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
 	cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml down -v 2>/dev/null || true", remoteDir)
@@ -122,10 +109,10 @@ func (h *ServiceHandler) deleteService(change *valueobject.Change, client SSHCli
 	return result, nil
 }
 
-func (h *ServiceHandler) getComposeFilePath(ch *valueobject.Change, deps *Deps) string {
+func (h *ServiceHandler) getComposeFilePath(ch *valueobject.Change, deps DepsProvider) string {
 	serverName := ExtractServerFromChange(ch)
 	if serverName == "" {
 		return ""
 	}
-	return filepath.Join(deps.WorkDir, "deployments", serverName, ch.Name+".compose.yaml")
+	return filepath.Join(deps.WorkDir(), "deployments", serverName, ch.Name+".compose.yaml")
 }

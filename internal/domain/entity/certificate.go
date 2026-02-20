@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/litelake/yamlops/internal/domain"
@@ -27,11 +26,11 @@ func (c *Certificate) Validate() error {
 		return fmt.Errorf("%w: certificate name is required", domain.ErrInvalidName)
 	}
 	if len(c.Domains) == 0 {
-		return errors.New("at least one domain is required")
+		return domain.RequiredField("domains")
 	}
-	for _, domain := range c.Domains {
-		if domain == "" {
-			return errors.New("domain cannot be empty")
+	for _, d := range c.Domains {
+		if d == "" {
+			return fmt.Errorf("%w: domain cannot be empty", domain.ErrEmptyValue)
 		}
 	}
 	validProviders := map[CertificateProvider]bool{
@@ -39,10 +38,10 @@ func (c *Certificate) Validate() error {
 		CertificateProviderZeroSSL:     true,
 	}
 	if !validProviders[c.Provider] {
-		return fmt.Errorf("invalid certificate provider: %s", c.Provider)
+		return fmt.Errorf("%w: certificate provider %s", domain.ErrInvalidType, c.Provider)
 	}
 	if c.DNSProvider == "" {
-		return errors.New("dns_provider is required")
+		return domain.RequiredField("dns_provider")
 	}
 	return nil
 }

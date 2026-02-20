@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 	"github.com/litelake/yamlops/internal/ssh"
 )
@@ -58,7 +59,7 @@ func runClean(ctx *Context) {
 			continue
 		}
 
-		dirStdout, _, err := client.Run("sudo ls -1 /data/yamlops 2>/dev/null || true")
+		dirStdout, _, err := client.Run("sudo ls -1 " + constants.RemoteBaseDir + " 2>/dev/null || true")
 		if err != nil {
 			fmt.Printf("[%s] Failed to list directories: %v\n", srv.Name, err)
 			client.Close()
@@ -140,7 +141,7 @@ func runClean(ctx *Context) {
 		}
 
 		for name := range orphanDirs {
-			remoteDir := fmt.Sprintf("/data/yamlops/%s", name)
+			remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, name)
 			fmt.Printf("[%s] Removing directory %s...\n", srv.Name, remoteDir)
 			_, stderr, err := client2.Run(fmt.Sprintf("sudo rm -rf %s", remoteDir))
 			if err != nil {

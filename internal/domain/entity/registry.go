@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/litelake/yamlops/internal/domain"
@@ -34,7 +33,7 @@ func (r *Registry) Validate() error {
 		return fmt.Errorf("%w: registry name is required", domain.ErrInvalidName)
 	}
 	if r.URL == "" {
-		return errors.New("url is required")
+		return domain.RequiredField("url")
 	}
 	if err := r.Credentials.Validate(); err != nil {
 		return err

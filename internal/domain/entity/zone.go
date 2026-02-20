@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/litelake/yamlops/internal/domain"
@@ -19,7 +18,7 @@ func (z *Zone) Validate() error {
 		return fmt.Errorf("%w: zone name is required", domain.ErrInvalidName)
 	}
 	if z.Region == "" {
-		return errors.New("region is required")
+		return domain.RequiredField("region")
 	}
 	return nil
 }

@@ -217,21 +217,7 @@ func (p *CloudflareProvider) BatchDeleteRecords(domain string, recordIDs []strin
 }
 
 func (p *CloudflareProvider) EnsureRecord(domain string, record *DNSRecord) error {
-	records, err := p.ListRecords(domain)
-	if err != nil {
-		return err
-	}
-
-	for _, r := range records {
-		if r.Name == record.Name && r.Type == record.Type {
-			if r.Value == record.Value && r.TTL == record.TTL {
-				return nil
-			}
-			return p.UpdateRecord(domain, r.ID, record)
-		}
-	}
-
-	return p.CreateRecord(domain, record)
+	return EnsureRecord(p, domain, record)
 }
 
 func ParseTTL(ttlStr string) (int, error) {

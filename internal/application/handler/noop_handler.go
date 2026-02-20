@@ -18,7 +18,7 @@ func (h *NoopHandler) EntityType() string {
 	return h.entityType
 }
 
-func (h *NoopHandler) Apply(ctx context.Context, change *valueobject.Change, deps *Deps) (*Result, error) {
+func (h *NoopHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
 	return &Result{
 		Change:  change,
 		Success: true,

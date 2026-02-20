@@ -6,15 +6,12 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/sha256"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
-	"math/big"
 	"net"
-	"strings"
 	"time"
 
 	"golang.org/x/crypto/acme"
@@ -195,11 +192,6 @@ func (c *ACMEClient) keyAuth(token string) (string, error) {
 	return token + "." + thumbprint, nil
 }
 
-func dns01KeyAuth(keyAuth string) string {
-	h := sha256.Sum256([]byte(keyAuth))
-	return base64.RawURLEncoding.EncodeToString(h[:])
-}
-
 func (c *ACMEClient) waitForChallenge(ctx context.Context, uri string) error {
 	for {
 		challenge, err := c.client.GetChallenge(ctx, uri)
@@ -327,17 +319,4 @@ func encodePrivateKey(key crypto.Signer) ([]byte, error) {
 
 func parseCertificate(der []byte) (*x509.Certificate, error) {
 	return x509.ParseCertificate(der)
-}
-
-func extractBaseDomain(domain string) string {
-	parts := strings.Split(domain, ".")
-	if len(parts) <= 2 {
-		return domain
-	}
-	return strings.Join(parts[len(parts)-2:], ".")
-}
-
-func generateSerialNumber() (*big.Int, error) {
-	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
-	return rand.Int(rand.Reader, serialNumberLimit)
 }

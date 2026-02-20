@@ -10,41 +10,70 @@ import (
 	"github.com/litelake/yamlops/internal/providers/dns"
 )
 
+type RegistryInterface interface {
+	Register(h handler.Handler)
+	Get(entityType string) (handler.Handler, bool)
+}
+
+type SSHPoolInterface interface {
+	Get(info *handler.ServerInfo) (handler.SSHClient, error)
+	CloseAll()
+}
+
+type DNSFactoryInterface interface {
+	Create(isp *entity.ISP, secrets map[string]string) (dns.Provider, error)
+}
+
+type ExecutorConfig struct {
+	Registry   RegistryInterface
+	SSHPool    SSHPoolInterface
+	DNSFactory DNSFactoryInterface
+	Plan       *valueobject.Plan
+	Env        string
+}
+
 type Executor struct {
 	plan       *valueobject.Plan
-	registry   *handler.Registry
-	sshPool    *SSHPool
+	registry   RegistryInterface
+	sshPool    SSHPoolInterface
 	secrets    map[string]string
 	servers    map[string]*handler.ServerInfo
 	env        string
 	domains    map[string]*entity.Domain
 	isps       map[string]*entity.ISP
 	workDir    string
-	dnsFactory *dns.Factory
+	dnsFactory DNSFactoryInterface
 }
 
-func NewExecutor(pl *valueobject.Plan, env string) *Executor {
-	if env == "" {
-		env = "dev"
+func NewExecutor(cfg *ExecutorConfig) *Executor {
+	if cfg == nil {
+		cfg = &ExecutorConfig{}
 	}
+	if cfg.Env == "" {
+		cfg.Env = "dev"
+	}
+	if cfg.Registry == nil {
+		cfg.Registry = handler.NewRegistry()
+	}
+	if cfg.SSHPool == nil {
+		cfg.SSHPool = NewSSHPool()
+	}
+	if cfg.DNSFactory == nil {
+		cfg.DNSFactory = dns.NewFactory()
+	}
+
 	return &Executor{
-		plan:       pl,
-		registry:   handler.NewRegistry(),
-		sshPool:    NewSSHPool(),
+		plan:       cfg.Plan,
+		registry:   cfg.Registry,
+		sshPool:    cfg.SSHPool,
 		secrets:    make(map[string]string),
 		servers:    make(map[string]*handler.ServerInfo),
 		domains:    make(map[string]*entity.Domain),
 		isps:       make(map[string]*entity.ISP),
-		env:        env,
+		env:        cfg.Env,
 		workDir:    ".",
-		dnsFactory: dns.NewFactory(),
+		dnsFactory: cfg.DNSFactory,
 	}
-}
-
-func NewExecutorWithRegistry(pl *valueobject.Plan, env string, registry *handler.Registry) *Executor {
-	e := NewExecutor(pl, env)
-	e.registry = registry
-	return e
 }
 
 func (e *Executor) SetSecrets(s map[string]string)         { e.secrets = s }
@@ -103,16 +132,20 @@ func (e *Executor) applyChange(ctx context.Context, ch *valueobject.Change) *han
 	return result
 }
 
-func (e *Executor) buildDeps(ch *valueobject.Change) *handler.Deps {
-	deps := &handler.Deps{
-		Secrets: e.secrets, Domains: e.domains, ISPs: e.isps,
-		Servers: e.servers, WorkDir: e.workDir, Env: e.env, DNSFactory: e.dnsFactory,
-	}
+func (e *Executor) buildDeps(ch *valueobject.Change) *handler.BaseDeps {
+	deps := handler.NewBaseDeps()
+	deps.SetSecrets(e.secrets)
+	deps.SetDomains(e.domains)
+	deps.SetISPs(e.isps)
+	deps.SetServers(e.servers)
+	deps.SetWorkDir(e.workDir)
+	deps.SetEnv(e.env)
+	deps.SetDNSFactory(e.dnsFactory)
+
 	if serverName := handler.ExtractServerFromChange(ch); serverName != "" {
 		if info, ok := e.servers[serverName]; ok {
 			client, err := e.sshPool.Get(info)
-			deps.SSHClient = client
-			deps.SSHError = err
+			deps.SetSSHClient(client, err)
 		}
 	}
 	return deps
@@ -128,4 +161,4 @@ func (e *Executor) FilterPlanByServer(serverName string) *valueobject.Plan {
 	return filtered
 }
 
-func (e *Executor) GetRegistry() *handler.Registry { return e.registry }
+func (e *Executor) GetRegistry() RegistryInterface { return e.registry }

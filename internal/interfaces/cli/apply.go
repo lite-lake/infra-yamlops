@@ -3,13 +3,13 @@ package cli
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/litelake/yamlops/internal/application/handler"
 	"github.com/litelake/yamlops/internal/application/usecase"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
-	"github.com/litelake/yamlops/internal/plan"
 )
 
 func newApplyCommand(ctx *Context) *cobra.Command {
@@ -38,19 +38,7 @@ func newApplyCommand(ctx *Context) *cobra.Command {
 }
 
 func runApply(ctx *Context, scope string, filters Filters) {
-	loader := persistence.NewConfigLoader(ctx.ConfigDir)
-	cfg, err := loader.Load(nil, ctx.Env)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-		os.Exit(1)
-	}
-
-	if err := loader.Validate(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "Validation error: %v\n", err)
-		os.Exit(1)
-	}
-
-	planner := plan.NewPlanner(cfg, ctx.Env)
+	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
 	planScope := &valueobject.Scope{
 		Domain:  filters.Domain,
 		Zone:    filters.Zone,
@@ -58,9 +46,9 @@ func runApply(ctx *Context, scope string, filters Filters) {
 		Service: filters.Service,
 	}
 
-	executionPlan, err := planner.Plan(planScope)
+	executionPlan, cfg, err := wf.Plan(nil, "", planScope)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error generating plan: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
@@ -69,12 +57,24 @@ func runApply(ctx *Context, scope string, filters Filters) {
 		return
 	}
 
-	if err := planner.GenerateDeployments(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error generating deployments: %v\n", err)
+	displayPlan(executionPlan)
+	fmt.Print("\nDo you want to apply these changes? (y/N): ")
+	var response string
+	fmt.Scanln(&response)
+	if strings.ToLower(response) != "y" {
+		fmt.Println("Cancelled.")
+		return
+	}
+
+	if err := wf.GenerateDeployments(cfg, ""); err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 
-	executor := usecase.NewExecutor(executionPlan, ctx.Env)
+	executor := usecase.NewExecutor(&usecase.ExecutorConfig{
+		Plan: executionPlan,
+		Env:  ctx.Env,
+	})
 	executor.SetSecrets(cfg.GetSecretsMap())
 	executor.SetDomains(cfg.GetDomainMap())
 	executor.SetISPs(cfg.GetISPMap())
@@ -96,7 +96,10 @@ func runApply(ctx *Context, scope string, filters Filters) {
 	}
 
 	results := executor.Apply()
+	displayResults(results)
+}
 
+func displayResults(results []*handler.Result) {
 	hasError := false
 	for _, result := range results {
 		if result.Success {
@@ -109,7 +112,6 @@ func runApply(ctx *Context, scope string, filters Filters) {
 			hasError = true
 		}
 	}
-
 	if hasError {
 		os.Exit(1)
 	}

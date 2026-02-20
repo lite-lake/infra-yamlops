@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/litelake/yamlops/internal/constants"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
@@ -182,7 +183,7 @@ func (c *Client) UploadFileSudoWithPerm(localPath, remotePath, perm string) erro
 	}
 	defer localFile.Close()
 
-	tmpPath := fmt.Sprintf("/tmp/yamlops-%d", os.Getpid())
+	tmpPath := fmt.Sprintf(constants.RemoteTempFileFmt, os.Getpid())
 	tmpFile, err := sftpClient.Create(tmpPath)
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)

@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/litelake/yamlops/internal/domain"
@@ -40,10 +39,10 @@ func (i *ISP) Validate() error {
 		i.Type = ISPType(i.Name)
 	}
 	if len(i.Services) == 0 {
-		return errors.New("at least one service is required")
+		return domain.RequiredField("services")
 	}
 	if len(i.Credentials) == 0 {
-		return errors.New("credentials are required")
+		return domain.RequiredField("credentials")
 	}
 	for key, ref := range i.Credentials {
 		if err := ref.Validate(); err != nil {

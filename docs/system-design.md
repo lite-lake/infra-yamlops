@@ -96,22 +96,77 @@ internal/
 │   ├── valueobject/                # 值对象
 │   ├── repository/                 # 仓储接口
 │   ├── service/                    # 领域服务
-│   └── errors.go                   # 领域错误
+│   └── errors.go                   # 领域错误（统一定义）
 ├── application/                    # 应用层
 │   ├── handler/                    # 变更处理器（策略模式）
+│   │   ├── types.go                # 依赖接口定义
+│   │   ├── dns_handler.go          # DNS 记录处理器
+│   │   ├── service_handler.go      # 业务服务处理器
+│   │   ├── infra_service_handler.go # 基础设施服务处理器
+│   │   ├── server_handler.go       # 服务器处理器
+│   │   ├── certificate_handler.go  # 证书处理器
+│   │   ├── registry_handler.go     # 镜像仓库处理器
+│   │   ├── noop_handler.go         # 空操作处理器
+│   │   ├── registry.go             # 处理器注册表
+│   │   └── utils.go                # 工具函数
 │   └── usecase/                    # 用例执行器
+│       ├── executor.go             # 执行器（支持依赖注入）
+│       └── ssh_pool.go             # SSH 连接池
 ├── infrastructure/                 # 基础设施层
 │   └── persistence/                # 配置加载实现
 ├── interfaces/                     # 接口层
 │   └── cli/                        # CLI 命令
+│       ├── root.go                 # 根命令
+│       ├── workflow.go             # CLI 工作流模块
+│       ├── context.go              # 执行上下文
+│       ├── plan.go                 # Plan 命令
+│       ├── apply.go                # Apply 命令
+│       ├── validate.go             # Validate 命令
+│       ├── list.go                 # List 命令
+│       ├── show.go                 # Show 命令
+│       ├── clean.go                # Clean 命令
+│       ├── env.go                  # Env 命令
+│       ├── dns.go                  # DNS 命令
+│       ├── dns_pull.go             # DNS Pull 命令
+│       ├── app.go                  # App 命令
+│       ├── server_cmd.go           # Server 命令
+│       ├── config_cmd.go           # Config 命令
+│       ├── tui.go                  # TUI 主入口
+│       ├── tui_model.go            # TUI 数据模型
+│       ├── tui_view.go             # TUI 视图渲染
+│       ├── tui_actions.go          # TUI 操作处理
+│       ├── tui_keys.go             # TUI 按键处理
+│       ├── tui_styles.go           # TUI 样式定义
+│       ├── tui_menu.go             # TUI 菜单
+│       ├── tui_tree.go             # TUI 树形视图
+│       ├── tui_viewport.go         # TUI 视口滚动
+│       ├── tui_server.go           # TUI 服务器操作
+│       ├── tui_dns.go              # TUI DNS 操作
+│       ├── tui_cleanup.go          # TUI 清理操作
+│       └── tui_stop.go             # TUI 停止操作
+├── constants/                      # 常量定义
+│   └── constants.go                # 路径、格式等常量
 ├── plan/                           # 规划协调层
 ├── config/                         # 配置工具
 ├── providers/                      # 外部服务提供者
 │   ├── dns/                        # DNS 提供者
+│   │   ├── provider.go             # DNS Provider 接口
+│   │   ├── factory.go              # DNS 提供商工厂
+│   │   ├── common.go               # DNS 公共逻辑
+│   │   ├── cloudflare.go           # Cloudflare 实现
+│   │   ├── aliyun.go               # 阿里云实现
+│   │   └── tencent.go              # 腾讯云实现
 │   └── ssl/                        # SSL 提供者
 ├── ssh/                            # SSH 客户端
+│   ├── client.go                   # SSH 客户端
+│   └── sftp.go                     # SFTP 文件传输
 ├── compose/                        # Docker Compose 工具
-└── gate/                           # infra-gate 工具
+├── gate/                           # infra-gate 工具
+└── server/                         # 服务器管理
+    ├── checker.go                  # 服务器检查
+    ├── syncer.go                   # 服务器同步
+    ├── templates.go                # 配置模板
+    └── types.go                    # 类型定义
 userdata/{env}/                     # 用户配置文件
 deployments/                        # 生成的部署文件（git-ignored）
 ```
@@ -399,27 +454,60 @@ ISP (底层基础设施提供商)
 ```go
 type Handler interface {
     EntityType() string
-    Apply(ctx context.Context, change *valueobject.Change, deps *Deps) (*Result, error)
+    Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error)
 }
 ```
 
-### 4.3 依赖注入结构
+### 4.3 依赖注入接口
+
+采用接口组合模式，支持细粒度的依赖注入：
 
 ```go
-type Deps struct {
-    SSHClient   SSHClient                    // SSH 客户端
-    DNSProvider DNSProvider                  // DNS 服务提供商
-    DNSFactory  *dns.Factory                 // DNS 提供商工厂
-    Secrets     map[string]string            // 密钥解析后的值
-    Domains     map[string]*entity.Domain    // 域名配置
-    ISPs        map[string]*entity.ISP       // ISP 配置
-    Servers     map[string]*ServerInfo       // 服务器信息
-    WorkDir     string                       // 工作目录
-    Env         string                       // 环境
+// DNS 操作依赖
+type DNSDeps interface {
+    DNSProvider(ispName string) (DNSProvider, error)
+    Domain(name string) (*entity.Domain, bool)
+    ISP(name string) (*entity.ISP, bool)
+}
+
+// 服务操作依赖
+type ServiceDeps interface {
+    SSHClient(server string) (SSHClient, error)
+    ServerInfo(name string) (*ServerInfo, bool)
+    WorkDir() string
+    Env() string
+}
+
+// 通用依赖
+type CommonDeps interface {
+    ResolveSecret(ref *valueobject.SecretRef) (string, error)
+}
+
+// 组合依赖接口
+type DepsProvider interface {
+    DNSDeps
+    ServiceDeps
+    CommonDeps
 }
 ```
 
-### 4.4 Handler 类型与职责
+### 4.4 BaseDeps 实现结构
+
+```go
+type BaseDeps struct {
+    sshClient  SSHClient
+    sshError   error
+    dnsFactory DNSFactory
+    secrets    map[string]string
+    domains    map[string]*entity.Domain
+    isps       map[string]*entity.ISP
+    servers    map[string]*ServerInfo
+    workDir    string
+    env        string
+}
+```
+
+### 4.5 Handler 类型与职责
 
 | Handler | Entity | 职责 |
 |---------|--------|------|
@@ -431,9 +519,41 @@ type Deps struct {
 | RegistryHandler | registry | 镜像仓库（标记跳过） |
 | NoopHandler | isp/zone/domain | 空操作 |
 
-### 4.5 Executor 执行器
+### 4.6 Executor 执行器
+
+采用配置结构支持依赖注入：
 
 ```go
+type ExecutorConfig struct {
+    Registry   RegistryInterface   // 处理器注册表
+    SSHPool    SSHPoolInterface    // SSH 连接池
+    DNSFactory DNSFactoryInterface // DNS 工厂
+    Plan       *valueobject.Plan   // 执行计划
+    Env        string              // 环境名称
+}
+
+type Executor struct {
+    plan       *valueobject.Plan
+    registry   RegistryInterface
+    sshPool    SSHPoolInterface
+    dnsFactory DNSFactoryInterface
+    secrets    map[string]string
+    servers    map[string]*ServerInfo
+    env        string
+    domains    map[string]*entity.Domain
+    isps       map[string]*entity.ISP
+    workDir    string
+}
+
+func NewExecutor(cfg *ExecutorConfig) *Executor {
+    // 支持默认值和 nil 安全
+    if cfg == nil {
+        cfg = &ExecutorConfig{}
+    }
+    // 自动初始化默认组件
+    ...
+}
+
 func (e *Executor) Apply() []*handler.Result {
     e.registerHandlers()  // 注册所有 Handler
     
@@ -445,6 +565,29 @@ func (e *Executor) Apply() []*handler.Result {
     
     e.sshPool.CloseAll()
     return results
+}
+
+func (e *Executor) FilterPlanByServer(serverName string) *valueobject.Plan {
+    // 按服务器过滤变更计划
+    ...
+}
+```
+
+### 4.7 Executor 依赖接口
+
+```go
+type RegistryInterface interface {
+    Register(h handler.Handler)
+    Get(entityType string) (handler.Handler, bool)
+}
+
+type SSHPoolInterface interface {
+    Get(info *handler.ServerInfo) (handler.SSHClient, error)
+    CloseAll()
+}
+
+type DNSFactoryInterface interface {
+    Create(isp *entity.ISP, secrets map[string]string) (dns.Provider, error)
 }
 ```
 
@@ -472,6 +615,42 @@ func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, er
 9. certificates.yaml
 
 ### 5.2 DNS 提供者
+
+#### 5.2.1 Provider 接口
+
+```go
+type Provider interface {
+    Name() string
+    ListRecords(domain string) ([]DNSRecord, error)
+    CreateRecord(domain string, record *DNSRecord) error
+    UpdateRecord(domain string, recordID string, record *DNSRecord) error
+    DeleteRecord(domain string, recordID string) error
+}
+```
+
+#### 5.2.2 公共逻辑 (common.go)
+
+```go
+// 确保记录存在，自动判断创建或更新
+func EnsureRecord(provider Provider, domain string, desired *DNSRecord) error {
+    records, err := provider.ListRecords(domain)
+    if err != nil {
+        return fmt.Errorf("list records: %w", err)
+    }
+    
+    for _, existing := range records {
+        if existing.Type == desired.Type && existing.Name == desired.Name {
+            if existing.Value == desired.Value && existing.TTL == desired.TTL {
+                return nil  // 无需变更
+            }
+            return provider.UpdateRecord(domain, existing.ID, desired)
+        }
+    }
+    return provider.CreateRecord(domain, desired)
+}
+```
+
+#### 5.2.3 提供商实现
 
 | Provider | 特性 |
 |----------|------|
@@ -852,17 +1031,29 @@ yamlops -e prod
 
 ### A. 错误码
 
+Domain 层统一定义在 `internal/domain/errors.go`：
+
 | 错误 | 说明 |
 |------|------|
 | ErrInvalidName | 无效名称 |
 | ErrInvalidIP | 无效 IP 地址 |
 | ErrInvalidPort | 无效端口 |
+| ErrInvalidProtocol | 无效协议 |
 | ErrInvalidDomain | 无效域名 |
+| ErrInvalidCIDR | 无效 CIDR 格式 |
+| ErrInvalidURL | 无效 URL |
+| ErrInvalidTTL | 无效 TTL |
+| ErrInvalidDuration | 无效时长 |
+| ErrInvalidType | 无效类型 |
+| ErrEmptyValue | 空值 |
+| ErrRequired | 必填字段缺失 |
 | ErrMissingSecret | 缺少密钥引用 |
+| ErrConfigNotLoaded | 配置未加载 |
 | ErrMissingReference | 缺少引用 |
 | ErrPortConflict | 端口冲突 |
 | ErrDomainConflict | 域名冲突 |
 | ErrHostnameConflict | 主机名冲突 |
+| ErrDNSSubdomainConflict | DNS 子域名冲突 |
 
 ### B. 部署状态
 
@@ -889,4 +1080,111 @@ type DeploymentState struct {
 | 适配器模式 | DNS Provider 适配 |
 | 对象池模式 | SSH 连接池 |
 | 依赖注入 | Handler Deps 结构 |
+| 接口隔离 (ISP) | DNSDeps / ServiceDeps / CommonDeps |
+| 依赖倒置 (DIP) | Executor 接收接口而非具体实现 |
 | 泛型编程 | planSimpleEntity 函数 |
+
+### D. 架构改进
+
+#### D.1 Handler 依赖接口隔离 (ISP)
+
+Handler 依赖拆分为专注的接口，避免臃肿的单一接口：
+
+```go
+type DNSDeps interface {
+    DNSProvider(ispName string) (DNSProvider, error)
+    Domain(name string) (*entity.Domain, bool)
+    ISP(name string) (*entity.ISP, bool)
+}
+
+type ServiceDeps interface {
+    SSHClient(server string) (SSHClient, error)
+    ServerInfo(name string) (*ServerInfo, bool)
+    WorkDir() string
+    Env() string
+}
+
+type DepsProvider interface {
+    DNSDeps
+    ServiceDeps
+    CommonDeps
+}
+```
+
+#### D.2 Executor 依赖注入 (DIP)
+
+Executor 通过配置结构接收依赖，支持测试和扩展：
+
+```go
+type ExecutorConfig struct {
+    Registry   RegistryInterface
+    SSHPool    SSHPoolInterface
+    DNSFactory DNSFactoryInterface
+    Plan       *valueobject.Plan
+    Env        string
+}
+
+func NewExecutor(cfg *ExecutorConfig) *Executor
+```
+
+#### D.3 CLI 工作流模块
+
+独立的 Workflow 模块封装 CLI 命令的通用流程：
+
+```go
+type Workflow struct {
+    env       string
+    configDir string
+    loader    repository.ConfigLoader
+}
+
+func (w *Workflow) LoadAndValidate(ctx context.Context) (*entity.Config, error)
+func (w *Workflow) ResolveSecrets(cfg *entity.Config) error
+func (w *Workflow) CreatePlanner(cfg *entity.Config, outputDir string) *plan.Planner
+func (w *Workflow) Plan(ctx context.Context, outputDir string, scope *valueobject.Scope) (*valueobject.Plan, *entity.Config, error)
+```
+
+#### D.4 TUI 模块拆分
+
+TUI 按功能拆分为独立文件，提高可维护性：
+
+| 文件 | 职责 |
+|------|------|
+| tui.go | 主入口、Update 循环 |
+| tui_model.go | 数据模型定义 |
+| tui_view.go | 主视图渲染 |
+| tui_server.go | 服务器操作（检查、同步） |
+| tui_dns.go | DNS 操作（拉取、管理） |
+| tui_cleanup.go | 服务清理（孤立资源） |
+| tui_stop.go | 服务停止 |
+
+#### D.5 常量集中管理
+
+应用级常量统一在 `internal/constants/constants.go` 定义：
+
+```go
+const (
+    RemoteBaseDir       = "/data/yamlops"
+    ServiceDirPattern   = "yo-%s-%s"
+    DockerNetworkFormat = "yamlops-%s"
+    TempFilePattern     = "yamlops-*.yml"
+    RemoteTempFileFmt   = "/tmp/yamlops-%d"
+    ServicePrefixFormat = "yo-%s-%s"
+)
+```
+
+#### D.6 统一 Domain 错误
+
+所有领域错误集中在 `internal/domain/errors.go` 定义，便于统一管理和复用：
+
+```go
+var (
+    ErrInvalidName      = errors.New("invalid name")
+    ErrInvalidIP        = errors.New("invalid IP address")
+    // ...
+)
+
+func RequiredField(field string) error {
+    return fmt.Errorf("%w: %s", ErrRequired, field)
+}
+```

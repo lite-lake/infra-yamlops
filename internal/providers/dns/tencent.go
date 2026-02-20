@@ -13,38 +13,19 @@ type TencentProvider struct {
 	client *dnspod.Client
 }
 
-func NewTencentProvider(secretID, secretKey string) Provider {
+func NewTencentProvider(secretID, secretKey string) (*TencentProvider, error) {
 	credential := common.NewCredential(secretID, secretKey)
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.Endpoint = "dnspod.tencentcloudapi.com"
 	client, err := dnspod.NewClient(credential, "", cpf)
 	if err != nil {
-		panic(fmt.Sprintf("failed to create tencent dns client: %v", err))
+		return nil, fmt.Errorf("create tencent dns client: %w", err)
 	}
-	return &TencentProvider{client: client}
+	return &TencentProvider{client: client}, nil
 }
 
 func (p *TencentProvider) Name() string {
 	return "tencent"
-}
-
-func (p *TencentProvider) getDomainID(domain string) (uint64, error) {
-	req := dnspod.NewDescribeDomainListRequest()
-	resp, err := p.client.DescribeDomainList(req)
-	if err != nil {
-		return 0, fmt.Errorf("failed to list domains: %w", err)
-	}
-
-	if resp.Response == nil || resp.Response.DomainList == nil {
-		return 0, ErrDomainNotFound
-	}
-
-	for _, d := range resp.Response.DomainList {
-		if *d.Name == domain {
-			return *d.DomainId, nil
-		}
-	}
-	return 0, ErrDomainNotFound
 }
 
 func (p *TencentProvider) ListRecords(domain string) ([]DNSRecord, error) {
@@ -231,21 +212,7 @@ func (p *TencentProvider) BatchDeleteRecords(domain string, recordIDs []string) 
 }
 
 func (p *TencentProvider) EnsureRecord(domain string, record *DNSRecord) error {
-	records, err := p.ListRecords(domain)
-	if err != nil {
-		return err
-	}
-
-	for _, r := range records {
-		if r.Name == record.Name && r.Type == record.Type {
-			if r.Value == record.Value && r.TTL == record.TTL {
-				return nil
-			}
-			return p.UpdateRecord(domain, r.ID, record)
-		}
-	}
-
-	return p.CreateRecord(domain, record)
+	return EnsureRecord(p, domain, record)
 }
 
 func (p *TencentProvider) CreateDomain(domain string) error {

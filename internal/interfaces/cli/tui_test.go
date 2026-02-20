@@ -30,11 +30,11 @@ func TestNewModel_LoadsConfig(t *testing.T) {
 func TestNewModel_BuildsTrees(t *testing.T) {
 	m := NewModel("demo", "../../..")
 
-	if len(m.TreeNodes) == 0 {
+	if len(m.Tree.TreeNodes) == 0 {
 		t.Error("App tree should be built")
 	}
 
-	if len(m.DNSTreeNodes) == 0 {
+	if len(m.Tree.DNSTreeNodes) == 0 {
 		t.Error("DNS tree should be built")
 	}
 }

@@ -20,7 +20,7 @@ func (h *DNSHandler) EntityType() string {
 	return "dns_record"
 }
 
-func (h *DNSHandler) Apply(ctx context.Context, change *valueobject.Change, deps *Deps) (*Result, error) {
+func (h *DNSHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
 	record, err := h.extractDNSRecordFromChange(change)
@@ -29,13 +29,13 @@ func (h *DNSHandler) Apply(ctx context.Context, change *valueobject.Change, deps
 		return result, nil
 	}
 
-	domain, ok := deps.Domains[record.Domain]
+	domain, ok := deps.Domain(record.Domain)
 	if !ok {
 		result.Error = fmt.Errorf("domain %s not found", record.Domain)
 		return result, nil
 	}
 
-	provider, err := h.getDNSProvider(domain.DNSISP, deps)
+	provider, err := deps.DNSProvider(domain.DNSISP)
 	if err != nil {
 		result.Error = fmt.Errorf("failed to get DNS provider: %w", err)
 		return result, nil
@@ -63,23 +63,6 @@ func (h *DNSHandler) extractDNSRecordFromChange(ch *valueobject.Change) (*entity
 		}
 	}
 	return nil, fmt.Errorf("cannot extract DNS record from change")
-}
-
-func (h *DNSHandler) getDNSProvider(ispName string, deps *Deps) (DNSProvider, error) {
-	isp, ok := deps.ISPs[ispName]
-	if !ok {
-		return nil, fmt.Errorf("ISP %s not found", ispName)
-	}
-
-	if !isp.HasService(entity.ISPServiceDNS) {
-		return nil, fmt.Errorf("ISP %s does not provide DNS service", ispName)
-	}
-
-	provider, err := deps.DNSFactory.Create(isp, deps.Secrets)
-	if err != nil {
-		return nil, err
-	}
-	return WrapDNSProvider(provider), nil
 }
 
 func (h *DNSHandler) createRecord(change *valueobject.Change, record *entity.DNSRecord, provider DNSProvider) (*Result, error) {

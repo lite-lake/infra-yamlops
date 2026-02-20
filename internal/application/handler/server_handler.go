@@ -16,7 +16,7 @@ func (h *ServerHandler) EntityType() string {
 	return "server"
 }
 
-func (h *ServerHandler) Apply(ctx context.Context, change *valueobject.Change, deps *Deps) (*Result, error) {
+func (h *ServerHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
 	switch change.Type {

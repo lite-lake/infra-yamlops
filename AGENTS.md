@@ -52,8 +52,18 @@ internal/
 │   └── usecase/                # Executor, SSHPool
 ├── infrastructure/persistence/ # Config loader
 ├── interfaces/cli/             # Cobra commands, BubbleTea TUI
+│   ├── workflow.go             # CLI workflow orchestration
+│   ├── tui_server.go           # TUI server operations
+│   ├── tui_dns.go              # TUI DNS operations
+│   ├── tui_cleanup.go          # TUI cleanup operations
+│   └── tui_stop.go             # TUI stop operations
+├── constants/                  # Shared constants
+│   └── constants.go            # Application-wide constants
 ├── plan/                       # Planner, Compose/Gate generators
 ├── providers/dns/              # Cloudflare, Aliyun, Tencent DNS
+│   ├── common.go               # Shared DNS logic
+│   ├── factory.go              # DNS provider factory
+│   └── provider.go             # Provider interface
 ├── providers/ssl/              # Let's Encrypt, ZeroSSL
 ├── ssh/                        # SSH client, SFTP
 ├── compose/                    # Docker Compose generator
@@ -219,6 +229,67 @@ Each environment: `yamlops-{env}` (e.g., `yamlops-prod`)
 | Application | application/ | → domain, infrastructure |
 | Domain | domain/ | No external deps |
 | Infrastructure | infrastructure/ | → domain (implements interfaces) |
+
+## Architecture Improvements
+
+### Handler Deps Interface Segregation (ISP)
+
+Handler dependencies are split into focused interfaces:
+
+```go
+type DNSReader interface {
+    GetDNSRecords(zone, name string) ([]DNSRecord, error)
+}
+
+type DNSWriter interface {
+    CreateDNSRecord(record DNSRecord) error
+    UpdateDNSRecord(record DNSRecord) error
+    DeleteDNSRecord(record DNSRecord) error
+}
+```
+
+### Executor Dependency Injection (DIP)
+
+Executor receives dependencies via constructor injection:
+
+```go
+func NewExecutor(sshPool SSHPool, dnsWriter DNSWriter) *Executor {
+    return &Executor{sshPool: sshPool, dnsWriter: dnsWriter}
+}
+```
+
+### Unified Domain Errors
+
+All domain errors defined in `internal/domain/errors.go`:
+
+```go
+var (
+    ErrNotFound      = errors.New("not found")
+    ErrAlreadyExists = errors.New("already exists")
+    ErrValidation    = errors.New("validation failed")
+)
+```
+
+### Thread-Safe Registry
+
+Registry uses `sync.RWMutex` for concurrent access:
+
+```go
+type Registry struct {
+    mu    sync.RWMutex
+    items map[string]Item
+}
+
+func (r *Registry) Get(name string) (Item, error) {
+    r.mu.RLock()
+    defer r.mu.RUnlock()
+    item, ok := r.items[name]
+    if !ok {
+        return Item{}, ErrNotFound
+    }
+    return item, nil
+}
+```
 
 ## Configuration Files
 

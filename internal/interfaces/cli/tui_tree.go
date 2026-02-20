@@ -18,11 +18,11 @@ func (m *Model) loadConfig() {
 	loader := persistence.NewConfigLoader(m.ConfigDir)
 	cfg, err := loader.Load(nil, string(m.Environment))
 	if err != nil {
-		m.ErrorMessage = fmt.Sprintf("Failed to load config: %v", err)
+		m.UI.ErrorMessage = fmt.Sprintf("Failed to load config: %v", err)
 		return
 	}
 	if err := loader.Validate(cfg); err != nil {
-		m.ErrorMessage = fmt.Sprintf("Validation error: %v", err)
+		m.UI.ErrorMessage = fmt.Sprintf("Validation error: %v", err)
 		return
 	}
 	m.Config = cfg
@@ -33,8 +33,8 @@ func (m *Model) buildTrees() {
 	if m.Config == nil {
 		return
 	}
-	m.TreeNodes = m.buildAppTree()
-	m.DNSTreeNodes = m.buildDNSTree()
+	m.Tree.TreeNodes = m.buildAppTree()
+	m.Tree.DNSTreeNodes = m.buildDNSTree()
 }
 
 func (m *Model) buildAppTree() []*TreeNode {
@@ -171,10 +171,10 @@ func (m *Model) buildDNSTree() []*TreeNode {
 }
 
 func (m *Model) generatePlan() {
-	m.PlanResult = valueobject.NewPlan()
-	m.ErrorMessage = ""
+	m.Action.PlanResult = valueobject.NewPlan()
+	m.UI.ErrorMessage = ""
 	m.loadConfig()
-	if m.ErrorMessage != "" {
+	if m.UI.ErrorMessage != "" {
 		return
 	}
 	m.buildScopeFromSelection()
@@ -185,15 +185,15 @@ func (m *Model) generatePlan() {
 	}
 
 	planner := plan.NewPlannerWithState(m.Config, state, string(m.Environment))
-	executionPlan, err := planner.Plan(m.PlanScope)
+	executionPlan, err := planner.Plan(m.Action.PlanScope)
 	if err != nil {
-		m.ErrorMessage = fmt.Sprintf("Failed to generate plan: %v", err)
+		m.UI.ErrorMessage = fmt.Sprintf("Failed to generate plan: %v", err)
 		return
 	}
-	m.PlanResult = executionPlan
-	m.ApplyTotal = len(executionPlan.Changes)
-	if m.ApplyTotal == 0 {
-		m.ApplyTotal = 1
+	m.Action.PlanResult = executionPlan
+	m.Action.ApplyTotal = len(executionPlan.Changes)
+	if m.Action.ApplyTotal == 0 {
+		m.Action.ApplyTotal = 1
 	}
 }
 
@@ -284,7 +284,7 @@ func (m *Model) getSelectedDomains() []string {
 }
 
 func (m *Model) buildScopeFromSelection() {
-	m.PlanScope = &valueobject.Scope{}
+	m.Action.PlanScope = &valueobject.Scope{}
 	services := make(map[string]bool)
 	infraServices := make(map[string]bool)
 	domains := make(map[string]bool)
@@ -306,37 +306,40 @@ func (m *Model) buildScopeFromSelection() {
 		}
 	}
 	for svc := range services {
-		m.PlanScope.Services = append(m.PlanScope.Services, svc)
+		m.Action.PlanScope.Services = append(m.Action.PlanScope.Services, svc)
 	}
 	for infra := range infraServices {
-		m.PlanScope.InfraServices = append(m.PlanScope.InfraServices, infra)
+		m.Action.PlanScope.InfraServices = append(m.Action.PlanScope.InfraServices, infra)
 	}
-	if len(m.PlanScope.Services) > 0 || len(m.PlanScope.InfraServices) > 0 {
-		m.PlanScope.ForceDeploy = true
+	if len(m.Action.PlanScope.Services) > 0 || len(m.Action.PlanScope.InfraServices) > 0 {
+		m.Action.PlanScope.ForceDeploy = true
 	}
 	for d := range domains {
-		m.PlanScope.Domain = d
+		m.Action.PlanScope.Domain = d
 		break
 	}
 }
 
 func (m *Model) executeApply() {
-	if m.PlanResult == nil || !m.PlanResult.HasChanges() {
-		m.ApplyComplete = true
+	if m.Action.PlanResult == nil || !m.Action.PlanResult.HasChanges() {
+		m.Action.ApplyComplete = true
 		return
 	}
 	m.loadConfig()
 	if m.Config == nil {
-		m.ApplyComplete = true
+		m.Action.ApplyComplete = true
 		return
 	}
 	planner := plan.NewPlanner(m.Config, string(m.Environment))
 	if err := planner.GenerateDeployments(); err != nil {
-		m.ErrorMessage = fmt.Sprintf("Failed to generate deployments: %v", err)
-		m.ApplyComplete = true
+		m.UI.ErrorMessage = fmt.Sprintf("Failed to generate deployments: %v", err)
+		m.Action.ApplyComplete = true
 		return
 	}
-	executor := usecase.NewExecutor(m.PlanResult, string(m.Environment))
+	executor := usecase.NewExecutor(&usecase.ExecutorConfig{
+		Plan: m.Action.PlanResult,
+		Env:  string(m.Environment),
+	})
 	executor.SetSecrets(m.Config.GetSecretsMap())
 	executor.SetDomains(m.Config.GetDomainMap())
 	executor.SetISPs(m.Config.GetISPMap())
@@ -349,15 +352,15 @@ func (m *Model) executeApply() {
 		}
 		executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
 	}
-	m.ApplyResults = executor.Apply()
-	m.ApplyComplete = true
+	m.Action.ApplyResults = executor.Apply()
+	m.Action.ApplyComplete = true
 }
 
 func (m Model) getCurrentTree() []*TreeNode {
 	if m.ViewMode == ViewModeDNS {
-		return m.DNSTreeNodes
+		return m.Tree.DNSTreeNodes
 	}
-	return m.TreeNodes
+	return m.Tree.TreeNodes
 }
 
 func (m Model) countVisibleNodes() int {

@@ -7,8 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
-
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 )
 
 func newShowCommand(ctx *Context) *cobra.Command {
@@ -28,10 +26,10 @@ func newShowCommand(ctx *Context) *cobra.Command {
 }
 
 func runShow(ctx *Context, entity, name string) {
-	loader := persistence.NewConfigLoader(ctx.ConfigDir)
-	cfg, err := loader.Load(nil, ctx.Env)
+	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
+	cfg, err := wf.LoadConfig(nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 

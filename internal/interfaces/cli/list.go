@@ -6,8 +6,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 )
 
 func newListCommand(ctx *Context) *cobra.Command {
@@ -26,10 +24,10 @@ func newListCommand(ctx *Context) *cobra.Command {
 }
 
 func runList(ctx *Context, entity string) {
-	loader := persistence.NewConfigLoader(ctx.ConfigDir)
-	cfg, err := loader.Load(nil, ctx.Env)
+	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
+	cfg, err := wf.LoadConfig(nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
 	}
 

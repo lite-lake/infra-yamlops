@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/litelake/yamlops/internal/domain"
@@ -38,13 +37,13 @@ func (r *DNSRecord) Validate() error {
 		DNSRecordTypeSRV:   true,
 	}
 	if !validTypes[r.Type] {
-		return fmt.Errorf("invalid dns record type: %s", r.Type)
+		return fmt.Errorf("%w: dns record type %s", domain.ErrInvalidType, r.Type)
 	}
 	if r.Name == "" {
-		return errors.New("name is required")
+		return domain.RequiredField("name")
 	}
 	if r.Value == "" {
-		return errors.New("value is required")
+		return domain.RequiredField("value")
 	}
 	if r.TTL < 0 {
 		return fmt.Errorf("%w: ttl must be non-negative", domain.ErrInvalidTTL)

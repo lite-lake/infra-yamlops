@@ -57,7 +57,3 @@ func planSimpleEntity[T any](
 		}
 	}
 }
-
-func alwaysMatchScope(_ string) bool {
-	return true
-}

@@ -16,7 +16,7 @@ func (h *CertificateHandler) EntityType() string {
 	return "certificate"
 }
 
-func (h *CertificateHandler) Apply(ctx context.Context, change *valueobject.Change, deps *Deps) (*Result, error) {
+func (h *CertificateHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
 	return &Result{
 		Change:  change,
 		Success: true,

@@ -198,51 +198,79 @@ func (n *TreeNode) GetSelectedLeaves() []*TreeNode {
 	return leaves
 }
 
-type Model struct {
-	ViewState          ViewState
-	ViewMode           ViewMode
-	TreeSource         ViewState
-	Environment        Environment
-	ConfigDir          string
-	Config             *entity.Config
-	TreeNodes          []*TreeNode
-	DNSTreeNodes       []*TreeNode
-	CursorIndex        int
-	Width              int
-	Height             int
-	ErrorMessage       string
-	PlanResult         *valueobject.Plan
-	ApplyProgress      int
-	ApplyTotal         int
-	ApplyComplete      bool
-	ApplyResults       []*handler.Result
-	ApplyInProgress    bool
-	ConfirmSelected    int
-	PlanScope          *valueobject.Scope
-	ConfirmView        bool
-	MainMenuIndex      int
-	ServiceMenuIndex   int
+type UIState struct {
+	Width         int
+	Height        int
+	ScrollOffset  int
+	ErrorMessage  string
+	MainMenuIndex int
+}
+
+type TreeState struct {
+	TreeNodes    []*TreeNode
+	DNSTreeNodes []*TreeNode
+	CursorIndex  int
+}
+
+type ServerState struct {
 	ServerList         []*entity.Server
 	ServerIndex        int
 	ServerCheckResults []serverpkg.CheckResult
 	ServerSyncResults  []serverpkg.SyncResult
 	ServerAction       int
 	ServerFocusPanel   int
-	DNSMenuIndex       int
-	DNSISPIndex        int
-	DNSDomainIndex     int
-	DNSPullDiffs       []DomainDiff
-	DNSRecordDiffs     []RecordDiff
-	DNSPullSelected    map[int]bool
-	DNSPullCursor      int
-	ScrollOffset       int
-	CleanupResults     []CleanupResult
-	CleanupSelected    map[int]bool
-	CleanupCursor      int
-	StopResults        []StopResult
-	StopSelected       map[int]bool
-	StopCursor         int
-	ServiceStatusMap   map[string]NodeStatus
+	ServiceMenuIndex   int
+}
+
+type DNSState struct {
+	DNSMenuIndex    int
+	DNSISPIndex     int
+	DNSDomainIndex  int
+	DNSPullDiffs    []DomainDiff
+	DNSRecordDiffs  []RecordDiff
+	DNSPullSelected map[int]bool
+	DNSPullCursor   int
+}
+
+type CleanupState struct {
+	CleanupResults  []CleanupResult
+	CleanupSelected map[int]bool
+	CleanupCursor   int
+}
+
+type StopState struct {
+	StopResults      []StopResult
+	StopSelected     map[int]bool
+	StopCursor       int
+	ServiceStatusMap map[string]NodeStatus
+}
+
+type ActionState struct {
+	PlanResult      *valueobject.Plan
+	ApplyProgress   int
+	ApplyTotal      int
+	ApplyComplete   bool
+	ApplyResults    []*handler.Result
+	ApplyInProgress bool
+	ConfirmSelected int
+	PlanScope       *valueobject.Scope
+}
+
+type Model struct {
+	ViewState   ViewState
+	ViewMode    ViewMode
+	TreeSource  ViewState
+	Environment Environment
+	ConfigDir   string
+	Config      *entity.Config
+
+	UI      *UIState
+	Tree    *TreeState
+	Server  *ServerState
+	DNS     *DNSState
+	Cleanup *CleanupState
+	Stop    *StopState
+	Action  *ActionState
 }
 
 func NewModel(env string, configDir string) Model {
@@ -258,19 +286,28 @@ func NewModel(env string, configDir string) Model {
 		environment = Environment(env)
 	}
 	m := Model{
-		ViewState:        ViewStateMainMenu,
-		ViewMode:         ViewModeApp,
-		Environment:      environment,
-		ConfigDir:        configDir,
-		PlanScope:        &valueobject.Scope{},
-		Width:            80,
-		Height:           24,
-		ServerFocusPanel: 0,
+		ViewState:   ViewStateMainMenu,
+		ViewMode:    ViewModeApp,
+		Environment: environment,
+		ConfigDir:   configDir,
+		UI: &UIState{
+			Width:         80,
+			Height:        24,
+			MainMenuIndex: 0,
+		},
+		Tree:    &TreeState{},
+		Server:  &ServerState{ServerFocusPanel: 0},
+		DNS:     &DNSState{},
+		Cleanup: &CleanupState{},
+		Stop:    &StopState{},
+		Action: &ActionState{
+			PlanScope: &valueobject.Scope{},
+		},
 	}
 	m.loadConfig()
 	if m.Config != nil {
 		for i := range m.Config.Servers {
-			m.ServerList = append(m.ServerList, &m.Config.Servers[i])
+			m.Server.ServerList = append(m.Server.ServerList, &m.Config.Servers[i])
 		}
 	}
 	return m

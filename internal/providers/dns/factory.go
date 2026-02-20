@@ -67,7 +67,7 @@ func createAliyun(isp *entity.ISP, secrets map[string]string) (Provider, error) 
 	if err != nil {
 		return nil, fmt.Errorf("resolve access_key_secret: %w", err)
 	}
-	return NewAliyunProvider(accessKeyID, accessKeySecret), nil
+	return NewAliyunProvider(accessKeyID, accessKeySecret)
 }
 
 func createTencent(isp *entity.ISP, secrets map[string]string) (Provider, error) {
@@ -79,5 +79,5 @@ func createTencent(isp *entity.ISP, secrets map[string]string) (Provider, error)
 	if err != nil {
 		return nil, fmt.Errorf("resolve secret_key: %w", err)
 	}
-	return NewTencentProvider(secretID, secretKey), nil
+	return NewTencentProvider(secretID, secretKey)
 }
