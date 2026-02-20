@@ -285,8 +285,8 @@ func TestValidator_PortConflicts(t *testing.T) {
 				{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}},
 			},
 			InfraServices: []entity.InfraService{
-				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, Server: "server1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 80}, Auth: entity.SSLAuth{}, Storage: entity.SSLStorage{Type: "local"}, Defaults: entity.SSLDefaults{IssueProvider: "test", StorageProvider: "test"}}},
-				{Name: "ssl2", Type: entity.InfraServiceTypeSSL, Server: "server1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 80}, Auth: entity.SSLAuth{}, Storage: entity.SSLStorage{Type: "local"}, Defaults: entity.SSLDefaults{IssueProvider: "test", StorageProvider: "test"}}},
+				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, Server: "server1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 80}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},
+				{Name: "ssl2", Type: entity.InfraServiceTypeSSL, Server: "server1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 80}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},
 			},
 		}
 		validator := NewValidator(cfg)

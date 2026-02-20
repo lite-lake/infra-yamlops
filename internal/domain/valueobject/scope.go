@@ -8,6 +8,7 @@ type Scope struct {
 	Services      []string
 	InfraServices []string
 	ForceDeploy   bool
+	DNSOnly       bool
 }
 
 func (s *Scope) Matches(zone, server, service, domain string) bool {

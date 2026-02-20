@@ -305,19 +305,14 @@ func sslConfigEqual(a, b *entity.SSLConfig) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	if a.Storage.Type != b.Storage.Type || a.Storage.Path != b.Storage.Path {
+	if a.Ports.API != b.Ports.API {
 		return false
 	}
-	if a.Defaults.IssueProvider != b.Defaults.IssueProvider || a.Defaults.StorageProvider != b.Defaults.StorageProvider {
+	if a.Config == nil && b.Config == nil {
+		return true
+	}
+	if a.Config == nil || b.Config == nil {
 		return false
 	}
-	if len(a.Volumes) != len(b.Volumes) {
-		return false
-	}
-	for i, v := range a.Volumes {
-		if i >= len(b.Volumes) || v != b.Volumes[i] {
-			return false
-		}
-	}
-	return true
+	return a.Config.Source == b.Config.Source && a.Config.Sync == b.Config.Sync
 }

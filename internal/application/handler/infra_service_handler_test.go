@@ -426,17 +426,21 @@ func TestInfraServiceHandler_GetSSLConfigFilePath(t *testing.T) {
 
 	deps := newMockDeps()
 	deps.workDir = "/tmp"
-	deps.servers["server1"] = &ServerInfo{}
+	deps.env = "demo"
 
-	change := &valueobject.Change{
+	infra := &entity.InfraService{
 		Name: "ssl1",
-		NewState: map[string]interface{}{
-			"server": "server1",
+		Type: entity.InfraServiceTypeSSL,
+		SSLConfig: &entity.SSLConfig{
+			Config: &entity.SSLVolumeConfig{
+				Source: "volumes://infra-ssl-config-cn",
+				Sync:   true,
+			},
 		},
 	}
 
-	result := h.getSSLConfigFilePath(change, deps)
-	expected := filepath.Join("/tmp", "deployments", "server1", "ssl-config", "config.yml")
+	result := h.getSSLConfigFilePath(infra, deps)
+	expected := filepath.Join("/tmp", "userdata", "demo", "volumes", "infra-ssl-config-cn", "config.yml")
 	if result != expected {
 		t.Errorf("expected %s, got %s", expected, result)
 	}

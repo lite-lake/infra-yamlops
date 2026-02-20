@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
 func TestGatewayPorts_Validate(t *testing.T) {
@@ -181,117 +180,6 @@ func TestSSLPorts_Validate(t *testing.T) {
 	}
 }
 
-func TestSSLAuth_Validate(t *testing.T) {
-	tests := []struct {
-		name    string
-		auth    SSLAuth
-		wantErr error
-	}{
-		{
-			name:    "disabled auth is valid",
-			auth:    SSLAuth{Enabled: false},
-			wantErr: nil,
-		},
-		{
-			name:    "enabled auth with empty apikey",
-			auth:    SSLAuth{Enabled: true, APIKey: valueobject.SecretRef{}},
-			wantErr: domain.ErrEmptyValue,
-		},
-		{
-			name:    "enabled auth with valid apikey",
-			auth:    SSLAuth{Enabled: true, APIKey: valueobject.SecretRef{Plain: "secret-key"}},
-			wantErr: nil,
-		},
-		{
-			name:    "enabled auth with secret reference",
-			auth:    SSLAuth{Enabled: true, APIKey: valueobject.SecretRef{Secret: "api-key-secret"}},
-			wantErr: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.auth.Validate()
-			if tt.wantErr != nil {
-				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("Validate() error = %v, want %v", err, tt.wantErr)
-				}
-			} else if err != nil {
-				t.Errorf("Validate() unexpected error = %v", err)
-			}
-		})
-	}
-}
-
-func TestSSLStorage_Validate(t *testing.T) {
-	tests := []struct {
-		name    string
-		storage SSLStorage
-		wantErr error
-	}{
-		{
-			name:    "missing type",
-			storage: SSLStorage{},
-			wantErr: domain.ErrRequired,
-		},
-		{
-			name:    "valid",
-			storage: SSLStorage{Type: "local", Path: "/data/ssl"},
-			wantErr: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.storage.Validate()
-			if tt.wantErr != nil {
-				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("Validate() error = %v, want %v", err, tt.wantErr)
-				}
-			} else if err != nil {
-				t.Errorf("Validate() unexpected error = %v", err)
-			}
-		})
-	}
-}
-
-func TestSSLDefaults_Validate(t *testing.T) {
-	tests := []struct {
-		name     string
-		defaults SSLDefaults
-		wantErr  error
-	}{
-		{
-			name:     "missing issue_provider",
-			defaults: SSLDefaults{StorageProvider: "local"},
-			wantErr:  domain.ErrRequired,
-		},
-		{
-			name:     "missing storage_provider",
-			defaults: SSLDefaults{IssueProvider: "letsencrypt"},
-			wantErr:  domain.ErrRequired,
-		},
-		{
-			name:     "valid",
-			defaults: SSLDefaults{IssueProvider: "letsencrypt", StorageProvider: "local"},
-			wantErr:  nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.defaults.Validate()
-			if tt.wantErr != nil {
-				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("Validate() error = %v, want %v", err, tt.wantErr)
-				}
-			} else if err != nil {
-				t.Errorf("Validate() unexpected error = %v", err)
-			}
-		})
-	}
-}
-
 func TestSSLConfig_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -301,50 +189,32 @@ func TestSSLConfig_Validate(t *testing.T) {
 		{
 			name: "invalid ports",
 			config: SSLConfig{
-				Ports:    SSLPorts{API: 0},
-				Auth:     SSLAuth{Enabled: false},
-				Storage:  SSLStorage{Type: "local"},
-				Defaults: SSLDefaults{IssueProvider: "letsencrypt", StorageProvider: "local"},
+				Ports:  SSLPorts{API: 0},
+				Config: &SSLVolumeConfig{Source: "volumes://ssl-config", Sync: true},
 			},
 			wantErr: domain.ErrInvalidPort,
 		},
 		{
-			name: "invalid auth",
+			name: "missing config",
 			config: SSLConfig{
-				Ports:    SSLPorts{API: 8080},
-				Auth:     SSLAuth{Enabled: true, APIKey: valueobject.SecretRef{}},
-				Storage:  SSLStorage{Type: "local"},
-				Defaults: SSLDefaults{IssueProvider: "letsencrypt", StorageProvider: "local"},
-			},
-			wantErr: domain.ErrEmptyValue,
-		},
-		{
-			name: "invalid storage",
-			config: SSLConfig{
-				Ports:    SSLPorts{API: 8080},
-				Auth:     SSLAuth{Enabled: false},
-				Storage:  SSLStorage{Type: ""},
-				Defaults: SSLDefaults{IssueProvider: "letsencrypt", StorageProvider: "local"},
+				Ports:  SSLPorts{API: 8080},
+				Config: nil,
 			},
 			wantErr: domain.ErrRequired,
 		},
 		{
-			name: "invalid defaults",
+			name: "missing config source",
 			config: SSLConfig{
-				Ports:    SSLPorts{API: 8080},
-				Auth:     SSLAuth{Enabled: false},
-				Storage:  SSLStorage{Type: "local"},
-				Defaults: SSLDefaults{IssueProvider: "", StorageProvider: "local"},
+				Ports:  SSLPorts{API: 8080},
+				Config: &SSLVolumeConfig{Source: "", Sync: true},
 			},
 			wantErr: domain.ErrRequired,
 		},
 		{
 			name: "valid",
 			config: SSLConfig{
-				Ports:    SSLPorts{API: 8080},
-				Auth:     SSLAuth{Enabled: false},
-				Storage:  SSLStorage{Type: "local", Path: "/data/ssl"},
-				Defaults: SSLDefaults{IssueProvider: "letsencrypt", StorageProvider: "local"},
+				Ports:  SSLPorts{API: 8080},
+				Config: &SSLVolumeConfig{Source: "volumes://ssl-config", Sync: true},
 			},
 			wantErr: nil,
 		},
@@ -432,10 +302,8 @@ func TestInfraService_Validate(t *testing.T) {
 				Server: "server-1",
 				Image:  "ssl:latest",
 				SSLConfig: &SSLConfig{
-					Ports:    SSLPorts{API: 8080},
-					Auth:     SSLAuth{Enabled: false},
-					Storage:  SSLStorage{Type: "local"},
-					Defaults: SSLDefaults{IssueProvider: "letsencrypt", StorageProvider: "local"},
+					Ports:  SSLPorts{API: 8080},
+					Config: &SSLVolumeConfig{Source: "volumes://ssl-config", Sync: true},
 				},
 			},
 			wantErr: nil,

@@ -289,7 +289,9 @@ func (m *Model) getSelectedDomains() []string {
 }
 
 func (m *Model) buildScopeFromSelection() {
-	m.Action.PlanScope = &valueobject.Scope{}
+	m.Action.PlanScope = &valueobject.Scope{
+		DNSOnly: m.ViewMode == ViewModeDNS,
+	}
 	services := make(map[string]bool)
 	infraServices := make(map[string]bool)
 	domains := make(map[string]bool)

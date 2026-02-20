@@ -98,28 +98,12 @@ func (g *Generator) generateInfraServiceSSL(serverDir string, infra *entity.Infr
 
 	volumes := []string{
 		"./ssl-data:/app/data",
-		"./ssl-config:/app/configs",
-	}
-	namedVolumes := []string{}
-	for _, v := range infra.SSLConfig.Volumes {
-		converted := convertVolumeProtocol(v)
-		volumes = append(volumes, converted)
-		if volName := extractNamedVolume(converted); volName != "" {
-			namedVolumes = append(namedVolumes, volName)
-		}
+		"./ssl-config:/app/configs:ro",
 	}
 
 	ports := []string{}
 	if infra.SSLConfig.Ports.API > 0 {
 		ports = append(ports, fmt.Sprintf("%d:%d", infra.SSLConfig.Ports.API, infra.SSLConfig.Ports.API))
-	}
-
-	volumesSection := ""
-	if len(namedVolumes) > 0 {
-		volumesSection = "\nvolumes:\n"
-		for _, vn := range namedVolumes {
-			volumesSection += fmt.Sprintf("  %s:\n    external: true\n", vn)
-		}
 	}
 
 	composeContent := fmt.Sprintf(`services:
@@ -137,24 +121,11 @@ func (g *Generator) generateInfraServiceSSL(serverDir string, infra *entity.Infr
 networks:
   %s:
     external: true
-%s`, serviceName, infra.Image, serviceName, strings.Join(ports, "\n      - "), strings.Join(volumes, "\n      - "), networkName, networkName, volumesSection)
+`, serviceName, infra.Image, serviceName, strings.Join(ports, "\n      - "), strings.Join(volumes, "\n      - "), networkName, networkName)
 
 	composeFile := filepath.Join(serverDir, fmt.Sprintf("%s.compose.yaml", infra.Name))
 	if err := os.WriteFile(composeFile, []byte(composeContent), 0644); err != nil {
 		return fmt.Errorf("failed to write ssl compose file %s: %w", composeFile, err)
-	}
-
-	sslConfigContent, err := g.generateSSLConfig(infra, config)
-	if err != nil {
-		return fmt.Errorf("failed to generate ssl config for %s: %w", infra.Name, err)
-	}
-	sslConfigDir := filepath.Join(serverDir, "ssl-config")
-	if err := os.MkdirAll(sslConfigDir, 0755); err != nil {
-		return fmt.Errorf("failed to create ssl-config directory: %w", err)
-	}
-	sslConfigFile := filepath.Join(sslConfigDir, "config.yml")
-	if err := os.WriteFile(sslConfigFile, []byte(sslConfigContent), 0644); err != nil {
-		return fmt.Errorf("failed to write ssl config file %s: %w", sslConfigFile, err)
 	}
 
 	return nil

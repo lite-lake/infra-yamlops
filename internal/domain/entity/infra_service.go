@@ -5,7 +5,6 @@ import (
 	"net"
 
 	"github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
 type InfraServiceType string
@@ -117,19 +116,17 @@ func (s *InfraService) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 	case InfraServiceTypeSSL:
 		var ssl struct {
-			Ports  *SSLPorts  `yaml:"ports"`
-			Config *SSLConfig `yaml:"config"`
+			Ports  *SSLPorts        `yaml:"ports"`
+			Config *SSLVolumeConfig `yaml:"config"`
 		}
 		if err := unmarshal(&ssl); err != nil {
 			return err
 		}
-		s.SSLConfig = ssl.Config
-		if s.SSLConfig == nil {
-			s.SSLConfig = &SSLConfig{}
-		}
+		s.SSLConfig = &SSLConfig{}
 		if ssl.Ports != nil {
 			s.SSLConfig.Ports = *ssl.Ports
 		}
+		s.SSLConfig.Config = ssl.Config
 	}
 
 	return nil
@@ -165,13 +162,15 @@ func (s *InfraService) MarshalYAML() (interface{}, error) {
 			Type   InfraServiceType `yaml:"type"`
 			Server string           `yaml:"server"`
 			Image  string           `yaml:"image"`
-			Config *SSLConfig       `yaml:"config,omitempty"`
+			Ports  *SSLPorts        `yaml:"ports,omitempty"`
+			Config *SSLVolumeConfig `yaml:"config,omitempty"`
 		}{
 			Name:   s.Name,
 			Type:   s.Type,
 			Server: s.Server,
 			Image:  s.Image,
-			Config: s.SSLConfig,
+			Ports:  &s.SSLConfig.Ports,
+			Config: s.SSLConfig.Config,
 		}, nil
 	}
 	return (*infraServiceAlias)(s), nil
@@ -215,26 +214,25 @@ func (s *InfraService) GetServer() string {
 	return s.Server
 }
 
+type SSLVolumeConfig struct {
+	Source string `yaml:"source"`
+	Sync   bool   `yaml:"sync"`
+}
+
 type SSLConfig struct {
-	Ports    SSLPorts    `yaml:"ports,omitempty"`
-	Auth     SSLAuth     `yaml:"auth"`
-	Storage  SSLStorage  `yaml:"storage"`
-	Defaults SSLDefaults `yaml:"defaults"`
-	Volumes  []string    `yaml:"volumes,omitempty"`
+	Ports  SSLPorts         `yaml:"ports,omitempty"`
+	Config *SSLVolumeConfig `yaml:"config,omitempty"`
 }
 
 func (c *SSLConfig) Validate() error {
 	if err := c.Ports.Validate(); err != nil {
 		return err
 	}
-	if err := c.Auth.Validate(); err != nil {
-		return err
+	if c.Config == nil {
+		return domain.RequiredField("config for ssl type")
 	}
-	if err := c.Storage.Validate(); err != nil {
-		return err
-	}
-	if err := c.Defaults.Validate(); err != nil {
-		return err
+	if c.Config.Source == "" {
+		return domain.RequiredField("config.source for ssl type")
 	}
 	return nil
 }
@@ -246,47 +244,6 @@ type SSLPorts struct {
 func (p *SSLPorts) Validate() error {
 	if p.API <= 0 || p.API > 65535 {
 		return fmt.Errorf("%w: api port must be between 1 and 65535", domain.ErrInvalidPort)
-	}
-	return nil
-}
-
-type SSLAuth struct {
-	Enabled bool                  `yaml:"enabled"`
-	APIKey  valueobject.SecretRef `yaml:"apikey"`
-}
-
-func (a *SSLAuth) Validate() error {
-	if a.Enabled {
-		if err := a.APIKey.Validate(); err != nil {
-			return fmt.Errorf("apikey: %w", err)
-		}
-	}
-	return nil
-}
-
-type SSLStorage struct {
-	Type string `yaml:"type"`
-	Path string `yaml:"path,omitempty"`
-}
-
-func (s *SSLStorage) Validate() error {
-	if s.Type == "" {
-		return domain.RequiredField("storage type")
-	}
-	return nil
-}
-
-type SSLDefaults struct {
-	IssueProvider   string `yaml:"issue_provider"`
-	StorageProvider string `yaml:"storage_provider"`
-}
-
-func (d *SSLDefaults) Validate() error {
-	if d.IssueProvider == "" {
-		return domain.RequiredField("issue_provider")
-	}
-	if d.StorageProvider == "" {
-		return domain.RequiredField("storage_provider")
 	}
 	return nil
 }

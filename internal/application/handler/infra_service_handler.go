@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain/entity"
@@ -139,13 +140,18 @@ func (h *InfraServiceHandler) deployGatewayType(change *valueobject.Change, clie
 }
 
 func (h *InfraServiceHandler) deploySSLType(change *valueobject.Change, client SSHClient, remoteDir string, deps DepsProvider) error {
-	sslConfigFile := h.getSSLConfigFilePath(change, deps)
+	infra, ok := change.NewState.(*entity.InfraService)
+	if !ok || infra == nil || infra.SSLConfig == nil || infra.SSLConfig.Config == nil {
+		return nil
+	}
+
+	sslConfigFile := h.getSSLConfigFilePath(infra, deps)
 	if sslConfigFile == "" {
 		return nil
 	}
 
 	if _, err := os.Stat(sslConfigFile); os.IsNotExist(err) {
-		return nil
+		return fmt.Errorf("ssl config file not found: %s", sslConfigFile)
 	}
 
 	content, err := os.ReadFile(sslConfigFile)
@@ -199,10 +205,16 @@ func (h *InfraServiceHandler) getGatewayFilePath(ch *valueobject.Change, deps De
 	return filepath.Join(deps.WorkDir(), "deployments", serverName, ch.Name+".gate.yaml")
 }
 
-func (h *InfraServiceHandler) getSSLConfigFilePath(ch *valueobject.Change, deps DepsProvider) string {
-	serverName := ExtractServerFromChange(ch)
-	if serverName == "" {
+func (h *InfraServiceHandler) getSSLConfigFilePath(infra *entity.InfraService, deps DepsProvider) string {
+	if infra.SSLConfig == nil || infra.SSLConfig.Config == nil || infra.SSLConfig.Config.Source == "" {
 		return ""
 	}
-	return filepath.Join(deps.WorkDir(), "deployments", serverName, "ssl-config", "config.yml")
+
+	source := infra.SSLConfig.Config.Source
+	if !strings.HasPrefix(source, "volumes://") {
+		return ""
+	}
+
+	volumePath := strings.TrimPrefix(source, "volumes://")
+	return filepath.Join(deps.WorkDir(), "userdata", deps.Env(), "volumes", volumePath, "config.yml")
 }
