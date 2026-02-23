@@ -19,7 +19,6 @@ type DeploymentState struct {
 	Domains       map[string]*entity.Domain
 	Records       map[string]*entity.DNSRecord
 	Certs         map[string]*entity.Certificate
-	Registries    map[string]*entity.Registry
 	ISPs          map[string]*entity.ISP
 }
 
@@ -32,7 +31,6 @@ func NewDeploymentState() *DeploymentState {
 		Domains:       make(map[string]*entity.Domain),
 		Records:       make(map[string]*entity.DNSRecord),
 		Certs:         make(map[string]*entity.Certificate),
-		Registries:    make(map[string]*entity.Registry),
 		ISPs:          make(map[string]*entity.ISP),
 	}
 }

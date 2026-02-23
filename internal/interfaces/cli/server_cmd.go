@@ -6,7 +6,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/environment"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 	"github.com/litelake/yamlops/internal/ssh"
@@ -78,7 +77,6 @@ func runServerSetup(ctx *Context, serverName, zone string, checkOnly, syncOnly b
 	}
 
 	secrets := cfg.GetSecretsMap()
-	registries := convertRegistries(cfg.Registries)
 
 	for i := range cfg.Servers {
 		srv := &cfg.Servers[i]
@@ -102,27 +100,19 @@ func runServerSetup(ctx *Context, serverName, zone string, checkOnly, syncOnly b
 		}
 
 		if !syncOnly {
-			checker := environment.NewChecker(client, srv, registries, secrets)
+			checker := environment.NewChecker(client, srv, cfg.Registries, secrets)
 			results := checker.CheckAll()
 			fmt.Print(environment.FormatResults(srv.Name, results))
 		}
 
 		if !checkOnly {
-			syncer := environment.NewSyncer(client, srv, ctx.Env, registries, secrets)
+			syncer := environment.NewSyncer(client, srv, ctx.Env, secrets, cfg.Registries)
 			results := syncer.SyncAll()
 			printSyncResults(srv.Name, results)
 		}
 
 		client.Close()
 	}
-}
-
-func convertRegistries(registries []entity.Registry) []*entity.Registry {
-	result := make([]*entity.Registry, len(registries))
-	for i := range registries {
-		result[i] = &registries[i]
-	}
-	return result
 }
 
 func runServerCheck(ctx *Context, serverName, zone string) {

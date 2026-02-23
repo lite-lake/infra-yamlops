@@ -61,7 +61,6 @@ func runEnvCheck(ctx *Context, server, zone string) {
 	}
 
 	secrets := cfg.GetSecretsMap()
-	registries := convertRegistries(cfg.Registries)
 
 	for i := range cfg.Servers {
 		srv := &cfg.Servers[i]
@@ -84,7 +83,7 @@ func runEnvCheck(ctx *Context, server, zone string) {
 			continue
 		}
 
-		checker := serverpkg.NewChecker(client, srv, registries, secrets)
+		checker := serverpkg.NewChecker(client, srv, cfg.Registries, secrets)
 		results := checker.CheckAll()
 		fmt.Print(serverpkg.FormatResults(srv.Name, results))
 
@@ -101,7 +100,6 @@ func runEnvSync(ctx *Context, server, zone string) {
 	}
 
 	secrets := cfg.GetSecretsMap()
-	registries := convertRegistries(cfg.Registries)
 
 	for i := range cfg.Servers {
 		srv := &cfg.Servers[i]
@@ -124,7 +122,7 @@ func runEnvSync(ctx *Context, server, zone string) {
 			continue
 		}
 
-		syncer := serverpkg.NewSyncer(client, srv, ctx.Env, registries, secrets)
+		syncer := serverpkg.NewSyncer(client, srv, ctx.Env, secrets, cfg.Registries)
 		results := syncer.SyncAll()
 
 		fmt.Printf("[%s] Sync Results\n", srv.Name)

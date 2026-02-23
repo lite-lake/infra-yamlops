@@ -211,7 +211,6 @@ func (m *Model) fetchDNSRemoteState() *plan.DeploymentState {
 		Domains:       make(map[string]*entity.Domain),
 		Records:       make(map[string]*entity.DNSRecord),
 		Certs:         make(map[string]*entity.Certificate),
-		Registries:    make(map[string]*entity.Registry),
 		ISPs:          make(map[string]*entity.ISP),
 	}
 
@@ -350,6 +349,7 @@ func (m *Model) executeApply() {
 	executor.SetSecrets(m.Config.GetSecretsMap())
 	executor.SetDomains(m.Config.GetDomainMap())
 	executor.SetISPs(m.Config.GetISPMap())
+	executor.SetServerEntities(m.Config.GetServerMap())
 	executor.SetWorkDir(m.ConfigDir)
 	secrets := m.Config.GetSecretsMap()
 	for _, srv := range m.Config.Servers {

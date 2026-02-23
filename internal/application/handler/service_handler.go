@@ -7,7 +7,9 @@ import (
 	"path/filepath"
 
 	"github.com/litelake/yamlops/internal/constants"
+	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/litelake/yamlops/internal/network"
 )
 
 type ServiceHandler struct{}
@@ -41,14 +43,51 @@ func (h *ServiceHandler) Apply(ctx context.Context, change *valueobject.Change, 
 	case valueobject.ChangeTypeDelete:
 		return h.deleteService(change, client, remoteDir)
 	default:
-		return h.deployService(change, client, remoteDir, deps)
+		return h.deployService(change, client, remoteDir, deps, serverName)
 	}
 }
 
-func (h *ServiceHandler) deployService(change *valueobject.Change, client SSHClient, remoteDir string, deps DepsProvider) (*Result, error) {
+func (h *ServiceHandler) deployService(change *valueobject.Change, client SSHClient, remoteDir string, deps DepsProvider, serverName string) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
-	if err := client.MkdirAllSudoWithPerm(remoteDir, "750"); err != nil {
+	if change.NewState != nil {
+		if svc, ok := change.NewState.(map[string]interface{}); ok {
+			if registryName, exists := svc["registry"].(string); exists && registryName != "" {
+				registryMgr, err := deps.RegistryManager(serverName)
+				if err != nil {
+					result.Error = fmt.Errorf("failed to get registry manager: %w", err)
+					return result, nil
+				}
+				loginResult, err := registryMgr.EnsureLoggedIn(registryName)
+				if err != nil {
+					result.Error = fmt.Errorf("failed to login registry %s: %w", registryName, err)
+					return result, nil
+				}
+				if !loginResult.Success {
+					result.Error = fmt.Errorf("registry login failed: %s", loginResult.Message)
+					return result, nil
+				}
+			}
+		}
+	}
+
+	requiredNetworks, err := h.getRequiredNetworks(change, deps, serverName)
+	if err != nil {
+		result.Error = err
+		return result, nil
+	}
+
+	if len(requiredNetworks) > 0 {
+		netMgr := network.NewManager(client)
+		for _, netSpec := range requiredNetworks {
+			if err := netMgr.Ensure(&netSpec); err != nil {
+				result.Error = fmt.Errorf("failed to ensure network %s: %w", netSpec.Name, err)
+				return result, nil
+			}
+		}
+	}
+
+	if err := client.MkdirAllSudoWithPerm(remoteDir, "755"); err != nil {
 		result.Error = fmt.Errorf("failed to create remote directory: %w", err)
 		return result, nil
 	}
@@ -65,9 +104,6 @@ func (h *ServiceHandler) deployService(change *valueobject.Change, client SSHCli
 				result.Error = fmt.Errorf("failed to sync compose file: %w", err)
 				return result, nil
 			}
-
-			networkCmd := fmt.Sprintf("sudo docker network create %s 2>/dev/null || true", fmt.Sprintf(constants.DockerNetworkFormat, deps.Env()))
-			_, _, _ = client.Run(networkCmd)
 
 			pullCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml pull", remoteDir)
 			_, pullStderr, pullErr := client.Run(pullCmd)
@@ -88,6 +124,45 @@ func (h *ServiceHandler) deployService(change *valueobject.Change, client SSHCli
 
 	result.Success = true
 	return result, nil
+}
+
+func (h *ServiceHandler) getRequiredNetworks(change *valueobject.Change, deps DepsProvider, serverName string) ([]entity.ServerNetwork, error) {
+	server, ok := deps.Server(serverName)
+	if !ok {
+		return nil, fmt.Errorf("server %s not found", serverName)
+	}
+
+	var serviceNetworks []string
+	if change.NewState != nil {
+		if svc, ok := change.NewState.(*entity.BizService); ok {
+			serviceNetworks = svc.Networks
+		} else if svc, ok := change.NewState.(map[string]interface{}); ok {
+			if nets, ok := svc["networks"].([]interface{}); ok {
+				for _, n := range nets {
+					if name, ok := n.(string); ok {
+						serviceNetworks = append(serviceNetworks, name)
+					}
+				}
+			}
+		}
+	}
+
+	if len(serviceNetworks) == 0 {
+		if len(server.Networks) > 0 {
+			return server.Networks[:1], nil
+		}
+		return []entity.ServerNetwork{{Name: fmt.Sprintf("yamlops-%s", deps.Env()), Type: entity.NetworkTypeBridge}}, nil
+	}
+
+	var requiredNetworks []entity.ServerNetwork
+	for _, netName := range serviceNetworks {
+		if server.HasNetwork(netName) {
+			requiredNetworks = append(requiredNetworks, *server.GetNetwork(netName))
+		} else {
+			requiredNetworks = append(requiredNetworks, entity.ServerNetwork{Name: netName, Type: entity.NetworkTypeBridge})
+		}
+	}
+	return requiredNetworks, nil
 }
 
 func (h *ServiceHandler) deleteService(change *valueobject.Change, client SSHClient, remoteDir string) (*Result, error) {

@@ -315,36 +315,6 @@ func TestCertificateEquals(t *testing.T) {
 	}
 }
 
-func TestRegistryEquals(t *testing.T) {
-	tests := []struct {
-		name     string
-		a, b     *entity.Registry
-		expected bool
-	}{
-		{
-			name:     "equal registries",
-			a:        &entity.Registry{Name: "reg1", URL: "https://registry.example.com"},
-			b:        &entity.Registry{Name: "reg1", URL: "https://registry.example.com"},
-			expected: true,
-		},
-		{
-			name:     "different URL",
-			a:        &entity.Registry{Name: "reg1", URL: "https://registry.example.com"},
-			b:        &entity.Registry{Name: "reg1", URL: "https://registry2.example.com"},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := RegistryEquals(tt.a, tt.b)
-			if result != tt.expected {
-				t.Errorf("RegistryEquals() = %v, expected %v", result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestServiceEquals(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -450,22 +420,6 @@ func TestDifferService_PlanCertificates(t *testing.T) {
 	}
 
 	svc.PlanCertificates(plan, cfgMap, scope)
-
-	if len(plan.Changes) != 1 {
-		t.Errorf("expected 1 change, got %d", len(plan.Changes))
-	}
-}
-
-func TestDifferService_PlanRegistries(t *testing.T) {
-	svc := NewDifferService(nil)
-	plan := valueobject.NewPlan()
-	scope := &valueobject.Scope{}
-
-	cfgMap := map[string]*entity.Registry{
-		"reg1": {Name: "reg1", URL: "https://registry.example.com"},
-	}
-
-	svc.PlanRegistries(plan, cfgMap, scope)
 
 	if len(plan.Changes) != 1 {
 		t.Errorf("expected 1 change, got %d", len(plan.Changes))

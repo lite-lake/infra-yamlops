@@ -24,7 +24,6 @@ func NewDifferService(state *repository.DeploymentState) *DifferService {
 			Domains:       make(map[string]*entity.Domain),
 			Records:       make(map[string]*entity.DNSRecord),
 			Certs:         make(map[string]*entity.Certificate),
-			Registries:    make(map[string]*entity.Registry),
 			ISPs:          make(map[string]*entity.ISP),
 		}
 	}
@@ -95,13 +94,4 @@ func CertificateEquals(a, b *entity.Certificate) bool {
 		}
 	}
 	return true
-}
-
-func (s *DifferService) PlanRegistries(plan *valueobject.Plan, cfgMap map[string]*entity.Registry, scope *valueobject.Scope) {
-	planSimpleEntity(plan, cfgMap, s.state.Registries, RegistryEquals, "registry",
-		func(_ string) bool { return scope.Matches("", "", "", "") })
-}
-
-func RegistryEquals(a, b *entity.Registry) bool {
-	return a.Name == b.Name && a.URL == b.URL
 }

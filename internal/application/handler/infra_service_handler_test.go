@@ -124,6 +124,7 @@ func TestInfraServiceHandler_Apply_Deploy(t *testing.T) {
 	deps := newMockDeps()
 	deps.sshClient = mockSSH
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
+	deps.serverEntities["server1"] = &entity.Server{Name: "server1"}
 	deps.env = "test"
 	deps.workDir = t.TempDir()
 
@@ -155,6 +156,7 @@ func TestInfraServiceHandler_Apply_DeploySSL(t *testing.T) {
 	deps := newMockDeps()
 	deps.sshClient = mockSSH
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
+	deps.serverEntities["server1"] = &entity.Server{Name: "server1"}
 	deps.env = "test"
 	deps.workDir = t.TempDir()
 
@@ -250,7 +252,7 @@ func TestInfraServiceHandler_DeployInfraService_InvalidState(t *testing.T) {
 		NewState: "invalid state",
 	}
 
-	result, err := h.deployInfraService(change, mockSSH, "/opt/test", deps)
+	result, err := h.deployInfraService(change, mockSSH, "/opt/test", deps, "server1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -280,6 +282,7 @@ services:
 	deps := newMockDeps()
 	deps.sshClient = mockSSH
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4"}
+	deps.serverEntities["server1"] = &entity.Server{Name: "server1"}
 	deps.env = "prod"
 	deps.workDir = tmpDir
 
@@ -294,7 +297,7 @@ services:
 		},
 	}
 
-	result, err := h.deployInfraService(change, mockSSH, "/opt/test", deps)
+	result, err := h.deployInfraService(change, mockSSH, "/opt/test", deps, "server1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

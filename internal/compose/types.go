@@ -34,10 +34,14 @@ type Service struct {
 	Restart       string            `yaml:"restart,omitempty"`
 }
 
+type ExternalNetwork struct {
+	External bool `yaml:"external"`
+}
+
 type ComposeFile struct {
-	Version  string              `yaml:"version"`
-	Services map[string]Service  `yaml:"services"`
-	Networks map[string]struct{} `yaml:"networks,omitempty"`
+	Version  string                      `yaml:"version"`
+	Services map[string]Service          `yaml:"services"`
+	Networks map[string]*ExternalNetwork `yaml:"networks,omitempty"`
 }
 
 type ComposeService struct {
@@ -49,4 +53,5 @@ type ComposeService struct {
 	HealthCheck *HealthCheck
 	Resources   *Resources
 	Internal    bool
+	Networks    []string
 }

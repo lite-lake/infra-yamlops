@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
@@ -25,6 +26,7 @@ func TestServiceHandler_Apply_Deploy(t *testing.T) {
 	deps := newMockDeps()
 	deps.sshClient = mockSSH
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
+	deps.serverEntities["server1"] = &entity.Server{Name: "server1"}
 	deps.env = "test"
 	deps.workDir = t.TempDir()
 
@@ -321,6 +323,7 @@ services:
 	deps := newMockDeps()
 	deps.sshClient = mockSSH
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4"}
+	deps.serverEntities["server1"] = &entity.Server{Name: "server1"}
 	deps.env = "prod"
 	deps.workDir = tmpDir
 
@@ -333,7 +336,7 @@ services:
 		},
 	}
 
-	result, err := h.deployService(change, mockSSH, "/opt/yamlops/yo-prod-testapp", deps)
+	result, err := h.deployService(change, mockSSH, "/opt/yamlops/yo-prod-testapp", deps, "server1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -360,6 +363,7 @@ func TestServiceHandler_DeployService_ReadFileError(t *testing.T) {
 	deps := newMockDeps()
 	deps.sshClient = mockSSH
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4"}
+	deps.serverEntities["server1"] = &entity.Server{Name: "server1"}
 	deps.env = "test"
 	deps.workDir = tmpDir
 
@@ -374,7 +378,7 @@ func TestServiceHandler_DeployService_ReadFileError(t *testing.T) {
 
 	os.Remove(composeFile)
 
-	result, err := h.deployService(change, mockSSH, "/opt/test", deps)
+	result, err := h.deployService(change, mockSSH, "/opt/test", deps, "server1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -391,6 +395,7 @@ func TestServiceHandler_Apply_UpdateType(t *testing.T) {
 	deps := newMockDeps()
 	deps.sshClient = mockSSH
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
+	deps.serverEntities["server1"] = &entity.Server{Name: "server1"}
 	deps.env = "test"
 	deps.workDir = t.TempDir()
 

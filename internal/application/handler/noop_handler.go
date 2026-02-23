@@ -6,7 +6,7 @@ import (
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
-var NoopEntities = []string{"isp", "zone", "domain", "certificate", "registry"}
+var NoopEntities = []string{"isp", "zone", "domain", "certificate"}
 
 type HandlerRegistry interface {
 	Register(h Handler)

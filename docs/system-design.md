@@ -104,7 +104,7 @@ internal/
 │   │   ├── service_handler.go      # 业务服务处理器
 │   │   ├── infra_service_handler.go # 基础设施服务处理器
 │   │   ├── server_handler.go       # 服务器处理器
-│   │   ├── noop_handler.go         # 空操作处理器（isp/zone/domain/certificate/registry）
+│   │   ├── noop_handler.go         # 空操作处理器（isp/zone/domain/certificate）
 │   │   ├── registry.go             # 处理器注册表
 │   │   └── utils.go                # 工具函数
 │   ├── usecase/                    # 用例执行器
@@ -250,6 +250,8 @@ isps:
 
 #### 3.2.3 Registry（Docker 仓库）
 
+Registry 配置定义 Docker 镜像仓库的登录凭据。服务器的 `environment.registries` 字段会引用这些配置，在服务部署前自动登录。
+
 ```yaml
 registries:
   - name: dockerhub
@@ -257,6 +259,15 @@ registries:
     credentials:
       username: {secret: docker_user}
       password: {secret: docker_pass}
+```
+
+Server 配置中引用：
+```yaml
+servers:
+  - name: srv-cn1
+    environment:
+      registries:
+        - dockerhub
 ```
 
 #### 3.2.4 Zone（网络区域）
@@ -538,8 +549,8 @@ type BaseDeps struct {
 | DNSHandler | dns_record | DNS 记录 CRUD |
 | ServiceHandler | service | Docker Compose 服务部署 |
 | InfraServiceHandler | infra_service | 基础设施服务部署 (gateway/ssl) |
-| ServerHandler | server | 服务器注册（无远程操作） |
-| NoopHandler | isp/zone/domain/certificate/registry | 空操作（非部署实体，跳过） |
+| ServerHandler | server | 服务器环境同步（含 Registry 登录） |
+| NoopHandler | isp/zone/domain/certificate | 空操作（非部署实体，跳过） |
 
 ### 4.6 Executor 执行器
 
@@ -631,9 +642,9 @@ func (l *ConfigLoader) Validate(cfg *entity.Config) error
 1. secrets.yaml
 2. isps.yaml
 3. zones.yaml
-4. infra_services.yaml
+4. services_infra.yaml
 5. servers.yaml
-6. services.yaml
+6. services_biz.yaml
 7. registries.yaml
 8. dns.yaml
 9. certificates.yaml
@@ -941,8 +952,8 @@ userdata/
 │   ├── isps.yaml
 │   ├── zones.yaml
 │   ├── servers.yaml
-│   ├── services.yaml
-│   ├── infra_services.yaml
+│   ├── services_biz.yaml
+│   ├── services_infra.yaml
 │   ├── registries.yaml
 │   ├── dns.yaml
 │   └── certificates.yaml
@@ -1113,7 +1124,6 @@ type DeploymentState struct {
     Domains       map[string]*entity.Domain
     Records       map[string]*entity.DNSRecord
     Certs         map[string]*entity.Certificate
-    Registries    map[string]*entity.Registry
     ISPs          map[string]*entity.ISP
 }
 ```
@@ -1260,7 +1270,6 @@ TUI 按功能拆分为独立文件，提高可维护性：
 const (
     RemoteBaseDir       = "/data/yamlops"
     ServiceDirPattern   = "yo-%s-%s"
-    DockerNetworkFormat = "yamlops-%s"
     TempFilePattern     = "yamlops-*.yml"
     RemoteTempFileFmt   = "/tmp/yamlops-%d"
     ServicePrefixFormat = "yo-%s-%s"

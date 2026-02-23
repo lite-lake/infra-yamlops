@@ -78,6 +78,7 @@ func runApply(ctx *Context, scope string, filters Filters) {
 	executor.SetSecrets(cfg.GetSecretsMap())
 	executor.SetDomains(cfg.GetDomainMap())
 	executor.SetISPs(cfg.GetISPMap())
+	executor.SetServerEntities(cfg.GetServerMap())
 	executor.SetWorkDir(ctx.ConfigDir)
 
 	for _, srv := range cfg.Servers {

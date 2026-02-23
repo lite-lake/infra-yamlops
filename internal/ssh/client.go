@@ -167,7 +167,7 @@ func (c *Client) MkdirAllSudoWithPerm(path, perm string) error {
 }
 
 func (c *Client) UploadFileSudo(localPath, remotePath string) error {
-	return c.UploadFileSudoWithPerm(localPath, remotePath, "640")
+	return c.UploadFileSudoWithPerm(localPath, remotePath, "644")
 }
 
 func (c *Client) UploadFileSudoWithPerm(localPath, remotePath, perm string) error {

@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/litelake/yamlops/internal/domain/entity"
@@ -47,11 +48,13 @@ func TestServerHandler_Apply_Create(t *testing.T) {
 	h := NewServerHandler()
 	ctx := context.Background()
 	deps := newMockDeps()
+	deps.SetServers(map[string]*ServerInfo{"server1": {Host: "1.2.3.4"}})
 
 	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "server",
-		Name:   "server1",
+		Type:     valueobject.ChangeTypeCreate,
+		Entity:   "server",
+		Name:     "server1",
+		NewState: &entity.Server{Name: "server1", Zone: "zone1"},
 	}
 
 	result, err := h.Apply(ctx, change, deps)
@@ -59,10 +62,11 @@ func TestServerHandler_Apply_Create(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.Success {
-		t.Error("expected success")
+		t.Errorf("expected success, got error: %v, warnings: %v", result.Error, result.Warnings)
 	}
-	if result.Output != "server registered" {
-		t.Errorf("unexpected output: %s", result.Output)
+	// Output should contain "server registered" (without registries configured)
+	if !strings.Contains(result.Output, "server registered") {
+		t.Errorf("expected output to contain 'server registered', got: %s", result.Output)
 	}
 }
 
@@ -70,11 +74,13 @@ func TestServerHandler_Apply_Update(t *testing.T) {
 	h := NewServerHandler()
 	ctx := context.Background()
 	deps := newMockDeps()
+	deps.SetServers(map[string]*ServerInfo{"server1": {Host: "1.2.3.4"}})
 
 	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeUpdate,
-		Entity: "server",
-		Name:   "server1",
+		Type:     valueobject.ChangeTypeUpdate,
+		Entity:   "server",
+		Name:     "server1",
+		NewState: &entity.Server{Name: "server1", Zone: "zone1"},
 	}
 
 	result, err := h.Apply(ctx, change, deps)
@@ -82,10 +88,11 @@ func TestServerHandler_Apply_Update(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if !result.Success {
-		t.Error("expected success")
+		t.Errorf("expected success, got error: %v, warnings: %v", result.Error, result.Warnings)
 	}
-	if result.Output != "server updated" {
-		t.Errorf("unexpected output: %s", result.Output)
+	// Output should contain "server updated" (without registries configured)
+	if !strings.Contains(result.Output, "server updated") {
+		t.Errorf("expected output to contain 'server updated', got: %s", result.Output)
 	}
 }
 

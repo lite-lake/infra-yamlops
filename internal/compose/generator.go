@@ -27,7 +27,6 @@ func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 	}
 
 	serviceName := "yo-" + env + "-" + svc.Name
-	networkName := "yamlops-" + env
 
 	service := Service{
 		Image:         svc.Image,
@@ -36,7 +35,7 @@ func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 		Environment:   svc.Environment,
 		Volumes:       svc.Volumes,
 		HealthCheck:   svc.HealthCheck,
-		Networks:      []string{networkName},
+		Networks:      svc.Networks,
 		Restart:       "unless-stopped",
 	}
 
@@ -46,14 +45,17 @@ func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 		}
 	}
 
+	networks := make(map[string]*ExternalNetwork)
+	for _, netName := range svc.Networks {
+		networks[netName] = &ExternalNetwork{External: true}
+	}
+
 	compose := ComposeFile{
 		Version: "3.8",
 		Services: map[string]Service{
 			serviceName: service,
 		},
-		Networks: map[string]struct{}{
-			networkName: {},
-		},
+		Networks: networks,
 	}
 
 	data, err := yaml.Marshal(&compose)

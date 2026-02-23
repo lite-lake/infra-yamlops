@@ -192,8 +192,7 @@ func TestServer_Validate(t *testing.T) {
 					Password: valueobject.SecretRef{Secret: "ssh_pass"},
 				},
 				Environment: ServerEnvironment{
-					APTSource:  "mirror",
-					Registries: []string{"registry-1"},
+					APTSource: "mirror",
 				},
 			},
 			wantErr: nil,

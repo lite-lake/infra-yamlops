@@ -53,9 +53,6 @@ func (s *FileStore) Load() (*repository.DeploymentState, error) {
 	for i := range cfg.Certificates {
 		state.Certs[cfg.Certificates[i].Name] = &cfg.Certificates[i]
 	}
-	for i := range cfg.Registries {
-		state.Registries[cfg.Registries[i].Name] = &cfg.Registries[i]
-	}
 	for i := range cfg.ISPs {
 		state.ISPs[cfg.ISPs[i].Name] = &cfg.ISPs[i]
 	}
@@ -71,7 +68,6 @@ func (s *FileStore) Save(state *repository.DeploymentState) error {
 		Zones:         make([]entity.Zone, 0, len(state.Zones)),
 		Domains:       make([]entity.Domain, 0, len(state.Domains)),
 		Certificates:  make([]entity.Certificate, 0, len(state.Certs)),
-		Registries:    make([]entity.Registry, 0, len(state.Registries)),
 		ISPs:          make([]entity.ISP, 0, len(state.ISPs)),
 	}
 
@@ -92,9 +88,6 @@ func (s *FileStore) Save(state *repository.DeploymentState) error {
 	}
 	for _, c := range state.Certs {
 		cfg.Certificates = append(cfg.Certificates, *c)
-	}
-	for _, r := range state.Registries {
-		cfg.Registries = append(cfg.Registries, *r)
 	}
 	for _, isp := range state.ISPs {
 		cfg.ISPs = append(cfg.ISPs, *isp)

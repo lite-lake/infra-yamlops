@@ -64,7 +64,20 @@ func (g *Generator) generateInfraServiceGateway(serverDir string, infra *entity.
 
 func (g *Generator) generateInfraGatewayCompose(infra *entity.InfraService) string {
 	serviceName := "yo-" + g.env + "-" + infra.Name
-	networkName := "yamlops-" + g.env
+	networks := infra.Networks
+	if len(networks) == 0 {
+		networks = []string{fmt.Sprintf("yamlops-%s", g.env)}
+	}
+
+	networksYAML := ""
+	for _, net := range networks {
+		networksYAML += fmt.Sprintf("      - %s\n", net)
+	}
+
+	externalNetworksYAML := ""
+	for _, net := range networks {
+		externalNetworksYAML += fmt.Sprintf("  %s:\n    external: true\n", net)
+	}
 
 	return fmt.Sprintf(`services:
   %s:
@@ -80,12 +93,9 @@ func (g *Generator) generateInfraGatewayCompose(infra *entity.InfraService) stri
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - %s
-
+%s
 networks:
-  %s:
-    external: true
-`, serviceName, infra.Image, serviceName, infra.GatewayPorts.HTTP, infra.GatewayPorts.HTTP, infra.GatewayPorts.HTTPS, infra.GatewayPorts.HTTPS, networkName, networkName)
+%s`, serviceName, infra.Image, serviceName, infra.GatewayPorts.HTTP, infra.GatewayPorts.HTTP, infra.GatewayPorts.HTTPS, infra.GatewayPorts.HTTPS, networksYAML, externalNetworksYAML)
 }
 
 func (g *Generator) generateInfraServiceSSL(serverDir string, infra *entity.InfraService, config *entity.Config) error {
@@ -94,7 +104,10 @@ func (g *Generator) generateInfraServiceSSL(serverDir string, infra *entity.Infr
 	}
 
 	serviceName := "yo-" + g.env + "-" + infra.Name
-	networkName := "yamlops-" + g.env
+	networks := infra.Networks
+	if len(networks) == 0 {
+		networks = []string{fmt.Sprintf("yamlops-%s", g.env)}
+	}
 
 	volumes := []string{
 		"./ssl-data:/app/data",
@@ -104,6 +117,16 @@ func (g *Generator) generateInfraServiceSSL(serverDir string, infra *entity.Infr
 	ports := []string{}
 	if infra.SSLConfig.Ports.API > 0 {
 		ports = append(ports, fmt.Sprintf("%d:%d", infra.SSLConfig.Ports.API, infra.SSLConfig.Ports.API))
+	}
+
+	networksYAML := ""
+	for _, net := range networks {
+		networksYAML += fmt.Sprintf("      - %s\n", net)
+	}
+
+	externalNetworksYAML := ""
+	for _, net := range networks {
+		externalNetworksYAML += fmt.Sprintf("  %s:\n    external: true\n", net)
 	}
 
 	composeContent := fmt.Sprintf(`services:
@@ -116,12 +139,9 @@ func (g *Generator) generateInfraServiceSSL(serverDir string, infra *entity.Infr
     volumes:
       - %s
     networks:
-      - %s
-
+%s
 networks:
-  %s:
-    external: true
-`, serviceName, infra.Image, serviceName, strings.Join(ports, "\n      - "), strings.Join(volumes, "\n      - "), networkName, networkName)
+%s`, serviceName, infra.Image, serviceName, strings.Join(ports, "\n      - "), strings.Join(volumes, "\n      - "), networksYAML, externalNetworksYAML)
 
 	composeFile := filepath.Join(serverDir, fmt.Sprintf("%s.compose.yaml", infra.Name))
 	if err := os.WriteFile(composeFile, []byte(composeContent), 0644); err != nil {

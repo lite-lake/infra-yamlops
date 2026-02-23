@@ -8,6 +8,7 @@ import (
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/providers/dns"
+	"github.com/litelake/yamlops/internal/registry"
 )
 
 type mockDNSProvider struct {
@@ -98,24 +99,26 @@ func (m *mockSSHClient) Close() error {
 }
 
 type mockDeps struct {
-	dnsProvider DNSProvider
-	dnsErr      error
-	sshClient   SSHClient
-	sshErr      error
-	domains     map[string]*entity.Domain
-	isps        map[string]*entity.ISP
-	servers     map[string]*ServerInfo
-	secrets     map[string]string
-	workDir     string
-	env         string
+	dnsProvider    DNSProvider
+	dnsErr         error
+	sshClient      SSHClient
+	sshErr         error
+	domains        map[string]*entity.Domain
+	isps           map[string]*entity.ISP
+	servers        map[string]*ServerInfo
+	serverEntities map[string]*entity.Server
+	secrets        map[string]string
+	workDir        string
+	env            string
 }
 
 func newMockDeps() *mockDeps {
 	return &mockDeps{
-		domains: make(map[string]*entity.Domain),
-		isps:    make(map[string]*entity.ISP),
-		servers: make(map[string]*ServerInfo),
-		secrets: make(map[string]string),
+		domains:        make(map[string]*entity.Domain),
+		isps:           make(map[string]*entity.ISP),
+		servers:        make(map[string]*ServerInfo),
+		serverEntities: make(map[string]*entity.Server),
+		secrets:        make(map[string]string),
 	}
 }
 
@@ -154,6 +157,11 @@ func (m *mockDeps) ServerInfo(name string) (*ServerInfo, bool) {
 	return info, ok
 }
 
+func (m *mockDeps) Server(name string) (*entity.Server, bool) {
+	server, ok := m.serverEntities[name]
+	return server, ok
+}
+
 func (m *mockDeps) WorkDir() string { return m.workDir }
 func (m *mockDeps) Env() string     { return m.env }
 
@@ -168,6 +176,22 @@ func (m *mockDeps) ResolveSecret(ref *valueobject.SecretRef) (string, error) {
 		return val, nil
 	}
 	return "", errors.New("secret not found: " + ref.Secret)
+}
+
+func (m *mockDeps) RegistryManager(server string) (*registry.Manager, error) {
+	return nil, nil
+}
+
+func (m *mockDeps) GetAllRegistries() []*entity.Registry {
+	return nil
+}
+
+func (m *mockDeps) Secrets() map[string]string {
+	return m.secrets
+}
+
+func (m *mockDeps) SetServers(servers map[string]*ServerInfo) {
+	m.servers = servers
 }
 
 func TestDNSHandler_EntityType(t *testing.T) {

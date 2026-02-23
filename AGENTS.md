@@ -343,7 +343,7 @@ func (r *Registry) Get(entityType string) (Handler, bool) {
 
 ## Configuration Files
 
-User configs in `userdata/{env}/`: secrets.yaml, isps.yaml, zones.yaml, servers.yaml, services.yaml, infra_services.yaml, registries.yaml, dns.yaml, certificates.yaml
+User configs in `userdata/{env}/`: secrets.yaml, isps.yaml, zones.yaml, servers.yaml, services_biz.yaml, services_infra.yaml, registries.yaml, dns.yaml, certificates.yaml
 
 ## Important Notes
 

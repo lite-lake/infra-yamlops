@@ -12,6 +12,9 @@ servers:
       user: root
       password:
         secret: srv_east_01_password
+    networks:
+      - name: yamlops-prod
+        type: bridge
     environment:
       apt_source: tuna
       registries:
@@ -31,6 +34,9 @@ servers:
       user: root
       password:
         secret: srv_south_01_password
+    networks:
+      - name: yamlops-prod
+        type: bridge
     environment:
       apt_source: tencent
       registries:

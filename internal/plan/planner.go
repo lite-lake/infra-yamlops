@@ -64,7 +64,6 @@ func (p *Planner) Plan(scope *valueobject.Scope) (*valueobject.Plan, error) {
 		p.differService.PlanDomains(plan, p.config.GetDomainMap(), scope)
 		p.differService.PlanRecords(plan, p.config.GetAllDNSRecords(), scope)
 		p.differService.PlanCertificates(plan, p.config.GetCertificateMap(), scope)
-		p.differService.PlanRegistries(plan, p.config.GetRegistryMap(), scope)
 		p.differService.PlanServers(plan, p.config.GetServerMap(), p.config.GetZoneMap(), scope)
 	}
 

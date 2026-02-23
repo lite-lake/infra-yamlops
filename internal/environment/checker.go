@@ -13,16 +13,20 @@ import (
 type Checker struct {
 	client     *ssh.Client
 	server     *entity.Server
-	registries []*entity.Registry
 	secrets    map[string]string
+	registries map[string]*entity.Registry
 }
 
-func NewChecker(client *ssh.Client, server *entity.Server, registries []*entity.Registry, secrets map[string]string) *Checker {
+func NewChecker(client *ssh.Client, server *entity.Server, registries []entity.Registry, secrets map[string]string) *Checker {
+	regMap := make(map[string]*entity.Registry)
+	for i := range registries {
+		regMap[registries[i].Name] = &registries[i]
+	}
 	return &Checker{
 		client:     client,
 		server:     server,
-		registries: registries,
 		secrets:    secrets,
+		registries: regMap,
 	}
 }
 
@@ -165,6 +169,73 @@ func (c *Checker) CheckAPTSource() CheckResult {
 	}
 }
 
+func (c *Checker) CheckRegistries() []CheckResult {
+	var results []CheckResult
+
+	if len(c.server.Environment.Registries) == 0 {
+		results = append(results, CheckResult{
+			Name:    "Registries",
+			Status:  CheckStatusOK,
+			Message: "Not configured",
+		})
+		return results
+	}
+
+	dockerInfo, _, _ := c.client.Run("sudo docker info 2>/dev/null | grep -i username || true")
+	configJSON, _, _ := c.client.Run("sudo cat /root/.docker/config.json 2>/dev/null || true")
+
+	for _, regName := range c.server.Environment.Registries {
+		registry, ok := c.registries[regName]
+		if !ok {
+			results = append(results, CheckResult{
+				Name:    fmt.Sprintf("Registry: %s", regName),
+				Status:  CheckStatusError,
+				Message: "Not found in config",
+			})
+			continue
+		}
+
+		if c.isRegistryLoggedIn(registry, dockerInfo, configJSON) {
+			results = append(results, CheckResult{
+				Name:    fmt.Sprintf("Registry: %s", regName),
+				Status:  CheckStatusOK,
+				Message: fmt.Sprintf("Logged in to %s", registry.URL),
+			})
+		} else {
+			results = append(results, CheckResult{
+				Name:    fmt.Sprintf("Registry: %s", regName),
+				Status:  CheckStatusWarning,
+				Message: fmt.Sprintf("Not logged in to %s", registry.URL),
+			})
+		}
+	}
+
+	return results
+}
+
+func (c *Checker) isRegistryLoggedIn(r *entity.Registry, dockerInfo, configJSON string) bool {
+	if strings.Contains(strings.ToLower(dockerInfo), strings.ToLower(r.URL)) {
+		return true
+	}
+
+	type dockerConfig struct {
+		Auths map[string]struct {
+			Auth string `json:"auth"`
+		} `json:"auths"`
+	}
+
+	var cfg dockerConfig
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err == nil {
+		for host, auth := range cfg.Auths {
+			if strings.Contains(host, r.URL) && auth.Auth != "" {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
 func (c *Checker) detectAPTSource(content string) string {
 	content = strings.ToLower(content)
 
@@ -187,79 +258,6 @@ func (c *Checker) detectAPTSource(content string) string {
 	return "unknown"
 }
 
-func (c *Checker) CheckRegistries() []CheckResult {
-	var results []CheckResult
-
-	expectedRegistries := c.server.Environment.Registries
-	if len(expectedRegistries) == 0 {
-		return results
-	}
-
-	registryMap := make(map[string]*entity.Registry)
-	for _, r := range c.registries {
-		registryMap[r.Name] = r
-	}
-
-	dockerInfo, _, _ := c.client.Run("docker info 2>/dev/null | grep -i username || true")
-	configJSON, _, _ := c.client.Run("cat ~/.docker/config.json 2>/dev/null || true")
-
-	for _, name := range expectedRegistries {
-		registry := registryMap[name]
-		if registry == nil {
-			results = append(results, CheckResult{
-				Name:    fmt.Sprintf("Registry/%s", name),
-				Status:  CheckStatusWarning,
-				Message: "Registry config not found",
-			})
-			continue
-		}
-
-		username := c.checkRegistryLogin(registry.URL, dockerInfo, configJSON)
-		if username != "" {
-			results = append(results, CheckResult{
-				Name:    fmt.Sprintf("Registry/%s", name),
-				Status:  CheckStatusOK,
-				Message: fmt.Sprintf("Logged in as %s", username),
-			})
-		} else {
-			results = append(results, CheckResult{
-				Name:    fmt.Sprintf("Registry/%s", name),
-				Status:  CheckStatusError,
-				Message: "Not logged in",
-			})
-		}
-	}
-
-	return results
-}
-
-func (c *Checker) checkRegistryLogin(registryURL, dockerInfo, configJSON string) string {
-	if strings.Contains(strings.ToLower(dockerInfo), strings.ToLower(registryURL)) {
-		re := regexp.MustCompile(`(?i)username[::\s]+(\S+)`)
-		matches := re.FindStringSubmatch(dockerInfo)
-		if len(matches) > 1 {
-			return matches[1]
-		}
-	}
-
-	type dockerConfig struct {
-		Auths map[string]struct {
-			Auth string `json:"auth"`
-		} `json:"auths"`
-	}
-
-	var cfg dockerConfig
-	if err := json.Unmarshal([]byte(configJSON), &cfg); err == nil {
-		for host, auth := range cfg.Auths {
-			if strings.Contains(host, registryURL) && auth.Auth != "" {
-				return "configured"
-			}
-		}
-	}
-
-	return ""
-}
-
 func FormatResults(serverName string, results []CheckResult) string {
 	var sb strings.Builder
 	sb.WriteString(fmt.Sprintf("[%s] Environment Check\n", serverName))
@@ -273,11 +271,7 @@ func FormatResults(serverName string, results []CheckResult) string {
 			icon = "❌"
 		}
 
-		if strings.HasPrefix(r.Name, "Registry/") {
-			sb.WriteString(fmt.Sprintf("    - %-20s %s %s\n", r.Name[9:]+":", icon, r.Message))
-		} else {
-			sb.WriteString(fmt.Sprintf("  %-20s %s %s\n", r.Name+":", icon, r.Message))
-		}
+		sb.WriteString(fmt.Sprintf("  %-20s %s %s\n", r.Name+":", icon, r.Message))
 	}
 
 	return sb.String()

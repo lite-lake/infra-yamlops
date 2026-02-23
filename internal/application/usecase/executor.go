@@ -34,16 +34,17 @@ type ExecutorConfig struct {
 }
 
 type Executor struct {
-	plan       *valueobject.Plan
-	registry   RegistryInterface
-	sshPool    SSHPoolInterface
-	secrets    map[string]string
-	servers    map[string]*handler.ServerInfo
-	env        string
-	domains    map[string]*entity.Domain
-	isps       map[string]*entity.ISP
-	workDir    string
-	dnsFactory DNSFactoryInterface
+	plan           *valueobject.Plan
+	registry       RegistryInterface
+	sshPool        SSHPoolInterface
+	secrets        map[string]string
+	servers        map[string]*handler.ServerInfo
+	serverEntities map[string]*entity.Server
+	env            string
+	domains        map[string]*entity.Domain
+	isps           map[string]*entity.ISP
+	workDir        string
+	dnsFactory     DNSFactoryInterface
 }
 
 func NewExecutor(cfg *ExecutorConfig) *Executor {
@@ -64,23 +65,25 @@ func NewExecutor(cfg *ExecutorConfig) *Executor {
 	}
 
 	return &Executor{
-		plan:       cfg.Plan,
-		registry:   cfg.Registry,
-		sshPool:    cfg.SSHPool,
-		secrets:    make(map[string]string),
-		servers:    make(map[string]*handler.ServerInfo),
-		domains:    make(map[string]*entity.Domain),
-		isps:       make(map[string]*entity.ISP),
-		env:        cfg.Env,
-		workDir:    ".",
-		dnsFactory: cfg.DNSFactory,
+		plan:           cfg.Plan,
+		registry:       cfg.Registry,
+		sshPool:        cfg.SSHPool,
+		secrets:        make(map[string]string),
+		servers:        make(map[string]*handler.ServerInfo),
+		serverEntities: make(map[string]*entity.Server),
+		domains:        make(map[string]*entity.Domain),
+		isps:           make(map[string]*entity.ISP),
+		env:            cfg.Env,
+		workDir:        ".",
+		dnsFactory:     cfg.DNSFactory,
 	}
 }
 
-func (e *Executor) SetSecrets(s map[string]string)         { e.secrets = s }
-func (e *Executor) SetDomains(d map[string]*entity.Domain) { e.domains = d }
-func (e *Executor) SetISPs(i map[string]*entity.ISP)       { e.isps = i }
-func (e *Executor) SetWorkDir(w string)                    { e.workDir = w }
+func (e *Executor) SetSecrets(s map[string]string)                { e.secrets = s }
+func (e *Executor) SetDomains(d map[string]*entity.Domain)        { e.domains = d }
+func (e *Executor) SetISPs(i map[string]*entity.ISP)              { e.isps = i }
+func (e *Executor) SetWorkDir(w string)                           { e.workDir = w }
+func (e *Executor) SetServerEntities(s map[string]*entity.Server) { e.serverEntities = s }
 
 func (e *Executor) RegisterServer(name, host string, port int, user, password string) {
 	e.servers[name] = &handler.ServerInfo{Host: host, Port: port, User: user, Password: password}
@@ -133,6 +136,7 @@ func (e *Executor) buildDeps(ch *valueobject.Change) *handler.BaseDeps {
 	deps.SetDomains(e.domains)
 	deps.SetISPs(e.isps)
 	deps.SetServers(e.servers)
+	deps.SetServerEntities(e.serverEntities)
 	deps.SetWorkDir(e.workDir)
 	deps.SetEnv(e.env)
 	deps.SetDNSFactory(e.dnsFactory)

@@ -176,6 +176,7 @@ func runAppApply(ctx *Context, filters AppFilters, autoApprove bool) {
 	executor.SetSecrets(cfg.GetSecretsMap())
 	executor.SetDomains(cfg.GetDomainMap())
 	executor.SetISPs(cfg.GetISPMap())
+	executor.SetServerEntities(cfg.GetServerMap())
 	executor.SetWorkDir(ctx.ConfigDir)
 
 	for _, srv := range cfg.Servers {

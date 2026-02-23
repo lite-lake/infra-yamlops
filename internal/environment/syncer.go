@@ -1,12 +1,14 @@
 package environment
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/network"
 	"github.com/litelake/yamlops/internal/ssh"
 )
 
@@ -14,17 +16,21 @@ type Syncer struct {
 	client     *ssh.Client
 	server     *entity.Server
 	env        string
-	registries []*entity.Registry
 	secrets    map[string]string
+	registries map[string]*entity.Registry
 }
 
-func NewSyncer(client *ssh.Client, server *entity.Server, env string, registries []*entity.Registry, secrets map[string]string) *Syncer {
+func NewSyncer(client *ssh.Client, server *entity.Server, env string, secrets map[string]string, registries []entity.Registry) *Syncer {
+	regMap := make(map[string]*entity.Registry)
+	for i := range registries {
+		regMap[registries[i].Name] = &registries[i]
+	}
 	return &Syncer{
 		client:     client,
 		server:     server,
 		env:        env,
-		registries: registries,
 		secrets:    secrets,
+		registries: regMap,
 	}
 }
 
@@ -33,9 +39,9 @@ func (s *Syncer) SyncAll() []SyncResult {
 
 	results = append(results, s.SyncAPTSource())
 
-	results = append(results, s.SyncRegistries()...)
-
 	results = append(results, s.SyncDockerNetwork())
+
+	results = append(results, s.SyncRegistries()...)
 
 	return results
 }
@@ -108,27 +114,79 @@ func (s *Syncer) SyncAPTSource() SyncResult {
 	}
 }
 
+func (s *Syncer) SyncDockerNetwork() SyncResult {
+	return s.SyncDockerNetworks()
+}
+
+func (s *Syncer) SyncDockerNetworks() SyncResult {
+	netMgr := network.NewManager(s.client)
+
+	if len(s.server.Networks) == 0 {
+		defaultNetwork := entity.ServerNetwork{
+			Name: fmt.Sprintf("yamlops-%s", s.env),
+			Type: entity.NetworkTypeBridge,
+		}
+		if err := netMgr.Ensure(&defaultNetwork); err != nil {
+			return SyncResult{
+				Name:    "docker_network",
+				Success: false,
+				Message: fmt.Sprintf("failed to create docker network %s", defaultNetwork.Name),
+				Error:   err,
+			}
+		}
+		return SyncResult{
+			Name:    "docker_network",
+			Success: true,
+			Message: fmt.Sprintf("network %s ready", defaultNetwork.Name),
+		}
+	}
+
+	var failedNetworks []string
+	for _, netSpec := range s.server.Networks {
+		if err := netMgr.Ensure(&netSpec); err != nil {
+			failedNetworks = append(failedNetworks, netSpec.Name)
+		}
+	}
+
+	if len(failedNetworks) > 0 {
+		return SyncResult{
+			Name:    "docker_network",
+			Success: false,
+			Message: fmt.Sprintf("failed to create networks: %s", strings.Join(failedNetworks, ", ")),
+			Error:   fmt.Errorf("network creation failed"),
+		}
+	}
+
+	return SyncResult{
+		Name:    "docker_network",
+		Success: true,
+		Message: fmt.Sprintf("all networks ready (%d networks)", len(s.server.Networks)),
+	}
+}
+
 func (s *Syncer) SyncRegistries() []SyncResult {
 	var results []SyncResult
 
-	registryNames := s.server.Environment.Registries
-	if len(registryNames) == 0 {
+	if len(s.server.Environment.Registries) == 0 {
 		return results
 	}
 
-	registryMap := make(map[string]*entity.Registry)
-	for _, r := range s.registries {
-		registryMap[r.Name] = r
-	}
-
-	for _, name := range registryNames {
-		registry, ok := registryMap[name]
+	for _, regName := range s.server.Environment.Registries {
+		registry, ok := s.registries[regName]
 		if !ok {
 			results = append(results, SyncResult{
-				Name:    fmt.Sprintf("registry:%s", name),
+				Name:    fmt.Sprintf("registry:%s", regName),
 				Success: false,
-				Message: "registry not found in config",
-				Error:   fmt.Errorf("registry %s not found", name),
+				Message: "not found in config",
+			})
+			continue
+		}
+
+		if s.isRegistryLoggedIn(registry) {
+			results = append(results, SyncResult{
+				Name:    fmt.Sprintf("registry:%s", regName),
+				Success: true,
+				Message: fmt.Sprintf("already logged in to %s", registry.URL),
 			})
 			continue
 		}
@@ -136,7 +194,7 @@ func (s *Syncer) SyncRegistries() []SyncResult {
 		username, err := registry.Credentials.Username.Resolve(s.secrets)
 		if err != nil {
 			results = append(results, SyncResult{
-				Name:    fmt.Sprintf("registry:%s", name),
+				Name:    fmt.Sprintf("registry:%s", regName),
 				Success: false,
 				Message: "failed to resolve username",
 				Error:   err,
@@ -147,7 +205,7 @@ func (s *Syncer) SyncRegistries() []SyncResult {
 		password, err := registry.Credentials.Password.Resolve(s.secrets)
 		if err != nil {
 			results = append(results, SyncResult{
-				Name:    fmt.Sprintf("registry:%s", name),
+				Name:    fmt.Sprintf("registry:%s", regName),
 				Success: false,
 				Message: "failed to resolve password",
 				Error:   err,
@@ -155,22 +213,22 @@ func (s *Syncer) SyncRegistries() []SyncResult {
 			continue
 		}
 
-		cmd := fmt.Sprintf("echo '%s' | docker login -u '%s' --password-stdin %s",
+		cmd := fmt.Sprintf("echo '%s' | sudo docker login -u '%s' --password-stdin %s 2>&1",
 			password, username, registry.URL)
-		_, stderr, err := s.client.Run(cmd)
+		stdout, _, err := s.client.Run(cmd)
 
 		if err != nil {
 			results = append(results, SyncResult{
-				Name:    fmt.Sprintf("registry:%s", name),
+				Name:    fmt.Sprintf("registry:%s", regName),
 				Success: false,
-				Message: "docker login failed",
-				Error:   fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr)),
+				Message: fmt.Sprintf("login failed: %s", strings.TrimSpace(stdout)),
+				Error:   err,
 			})
 			continue
 		}
 
 		results = append(results, SyncResult{
-			Name:    fmt.Sprintf("registry:%s", name),
+			Name:    fmt.Sprintf("registry:%s", regName),
 			Success: true,
 			Message: fmt.Sprintf("logged in to %s", registry.URL),
 		})
@@ -179,23 +237,28 @@ func (s *Syncer) SyncRegistries() []SyncResult {
 	return results
 }
 
-func (s *Syncer) SyncDockerNetwork() SyncResult {
-	networkName := fmt.Sprintf("yamlops-%s", s.env)
-	cmd := fmt.Sprintf("sudo docker network create %s 2>/dev/null || true", networkName)
+func (s *Syncer) isRegistryLoggedIn(r *entity.Registry) bool {
+	dockerInfo, _, _ := s.client.Run("sudo docker info 2>/dev/null | grep -i username || true")
+	configJSON, _, _ := s.client.Run("cat ~/.docker/config.json 2>/dev/null || true")
 
-	_, stderr, err := s.client.Run(cmd)
-	if err != nil {
-		return SyncResult{
-			Name:    "docker_network",
-			Success: false,
-			Message: "failed to create docker network",
-			Error:   fmt.Errorf("%w: %s", err, stderr),
+	if strings.Contains(strings.ToLower(dockerInfo), strings.ToLower(r.URL)) {
+		return true
+	}
+
+	type dockerConfig struct {
+		Auths map[string]struct {
+			Auth string `json:"auth"`
+		} `json:"auths"`
+	}
+
+	var cfg dockerConfig
+	if err := json.Unmarshal([]byte(configJSON), &cfg); err == nil {
+		for host, auth := range cfg.Auths {
+			if strings.Contains(host, r.URL) && auth.Auth != "" {
+				return true
+			}
 		}
 	}
 
-	return SyncResult{
-		Name:    "docker_network",
-		Success: true,
-		Message: fmt.Sprintf("network %s ready", networkName),
-	}
+	return false
 }

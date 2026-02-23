@@ -6,6 +6,7 @@ import (
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/providers/dns"
+	"github.com/litelake/yamlops/internal/registry"
 	"github.com/litelake/yamlops/internal/ssh"
 )
 
@@ -18,8 +19,12 @@ type DNSDeps interface {
 type ServiceDeps interface {
 	SSHClient(server string) (SSHClient, error)
 	ServerInfo(name string) (*ServerInfo, bool)
+	Server(name string) (*entity.Server, bool)
 	WorkDir() string
 	Env() string
+	RegistryManager(server string) (*registry.Manager, error)
+	GetAllRegistries() []*entity.Registry
+	Secrets() map[string]string
 }
 
 type CommonDeps interface {
@@ -42,23 +47,27 @@ type Handler interface {
 }
 
 type BaseDeps struct {
-	sshClient  SSHClient
-	sshError   error
-	dnsFactory DNSFactory
-	secrets    map[string]string
-	domains    map[string]*entity.Domain
-	isps       map[string]*entity.ISP
-	servers    map[string]*ServerInfo
-	workDir    string
-	env        string
+	sshClient      SSHClient
+	sshError       error
+	dnsFactory     DNSFactory
+	secrets        map[string]string
+	domains        map[string]*entity.Domain
+	isps           map[string]*entity.ISP
+	servers        map[string]*ServerInfo
+	serverEntities map[string]*entity.Server
+	registries     map[string]*entity.Registry
+	workDir        string
+	env            string
 }
 
 func NewBaseDeps() *BaseDeps {
 	return &BaseDeps{
-		secrets: make(map[string]string),
-		domains: make(map[string]*entity.Domain),
-		isps:    make(map[string]*entity.ISP),
-		servers: make(map[string]*ServerInfo),
+		secrets:        make(map[string]string),
+		domains:        make(map[string]*entity.Domain),
+		isps:           make(map[string]*entity.ISP),
+		servers:        make(map[string]*ServerInfo),
+		serverEntities: make(map[string]*entity.Server),
+		registries:     make(map[string]*entity.Registry),
 	}
 }
 
@@ -76,8 +85,40 @@ func (d *BaseDeps) SetISPs(isps map[string]*entity.ISP) { d.isps = isps }
 func (d *BaseDeps) SetServers(servers map[string]*ServerInfo) {
 	d.servers = servers
 }
-func (d *BaseDeps) SetWorkDir(w string) { d.workDir = w }
-func (d *BaseDeps) SetEnv(e string)     { d.env = e }
+func (d *BaseDeps) SetServerEntities(servers map[string]*entity.Server) {
+	d.serverEntities = servers
+}
+func (d *BaseDeps) SetWorkDir(w string)                         { d.workDir = w }
+func (d *BaseDeps) SetEnv(e string)                             { d.env = e }
+func (d *BaseDeps) SetRegistries(r map[string]*entity.Registry) { d.registries = r }
+
+func (d *BaseDeps) GetAllRegistries() []*entity.Registry {
+	var result []*entity.Registry
+	for _, r := range d.registries {
+		result = append(result, r)
+	}
+	return result
+}
+
+func (d *BaseDeps) RegistryManager(server string) (*registry.Manager, error) {
+	if _, ok := d.servers[server]; !ok {
+		return nil, ErrServerNotRegistered
+	}
+	if d.sshClient == nil {
+		if d.sshError != nil {
+			return nil, d.sshError
+		}
+		return nil, ErrSSHClientNotAvailable
+	}
+
+	// Convert map to slice
+	var registryList []*entity.Registry
+	for _, r := range d.registries {
+		registryList = append(registryList, r)
+	}
+
+	return registry.NewManager(d.sshClient, registryList, d.secrets), nil
+}
 
 func (d *BaseDeps) DNSProvider(ispName string) (DNSProvider, error) {
 	isp, ok := d.isps[ispName]
@@ -120,6 +161,11 @@ func (d *BaseDeps) SSHClient(server string) (SSHClient, error) {
 func (d *BaseDeps) ServerInfo(name string) (*ServerInfo, bool) {
 	info, ok := d.servers[name]
 	return info, ok
+}
+
+func (d *BaseDeps) Server(name string) (*entity.Server, bool) {
+	server, ok := d.serverEntities[name]
+	return server, ok
 }
 
 func (d *BaseDeps) WorkDir() string { return d.workDir }

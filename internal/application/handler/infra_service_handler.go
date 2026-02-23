@@ -10,6 +10,7 @@ import (
 	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/litelake/yamlops/internal/network"
 )
 
 type InfraServiceHandler struct{}
@@ -48,10 +49,10 @@ func (h *InfraServiceHandler) Apply(ctx context.Context, change *valueobject.Cha
 		return h.deleteInfraService(change, client, remoteDir)
 	}
 
-	return h.deployInfraService(change, client, remoteDir, deps)
+	return h.deployInfraService(change, client, remoteDir, deps, serverName)
 }
 
-func (h *InfraServiceHandler) deployInfraService(change *valueobject.Change, client SSHClient, remoteDir string, deps DepsProvider) (*Result, error) {
+func (h *InfraServiceHandler) deployInfraService(change *valueobject.Change, client SSHClient, remoteDir string, deps DepsProvider, serverName string) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
 	infra, ok := change.NewState.(*entity.InfraService)
@@ -60,7 +61,23 @@ func (h *InfraServiceHandler) deployInfraService(change *valueobject.Change, cli
 		return result, nil
 	}
 
-	if err := client.MkdirAllSudoWithPerm(remoteDir, "750"); err != nil {
+	requiredNetworks, err := h.getRequiredNetworks(change, deps, serverName)
+	if err != nil {
+		result.Error = err
+		return result, nil
+	}
+
+	if len(requiredNetworks) > 0 {
+		netMgr := network.NewManager(client)
+		for _, netSpec := range requiredNetworks {
+			if err := netMgr.Ensure(&netSpec); err != nil {
+				result.Error = fmt.Errorf("failed to ensure network %s: %w", netSpec.Name, err)
+				return result, nil
+			}
+		}
+	}
+
+	if err := client.MkdirAllSudoWithPerm(remoteDir, "755"); err != nil {
 		result.Error = fmt.Errorf("failed to create remote directory: %w", err)
 		return result, nil
 	}
@@ -92,9 +109,6 @@ func (h *InfraServiceHandler) deployInfraService(change *valueobject.Change, cli
 				return result, nil
 			}
 
-			networkCmd := fmt.Sprintf("sudo docker network create %s 2>/dev/null || true", fmt.Sprintf(constants.DockerNetworkFormat, deps.Env()))
-			_, _, _ = client.Run(networkCmd)
-
 			pullCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml pull", remoteDir)
 			_, pullStderr, pullErr := client.Run(pullCmd)
 			if pullErr != nil {
@@ -115,6 +129,37 @@ func (h *InfraServiceHandler) deployInfraService(change *valueobject.Change, cli
 	result.Success = true
 	result.Output = fmt.Sprintf("deployed infra service %s", change.Name)
 	return result, nil
+}
+
+func (h *InfraServiceHandler) getRequiredNetworks(change *valueobject.Change, deps DepsProvider, serverName string) ([]entity.ServerNetwork, error) {
+	server, ok := deps.Server(serverName)
+	if !ok {
+		return nil, fmt.Errorf("server %s not found", serverName)
+	}
+
+	var serviceNetworks []string
+	if change.NewState != nil {
+		if infra, ok := change.NewState.(*entity.InfraService); ok {
+			serviceNetworks = infra.Networks
+		}
+	}
+
+	if len(serviceNetworks) == 0 {
+		if len(server.Networks) > 0 {
+			return server.Networks[:1], nil
+		}
+		return []entity.ServerNetwork{{Name: fmt.Sprintf("yamlops-%s", deps.Env()), Type: entity.NetworkTypeBridge}}, nil
+	}
+
+	var requiredNetworks []entity.ServerNetwork
+	for _, netName := range serviceNetworks {
+		if server.HasNetwork(netName) {
+			requiredNetworks = append(requiredNetworks, *server.GetNetwork(netName))
+		} else {
+			requiredNetworks = append(requiredNetworks, entity.ServerNetwork{Name: netName, Type: entity.NetworkTypeBridge})
+		}
+	}
+	return requiredNetworks, nil
 }
 
 func (h *InfraServiceHandler) deployGatewayType(change *valueobject.Change, client SSHClient, remoteDir string, deps DepsProvider) error {

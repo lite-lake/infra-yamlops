@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/litelake/yamlops/internal/domain/entity"
 	serverpkg "github.com/litelake/yamlops/internal/environment"
 	"github.com/litelake/yamlops/internal/ssh"
 )
@@ -30,32 +31,45 @@ func (m Model) renderServerSetup() string {
 	title := TitleStyle.Render("  Server Setup")
 	sb.WriteString(title + "\n\n")
 
-	sb.WriteString("  Select Server:\n")
+	serverPanelTitle := "  Select Server:"
+	if m.Server.ServerFocusPanel == 0 {
+		serverPanelTitle = TabActiveStyle.Render("  ▸ Select Server:")
+	}
+	sb.WriteString(serverPanelTitle + "\n")
+
 	for i := serverViewport.VisibleStart(); i < serverViewport.VisibleEnd() && i < totalServers; i++ {
 		srv := m.Server.ServerList[i]
-		prefix := "  "
-		focusPrefix := ""
-		if m.Server.ServerFocusPanel == 0 && i == m.Server.ServerIndex {
-			focusPrefix = "> "
+		line := fmt.Sprintf("%s (%s)", srv.Name, srv.Zone)
+		if i == m.Server.ServerIndex {
+			if m.Server.ServerFocusPanel == 0 {
+				sb.WriteString(MenuSelectedStyle.Render("> "+line) + "\n")
+			} else {
+				sb.WriteString(SelectedStyle.Render("  "+line) + "\n")
+			}
+		} else {
+			sb.WriteString(MenuItemStyle.Render("  "+line) + "\n")
 		}
-		sb.WriteString(fmt.Sprintf("  %s%s%s (%s)\n", focusPrefix, prefix, srv.Name, srv.Zone))
 	}
 
 	if serverViewport.TotalRows > serverViewport.VisibleRows {
 		sb.WriteString("  " + serverViewport.RenderSimpleScrollIndicator() + "\n")
 	}
 
-	sb.WriteString("\n  Actions:\n")
+	actionPanelTitle := "\n  Actions:"
+	if m.Server.ServerFocusPanel == 1 {
+		actionPanelTitle = "\n" + TabActiveStyle.Render("  ▸ Actions:")
+	}
+	sb.WriteString(actionPanelTitle + "\n")
+
 	for i, action := range actions {
-		prefix := "  "
-		focusPrefix := ""
 		if m.Server.ServerFocusPanel == 1 && i == m.Server.ServerAction {
-			focusPrefix = "> "
+			sb.WriteString(MenuSelectedStyle.Render("> "+action) + "\n")
+		} else {
+			sb.WriteString(MenuItemStyle.Render("  "+action) + "\n")
 		}
-		sb.WriteString(fmt.Sprintf("  %s%s%s\n", focusPrefix, prefix, action))
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Tab switch  Enter select  Esc back  q quit"))
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Tab switch panel  Enter select  Esc back  q quit"))
 
 	return BaseStyle.Render(sb.String())
 }
@@ -129,7 +143,11 @@ func (m *Model) executeServerCheck() {
 	}
 	defer client.Close()
 
-	checker := serverpkg.NewChecker(client, srv, convertRegistries(m.Config.Registries), secrets)
+	registries := make([]entity.Registry, 0, len(m.Config.Registries))
+	for i := range m.Config.Registries {
+		registries = append(registries, m.Config.Registries[i])
+	}
+	checker := serverpkg.NewChecker(client, srv, registries, secrets)
 	m.Server.ServerCheckResults = checker.CheckAll()
 	m.Server.ServerSyncResults = nil
 	m.ViewState = ViewStateServerCheck
@@ -156,7 +174,11 @@ func (m *Model) executeServerSync() {
 	}
 	defer client.Close()
 
-	syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), convertRegistries(m.Config.Registries), secrets)
+	registries := make([]entity.Registry, 0, len(m.Config.Registries))
+	for i := range m.Config.Registries {
+		registries = append(registries, m.Config.Registries[i])
+	}
+	syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), secrets, registries)
 	m.Server.ServerSyncResults = syncer.SyncAll()
 	m.Server.ServerCheckResults = nil
 	m.ViewState = ViewStateServerCheck
@@ -183,10 +205,14 @@ func (m *Model) executeServerFullSetup() {
 	}
 	defer client.Close()
 
-	checker := serverpkg.NewChecker(client, srv, convertRegistries(m.Config.Registries), secrets)
+	registries := make([]entity.Registry, 0, len(m.Config.Registries))
+	for i := range m.Config.Registries {
+		registries = append(registries, m.Config.Registries[i])
+	}
+	checker := serverpkg.NewChecker(client, srv, registries, secrets)
 	m.Server.ServerCheckResults = checker.CheckAll()
 
-	syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), convertRegistries(m.Config.Registries), secrets)
+	syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), secrets, registries)
 	m.Server.ServerSyncResults = syncer.SyncAll()
 
 	m.ViewState = ViewStateServerCheck

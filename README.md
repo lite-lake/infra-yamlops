@@ -89,8 +89,8 @@ go build -o yamlops ./cmd/yamlops
     │   ├── isps.yaml        # 服务商
     │   ├── zones.yaml       # 网区
     │   ├── servers.yaml     # 服务器
-    │   ├── services.yaml    # 业务服务
-    │   ├── infra_services.yaml  # 基础设施服务 (gateway/ssl)
+    │   ├── services_biz.yaml    # 业务服务
+    │   ├── services_infra.yaml  # 基础设施服务 (gateway/ssl)
     │   ├── registries.yaml  # Docker Registry
     │   ├── dns.yaml         # 域名和 DNS 记录
     │   ├── certificates.yaml # SSL 证书
@@ -349,7 +349,7 @@ servers:
       registries: [registry-aliyun]
 ```
 
-### services.yaml - 服务配置
+### services_biz.yaml - 业务服务配置
 
 ```yaml
 services:
@@ -391,7 +391,7 @@ services:
 - `./xxx` - 相对路径，在服务器上创建
 - `name:/path` - Docker named volume
 
-### infra_services.yaml - 基础设施服务
+### services_infra.yaml - 基础设施服务
 
 ```yaml
 infra_services:
@@ -491,7 +491,7 @@ certificates:
 
 ```bash
 # 1. 编辑配置
-vim userdata/prod/services.yaml
+vim userdata/prod/services_biz.yaml
 
 # 2. 验证配置
 ./yamlops validate -e prod
@@ -506,7 +506,7 @@ vim userdata/prod/services.yaml
 ### 2. 更新服务镜像
 
 ```bash
-# 1. 修改 services.yaml 中的 image 字段
+# 1. 修改 services_biz.yaml 中的 image 字段
 # 2. 验证并应用
 ./yamlops validate -e prod && ./yamlops apply -e prod --service api-server
 ```

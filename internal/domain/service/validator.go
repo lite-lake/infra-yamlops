@@ -11,12 +11,11 @@ import (
 type Validator struct {
 	cfg *entity.Config
 
-	secrets    map[string]string
-	isps       map[string]*entity.ISP
-	zones      map[string]*entity.Zone
-	servers    map[string]*entity.Server
-	registries map[string]*entity.Registry
-	domainMap  map[string]*entity.Domain
+	secrets   map[string]string
+	isps      map[string]*entity.ISP
+	zones     map[string]*entity.Zone
+	servers   map[string]*entity.Server
+	domainMap map[string]*entity.Domain
 }
 
 func NewValidator(cfg *entity.Config) *Validator {
@@ -24,13 +23,12 @@ func NewValidator(cfg *entity.Config) *Validator {
 		return &Validator{cfg: nil}
 	}
 	return &Validator{
-		cfg:        cfg,
-		secrets:    cfg.GetSecretsMap(),
-		isps:       cfg.GetISPMap(),
-		zones:      cfg.GetZoneMap(),
-		servers:    cfg.GetServerMap(),
-		registries: cfg.GetRegistryMap(),
-		domainMap:  cfg.GetDomainMap(),
+		cfg:       cfg,
+		secrets:   cfg.GetSecretsMap(),
+		isps:      cfg.GetISPMap(),
+		zones:     cfg.GetZoneMap(),
+		servers:   cfg.GetServerMap(),
+		domainMap: cfg.GetDomainMap(),
 	}
 }
 
@@ -131,11 +129,6 @@ func (v *Validator) validateServerReferences() error {
 		if server.ISP != "" {
 			if _, ok := v.isps[server.ISP]; !ok {
 				return fmt.Errorf("%w: isp '%s' referenced by server '%s' does not exist", domain.ErrMissingReference, server.ISP, server.Name)
-			}
-		}
-		for _, regName := range server.Environment.Registries {
-			if _, ok := v.registries[regName]; !ok {
-				return fmt.Errorf("%w: registry '%s' referenced by server '%s' does not exist", domain.ErrMissingReference, regName, server.Name)
 			}
 		}
 		if server.SSH.Password.Secret != "" {

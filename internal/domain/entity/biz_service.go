@@ -121,6 +121,7 @@ type BizService struct {
 	Volumes     []ServiceVolume                  `yaml:"volumes,omitempty"`
 	Gateways    []ServiceGatewayRoute            `yaml:"gateways,omitempty"`
 	Internal    bool                             `yaml:"internal,omitempty"`
+	Networks    []string                         `yaml:"networks,omitempty"`
 }
 
 func (s *BizService) GetServer() string {

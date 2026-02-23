@@ -76,16 +76,19 @@ type InfraService struct {
 	GatewayLogLevel int               `yaml:"log_level,omitempty"`
 
 	SSLConfig *SSLConfig `yaml:"-"`
+
+	Networks []string `yaml:"networks,omitempty"`
 }
 
 type infraServiceAlias InfraService
 
 func (s *InfraService) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var raw struct {
-		Name   string           `yaml:"name"`
-		Type   InfraServiceType `yaml:"type"`
-		Server string           `yaml:"server"`
-		Image  string           `yaml:"image"`
+		Name     string           `yaml:"name"`
+		Type     InfraServiceType `yaml:"type"`
+		Server   string           `yaml:"server"`
+		Image    string           `yaml:"image"`
+		Networks []string         `yaml:"networks"`
 	}
 	if err := unmarshal(&raw); err != nil {
 		return err
@@ -95,6 +98,7 @@ func (s *InfraService) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	s.Type = raw.Type
 	s.Server = raw.Server
 	s.Image = raw.Image
+	s.Networks = raw.Networks
 
 	switch s.Type {
 	case InfraServiceTypeGateway:
@@ -145,6 +149,7 @@ func (s *InfraService) MarshalYAML() (interface{}, error) {
 			SSL      *GatewaySSLConfig `yaml:"ssl,omitempty"`
 			WAF      *GatewayWAFConfig `yaml:"waf,omitempty"`
 			LogLevel int               `yaml:"log_level,omitempty"`
+			Networks []string          `yaml:"networks,omitempty"`
 		}{
 			Name:     s.Name,
 			Type:     s.Type,
@@ -155,22 +160,25 @@ func (s *InfraService) MarshalYAML() (interface{}, error) {
 			SSL:      s.GatewaySSL,
 			WAF:      s.GatewayWAF,
 			LogLevel: s.GatewayLogLevel,
+			Networks: s.Networks,
 		}, nil
 	case InfraServiceTypeSSL:
 		return struct {
-			Name   string           `yaml:"name"`
-			Type   InfraServiceType `yaml:"type"`
-			Server string           `yaml:"server"`
-			Image  string           `yaml:"image"`
-			Ports  *SSLPorts        `yaml:"ports,omitempty"`
-			Config *SSLVolumeConfig `yaml:"config,omitempty"`
+			Name     string           `yaml:"name"`
+			Type     InfraServiceType `yaml:"type"`
+			Server   string           `yaml:"server"`
+			Image    string           `yaml:"image"`
+			Ports    *SSLPorts        `yaml:"ports,omitempty"`
+			Config   *SSLVolumeConfig `yaml:"config,omitempty"`
+			Networks []string         `yaml:"networks,omitempty"`
 		}{
-			Name:   s.Name,
-			Type:   s.Type,
-			Server: s.Server,
-			Image:  s.Image,
-			Ports:  &s.SSLConfig.Ports,
-			Config: s.SSLConfig.Config,
+			Name:     s.Name,
+			Type:     s.Type,
+			Server:   s.Server,
+			Image:    s.Image,
+			Ports:    &s.SSLConfig.Ports,
+			Config:   s.SSLConfig.Config,
+			Networks: s.Networks,
 		}, nil
 	}
 	return (*infraServiceAlias)(s), nil
