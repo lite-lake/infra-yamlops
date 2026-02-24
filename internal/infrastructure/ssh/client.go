@@ -19,13 +19,38 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
+func closeWithLog(closer io.Closer, name string) {
+	if err := closer.Close(); err != nil {
+		logger.Debug("close error", "name", name, "error", err)
+	}
+}
+
 type Client struct {
 	client *ssh.Client
 	user   string
 }
 
+type SSHConfig struct {
+	StrictHostKeyChecking bool
+	Timeout               time.Duration
+}
+
+func DefaultSSHConfig() *SSHConfig {
+	return &SSHConfig{
+		StrictHostKeyChecking: true,
+		Timeout:               30 * time.Second,
+	}
+}
+
 func NewClient(host string, port int, user, password string) (*Client, error) {
-	logger.Debug("connecting to SSH server", "host", host, "port", port, "user", user)
+	return NewClientWithConfig(host, port, user, password, nil)
+}
+
+func NewClientWithConfig(host string, port int, user, password string, cfg *SSHConfig) (*Client, error) {
+	if cfg == nil {
+		cfg = DefaultSSHConfig()
+	}
+	logger.Debug("connecting to SSH server", "host", host, "port", port, "user", user, "strict_host_key", cfg.StrictHostKeyChecking, "timeout", cfg.Timeout)
 
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
@@ -33,18 +58,17 @@ func NewClient(host string, port int, user, password string) (*Client, error) {
 	}
 	knownHosts := filepath.Join(homeDir, ".ssh", "known_hosts")
 
-	hostKeyCallback, err := createHostKeyCallback(knownHosts)
+	hostKeyCallback, err := createHostKeyCallback(knownHosts, cfg.StrictHostKeyChecking)
 	if err != nil {
 		logger.Error("failed to create host key callback", "error", err)
 		return nil, domainerr.WrapOp("create host key callback", domainerr.ErrSSHConnectFailed)
 	}
 
 	config := &ssh.ClientConfig{
-		User: user,
-		Auth: []ssh.AuthMethod{
-			ssh.Password(password),
-		},
+		User:            user,
+		Auth:            []ssh.AuthMethod{ssh.Password(password)},
 		HostKeyCallback: hostKeyCallback,
+		Timeout:         cfg.Timeout,
 	}
 
 	addr := fmt.Sprintf("%s:%d", host, port)
@@ -123,7 +147,7 @@ func NewClientWithRetry(ctx context.Context, host string, port int, user, passwo
 	return client, err
 }
 
-func createHostKeyCallback(knownHostsPath string) (ssh.HostKeyCallback, error) {
+func createHostKeyCallback(knownHostsPath string, strict bool) (ssh.HostKeyCallback, error) {
 	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(knownHostsPath), 0700); err != nil {
 			return nil, err
@@ -153,12 +177,19 @@ func createHostKeyCallback(knownHostsPath string) (ssh.HostKeyCallback, error) {
 			return domainerr.WrapEntity("host key", hostname, domainerr.ErrSSHHostKeyMismatch)
 		}
 
+		if strict {
+			logger.Warn("unknown host key rejected", "hostname", hostname, "fingerprint", ssh.FingerprintSHA256(key))
+			return fmt.Errorf("%w: unknown host %s (fingerprint: %s). Add to known_hosts manually or disable strict host key checking",
+				domainerr.ErrSSHConnectFailed, hostname, ssh.FingerprintSHA256(key))
+		}
+
+		logger.Warn("auto-accepting unknown host key", "hostname", hostname, "fingerprint", ssh.FingerprintSHA256(key))
 		line := knownhosts.Line([]string{hostname}, key)
 		f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
 			return domainerr.WrapOp("open known_hosts", domainerr.ErrSSHConnectFailed)
 		}
-		defer f.Close()
+		defer closeWithLog(f, "known_hosts file")
 		if _, err := fmt.Fprintln(f, line); err != nil {
 			return domainerr.WrapOp("write known_hosts", domainerr.ErrSSHConnectFailed)
 		}
@@ -181,7 +212,7 @@ func (c *Client) Run(cmd string) (stdout, stderr string, err error) {
 		logger.Error("failed to create SSH session", "error", err)
 		return "", "", domainerr.WrapOp("create session", domainerr.ErrSSHSessionFailed)
 	}
-	defer session.Close()
+	defer closeWithLog(session, "ssh session")
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	session.Stdout = &stdoutBuf
@@ -199,7 +230,7 @@ func (c *Client) RunWithStdin(stdin string, cmd string) (stdout, stderr string, 
 	if err != nil {
 		return "", "", domainerr.WrapOp("create session", domainerr.ErrSSHSessionFailed)
 	}
-	defer session.Close()
+	defer closeWithLog(session, "ssh session")
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 	session.Stdout = &stdoutBuf
@@ -230,19 +261,19 @@ func (c *Client) UploadFile(localPath, remotePath string) error {
 	if err != nil {
 		return err
 	}
-	defer sftpClient.Close()
+	defer closeWithLog(sftpClient, "sftp client")
 
 	localFile, err := os.Open(localPath)
 	if err != nil {
 		return domainerr.WrapOp("open local file", domainerr.ErrSSHFileTransfer)
 	}
-	defer localFile.Close()
+	defer closeWithLog(localFile, "local file")
 
 	remoteFile, err := sftpClient.Create(remotePath)
 	if err != nil {
 		return domainerr.WrapOp("create remote file", domainerr.ErrSSHFileTransfer)
 	}
-	defer remoteFile.Close()
+	defer closeWithLog(remoteFile, "remote file")
 
 	_, err = io.Copy(remoteFile, localFile)
 	if err != nil {
@@ -257,7 +288,7 @@ func (c *Client) MkdirAll(path string) error {
 	if err != nil {
 		return err
 	}
-	defer sftpClient.Close()
+	defer closeWithLog(sftpClient, "sftp client")
 
 	return sftpClient.MkdirAll(path)
 }
@@ -288,20 +319,20 @@ func (c *Client) UploadFileSudoWithPerm(localPath, remotePath, perm string) erro
 	if err != nil {
 		return err
 	}
-	defer sftpClient.Close()
+	defer closeWithLog(sftpClient, "sftp client")
 
 	localFile, err := os.Open(localPath)
 	if err != nil {
 		return domainerr.WrapOp("open local file", domainerr.ErrSSHFileTransfer)
 	}
-	defer localFile.Close()
+	defer closeWithLog(localFile, "local file")
 
 	tmpPath := fmt.Sprintf(constants.RemoteTempFileFmt, os.Getpid())
 	tmpFile, err := sftpClient.Create(tmpPath)
 	if err != nil {
 		return domainerr.WrapOp("create temp file", domainerr.ErrSSHFileTransfer)
 	}
-	defer tmpFile.Close()
+	defer closeWithLog(tmpFile, "temp file")
 
 	_, err = io.Copy(tmpFile, localFile)
 	if err != nil {
@@ -321,7 +352,7 @@ func (c *Client) FileExists(path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer sftpClient.Close()
+	defer closeWithLog(sftpClient, "sftp client")
 
 	_, err = sftpClient.Stat(path)
 	if err != nil {
@@ -338,7 +369,7 @@ func (c *Client) StreamRun(cmd string, stdoutChan, stderrChan chan string) error
 	if err != nil {
 		return domainerr.WrapOp("create session", domainerr.ErrSSHSessionFailed)
 	}
-	defer session.Close()
+	defer closeWithLog(session, "ssh session")
 
 	stdoutPipe, err := session.StdoutPipe()
 	if err != nil {

@@ -3,6 +3,7 @@ package state
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
@@ -92,8 +93,14 @@ func (s *FileStore) Save(state *repository.DeploymentState) error {
 		return domain.WrapOp("marshal state", domain.ErrStateSerializeFail)
 	}
 
-	if err := os.WriteFile(s.path, data, 0644); err != nil {
-		return domain.WrapOp("write state file", domain.ErrStateWriteFailed)
+	tmpPath := filepath.Join(filepath.Dir(s.path), "."+filepath.Base(s.path)+".tmp")
+	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+		return domain.WrapOp("write temp state file", domain.ErrStateWriteFailed)
+	}
+
+	if err := os.Rename(tmpPath, s.path); err != nil {
+		os.Remove(tmpPath)
+		return domain.WrapOp("rename state file", domain.ErrStateWriteFailed)
 	}
 
 	return nil

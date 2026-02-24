@@ -63,8 +63,10 @@ func (m *Model) fetchRestartServiceStatusAsync() tea.Cmd {
 				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, infra.Name))
 				key := fmt.Sprintf(constants.ServicePrefixFormat, m.Environment, infra.Name)
 				if _, exists := statusMap[key]; !exists {
-					stdout, _, _ := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
-					if strings.TrimSpace(stdout) == "exists" {
+					stdout, _, err := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
+					if err != nil {
+						statusMap[key] = StatusError
+					} else if strings.TrimSpace(stdout) == "exists" {
 						statusMap[key] = StatusStopped
 					}
 				}
@@ -77,8 +79,10 @@ func (m *Model) fetchRestartServiceStatusAsync() tea.Cmd {
 				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, svc.Name))
 				key := fmt.Sprintf(constants.ServicePrefixFormat, m.Environment, svc.Name)
 				if _, exists := statusMap[key]; !exists {
-					stdout, _, _ := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
-					if strings.TrimSpace(stdout) == "exists" {
+					stdout, _, err := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
+					if err != nil {
+						statusMap[key] = StatusError
+					} else if strings.TrimSpace(stdout) == "exists" {
 						statusMap[key] = StatusStopped
 					}
 				}
