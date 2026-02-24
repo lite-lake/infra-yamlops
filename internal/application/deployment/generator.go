@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/litelake/yamlops/internal/compose"
 	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/gate"
+	"github.com/litelake/yamlops/internal/infrastructure/generator/compose"
+	"github.com/litelake/yamlops/internal/infrastructure/generator/gate"
 )
 
 type Generator struct {

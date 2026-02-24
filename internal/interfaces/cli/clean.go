@@ -10,7 +10,7 @@ import (
 
 	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
-	"github.com/litelake/yamlops/internal/ssh"
+	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
 
 func newCleanCommand(ctx *Context) *cobra.Command {

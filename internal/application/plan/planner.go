@@ -1,7 +1,6 @@
 package plan
 
 import (
-	"github.com/litelake/yamlops/internal/application/deployment"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/repository"
 	"github.com/litelake/yamlops/internal/domain/service"
@@ -11,10 +10,15 @@ import (
 
 type DeploymentState = repository.DeploymentState
 
+type DeploymentGenerator interface {
+	Generate(config *entity.Config) error
+	SetOutputDir(dir string)
+}
+
 type Planner struct {
 	config        *entity.Config
 	differService *service.DifferService
-	deployGen     *deployment.Generator
+	deployGen     DeploymentGenerator
 	stateStore    *state.FileStore
 	outputDir     string
 	env           string
@@ -27,7 +31,7 @@ func NewPlanner(cfg *entity.Config, env string) *Planner {
 	return &Planner{
 		config:        cfg,
 		differService: service.NewDifferService(nil),
-		deployGen:     deployment.NewGenerator(env, "deployments"),
+		deployGen:     NewDeploymentGeneratorAdapter(env, "deployments"),
 		outputDir:     "deployments",
 		env:           env,
 	}
@@ -40,7 +44,20 @@ func NewPlannerWithState(cfg *entity.Config, st *DeploymentState, env string) *P
 	return &Planner{
 		config:        cfg,
 		differService: service.NewDifferService(st),
-		deployGen:     deployment.NewGenerator(env, "deployments"),
+		deployGen:     NewDeploymentGeneratorAdapter(env, "deployments"),
+		outputDir:     "deployments",
+		env:           env,
+	}
+}
+
+func NewPlannerWithGenerator(cfg *entity.Config, st *DeploymentState, env string, gen DeploymentGenerator) *Planner {
+	if env == "" {
+		env = "dev"
+	}
+	return &Planner{
+		config:        cfg,
+		differService: service.NewDifferService(st),
+		deployGen:     gen,
 		outputDir:     "deployments",
 		env:           env,
 	}

@@ -4,7 +4,7 @@ import (
 	"sync"
 
 	"github.com/litelake/yamlops/internal/application/handler"
-	"github.com/litelake/yamlops/internal/ssh"
+	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
 
 type SSHClientFactory func(info *handler.ServerInfo) (handler.SSHClient, error)

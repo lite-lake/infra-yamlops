@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/ssh"
+	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
 
 type Checker struct {

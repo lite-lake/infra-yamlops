@@ -6,7 +6,7 @@ import (
 
 	"github.com/litelake/yamlops/internal/domain/entity"
 	serverpkg "github.com/litelake/yamlops/internal/environment"
-	"github.com/litelake/yamlops/internal/ssh"
+	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
 
 func (m Model) renderServerSetup() string {

@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/litelake/yamlops/internal/constants"
-	"github.com/litelake/yamlops/internal/ssh"
+	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
 
 func (m *Model) buildStopTree() {

@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/litelake/yamlops/internal/application/plan"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/repository"
 	"github.com/litelake/yamlops/internal/domain/service"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
-	"github.com/litelake/yamlops/internal/plan"
-	"github.com/litelake/yamlops/internal/secrets"
+	"github.com/litelake/yamlops/internal/infrastructure/secrets"
 )
 
 type Workflow struct {
@@ -96,4 +96,8 @@ func (w *Workflow) Plan(ctx context.Context, outputDir string, scope *valueobjec
 func (w *Workflow) GenerateDeployments(cfg *entity.Config, outputDir string) error {
 	planner := w.CreatePlanner(cfg, outputDir)
 	return planner.GenerateDeployments()
+}
+
+func (w *Workflow) FetchRemoteState(ctx context.Context, cfg *entity.Config) *repository.DeploymentState {
+	return w.stateFetcher.Fetch(ctx, cfg)
 }

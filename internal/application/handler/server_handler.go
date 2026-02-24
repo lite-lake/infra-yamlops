@@ -7,7 +7,7 @@ import (
 
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
-	"github.com/litelake/yamlops/internal/registry"
+	"github.com/litelake/yamlops/internal/infrastructure/registry"
 )
 
 type ServerHandler struct{}

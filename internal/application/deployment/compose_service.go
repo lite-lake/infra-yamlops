@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/litelake/yamlops/internal/compose"
 	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/infrastructure/generator/compose"
 )
 
 func (g *Generator) generateServiceComposes(config *entity.Config) error {

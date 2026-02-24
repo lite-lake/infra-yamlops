@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/gate"
+	"github.com/litelake/yamlops/internal/infrastructure/generator/gate"
 )
 
 func (g *Generator) generateGatewayConfigs(config *entity.Config) error {

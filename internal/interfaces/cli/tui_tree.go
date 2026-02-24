@@ -6,11 +6,11 @@ import (
 	"strings"
 
 	"github.com/litelake/yamlops/internal/application/orchestrator"
+	"github.com/litelake/yamlops/internal/application/plan"
 	"github.com/litelake/yamlops/internal/application/usecase"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
-	"github.com/litelake/yamlops/internal/plan"
 )
 
 func (m *Model) loadConfig() {
