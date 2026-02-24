@@ -47,14 +47,12 @@ func (m Model) handleUp() Model {
 			m.Server.ServiceMenuIndex--
 		}
 	case ViewStateServerSetup:
-		if m.Server.ServerFocusPanel == 0 {
-			if m.Server.ServerIndex > 0 {
-				m.Server.ServerIndex--
-			}
-		} else {
-			if m.Server.ServerAction > 0 {
-				m.Server.ServerAction--
-			}
+		if m.ServerEnv.CursorIndex > 0 {
+			m.ServerEnv.CursorIndex--
+		}
+	case ViewStateServerCheck:
+		if m.ServerEnv.ResultsScrollY > 0 {
+			m.ServerEnv.ResultsScrollY--
 		}
 	case ViewStateDNSManagement:
 		if m.DNS.DNSMenuIndex > 0 {
@@ -119,14 +117,22 @@ func (m Model) handleDown() Model {
 			m.Server.ServiceMenuIndex++
 		}
 	case ViewStateServerSetup:
-		if m.Server.ServerFocusPanel == 0 {
-			if m.Server.ServerIndex < len(m.Server.ServerList)-1 {
-				m.Server.ServerIndex++
-			}
-		} else {
-			if m.Server.ServerAction < 3 {
-				m.Server.ServerAction++
-			}
+		totalNodes := m.countServerEnvNodes()
+		if m.ServerEnv.CursorIndex < totalNodes-1 {
+			m.ServerEnv.CursorIndex++
+		}
+	case ViewStateServerCheck:
+		totalLines := m.countServerEnvResultLines()
+		availableHeight := m.UI.Height - 8
+		if availableHeight < 5 {
+			availableHeight = 5
+		}
+		maxScroll := totalLines - availableHeight
+		if maxScroll < 0 {
+			maxScroll = 0
+		}
+		if m.ServerEnv.ResultsScrollY < maxScroll {
+			m.ServerEnv.ResultsScrollY++
 		}
 	case ViewStateDNSManagement:
 		if m.DNS.DNSMenuIndex < 3 {
@@ -203,6 +209,13 @@ func (m Model) handleSpace() Model {
 		}
 		return m
 	}
+	if m.ViewState == ViewStateServerSetup {
+		node := m.getServerEnvNodeAtIndex(m.ServerEnv.CursorIndex)
+		if node != nil {
+			node.Selected = !node.Selected
+		}
+		return m
+	}
 	if m.ViewState == ViewStateServiceStop {
 		node := m.getNodeAtIndex(m.Tree.CursorIndex)
 		if node == nil || len(node.Children) > 0 {
@@ -271,24 +284,22 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 			m.Loading.Message = "Fetching service status..."
 			return m, tea.Batch(tickSpinner(), m.fetchServiceStatusAsync())
 		case 1:
-			m.ViewState = ViewStateServiceStop
-			m.Stop.StopCursor = 0
-			m.buildStopTree()
-			return m, nil
+			m.Tree.CursorIndex = 0
+			m.Loading.Active = true
+			m.Loading.Message = "Fetching service status..."
+			return m, tea.Batch(tickSpinner(), m.fetchServiceStatusAsync())
 		case 2:
-			m.ViewState = ViewStateServiceRestart
-			m.Restart.RestartCursor = 0
-			m.buildRestartTree()
-			return m, nil
+			m.Tree.CursorIndex = 0
+			m.Loading.Active = true
+			m.Loading.Message = "Fetching service status..."
+			return m, tea.Batch(tickSpinner(), m.fetchRestartServiceStatusAsync())
 		case 3:
 			m.Loading.Active = true
 			m.Loading.Message = "Scanning orphan services..."
 			return m, tea.Batch(tickSpinner(), m.scanOrphanServicesAsync())
 		case 4:
 			m.ViewState = ViewStateServerSetup
-			m.Server.ServerIndex = 0
-			m.Server.ServerAction = 0
-			m.Server.ServerFocusPanel = 0
+			m.initServerEnvNodes()
 			return m, nil
 		case 5:
 			m.ViewState = ViewStateMainMenu
@@ -341,21 +352,22 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		m.DNS.DNSPullSelected = nil
 		return m, nil
 	case ViewStateServerSetup:
-		switch m.Server.ServerAction {
+		if m.ServerEnv.CountSelected() == 0 {
+			return m, nil
+		}
+		switch m.ServerEnv.OperationIndex {
 		case 0:
 			m.Loading.Active = true
-			m.Loading.Message = "Checking server environment..."
-			return m, tea.Batch(tickSpinner(), m.executeServerCheckAsync())
+			m.Loading.Message = "Checking server environments..."
+			return m, tea.Batch(tickSpinner(), m.executeServerEnvCheckAsync())
 		case 1:
 			m.Loading.Active = true
-			m.Loading.Message = "Syncing server environment..."
-			return m, tea.Batch(tickSpinner(), m.executeServerSyncAsync())
+			m.Loading.Message = "Syncing server environments..."
+			return m, tea.Batch(tickSpinner(), m.executeServerEnvSyncAsync())
 		case 2:
 			m.Loading.Active = true
 			m.Loading.Message = "Running full setup..."
-			return m, tea.Batch(tickSpinner(), m.executeServerFullSetupAsync())
-		case 3:
-			m.ViewState = ViewStateServiceManagement
+			return m, tea.Batch(tickSpinner(), m.executeServerEnvFullSetupAsync())
 		}
 		return m, nil
 	case ViewStateServerCheck:
@@ -452,11 +464,7 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 func (m Model) handleTab() Model {
 	switch m.ViewState {
 	case ViewStateServerSetup:
-		if m.Server.ServerFocusPanel == 0 {
-			m.Server.ServerFocusPanel = 1
-		} else {
-			m.Server.ServerFocusPanel = 0
-		}
+		m.ServerEnv.OperationIndex = (m.ServerEnv.OperationIndex + 1) % len(serverEnvOperations)
 	case ViewStateTree:
 		if m.ViewMode == ViewModeApp {
 			m.ViewMode = ViewModeDNS
@@ -469,6 +477,13 @@ func (m Model) handleTab() Model {
 }
 
 func (m Model) handleSelectCurrent(selected bool) Model {
+	if m.ViewState == ViewStateServerSetup {
+		node := m.getServerEnvNodeAtIndex(m.ServerEnv.CursorIndex)
+		if node != nil {
+			node.Selected = selected
+		}
+		return m
+	}
 	if m.ViewState != ViewStateTree && m.ViewState != ViewStateServiceStop && m.ViewState != ViewStateServiceRestart {
 		return m
 	}
@@ -482,6 +497,10 @@ func (m Model) handleSelectCurrent(selected bool) Model {
 }
 
 func (m Model) handleSelectAll(selected bool) Model {
+	if m.ViewState == ViewStateServerSetup {
+		m.ServerEnv.SelectAll(selected)
+		return m
+	}
 	if m.ViewState != ViewStateTree && m.ViewState != ViewStateServiceStop && m.ViewState != ViewStateServiceRestart {
 		return m
 	}

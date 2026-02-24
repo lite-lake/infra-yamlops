@@ -10,108 +10,222 @@ import (
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
 
-func (m Model) renderServerSetup() string {
-	actions := []string{"Check Environment", "Sync Environment", "Full Setup (Check + Sync)", "Back to Menu"}
+var serverEnvOperations = []string{"Check", "Sync", "Full Setup"}
+
+func (m *Model) initServerEnvNodes() {
+	m.ServerEnv.Nodes = nil
+	for _, srv := range m.Server.ServerList {
+		m.ServerEnv.Nodes = append(m.ServerEnv.Nodes, &ServerEnvNode{
+			Name:     srv.Name,
+			Zone:     srv.Zone,
+			Selected: false,
+			Expanded: false,
+			Server:   srv,
+		})
+	}
+	m.ServerEnv.CursorIndex = 0
+	m.ServerEnv.OperationIndex = 0
+	m.ServerEnv.Results = nil
+	m.ServerEnv.SyncResults = nil
+}
+
+func (m Model) renderServerEnvSetup() string {
+	availableHeight := m.UI.Height - 12
+	if availableHeight < 5 {
+		availableHeight = 5
+	}
+
+	treeHeight := availableHeight - 2
+	if treeHeight < 3 {
+		treeHeight = 3
+	}
+
+	var lines []string
+	for _, node := range m.ServerEnv.Nodes {
+		m.renderServerEnvNode(node, &lines)
+	}
+
+	totalLines := len(lines)
+	viewport := NewViewport(m.ServerEnv.CursorIndex, totalLines, treeHeight)
+	viewport.EnsureCursorVisible()
+
+	var sb strings.Builder
+	sb.WriteString(TitleStyle.Render("  Server Environment Setup") + "\n\n")
+
+	sb.WriteString(TabActiveStyle.Render("  ▸ Select Servers:") + "\n")
+
+	start := viewport.VisibleStart()
+	end := viewport.VisibleEnd()
+	for i := start; i < end && i < len(lines); i++ {
+		sb.WriteString("  " + lines[i] + "\n")
+	}
+
+	if viewport.TotalRows > viewport.VisibleRows {
+		sb.WriteString("  " + viewport.RenderSimpleScrollIndicator() + "\n")
+	}
+
+	sb.WriteString("\n")
+	sb.WriteString("  " + strings.Repeat("─", 40) + "\n")
+
+	sb.WriteString("\n" + TabActiveStyle.Render("  ▸ Operation:") + "  ")
+
+	for i, op := range serverEnvOperations {
+		if i == m.ServerEnv.OperationIndex {
+			sb.WriteString(SelectedStyle.Render("["+op+"]") + "  ")
+		} else {
+			sb.WriteString(MenuItemStyle.Render(op) + "  ")
+		}
+	}
+	sb.WriteString("\n")
+
+	selectedCount := m.ServerEnv.CountSelected()
+	sb.WriteString(fmt.Sprintf("\n  Selected: %d server(s)\n", selectedCount))
+
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Space select  Enter expand/execute  Tab operation  a all  n none  Esc back  q quit"))
+
+	return BaseStyle.Render(sb.String())
+}
+
+func (m Model) renderServerEnvNode(node *ServerEnvNode, lines *[]string) {
+	cursor := " "
+	lineIdx := len(*lines)
+	if lineIdx == m.ServerEnv.CursorIndex {
+		cursor = ">"
+	}
+
+	selectIcon := "○"
+	if node.Selected {
+		selectIcon = "◉"
+	}
+
+	expandIcon := "▸"
+	if node.Expanded {
+		expandIcon = "▾"
+	}
+
+	line := fmt.Sprintf("%s %s %s %s (%s)", cursor, selectIcon, expandIcon, node.Name, node.Zone)
+	if lineIdx == m.ServerEnv.CursorIndex {
+		line = SelectedStyle.Render(line)
+	}
+	*lines = append(*lines, line)
+
+	if node.Expanded && m.ServerEnv.Results != nil {
+		if results, ok := m.ServerEnv.Results[node.Name]; ok {
+			for _, r := range results {
+				icon := "✓"
+				style := SuccessStyle
+				if r.Status != serverpkg.CheckStatusOK {
+					icon = "✗"
+					style = ChangeDeleteStyle
+				}
+				detailLine := fmt.Sprintf("      %s %s: %s", icon, r.Name, r.Message)
+				*lines = append(*lines, style.Render(detailLine))
+			}
+		}
+	}
+}
+
+func (m Model) renderServerEnvResults() string {
+	var lines []string
+
+	checkResults := m.ServerEnv.Results
+	syncResults := m.ServerEnv.SyncResults
+
+	if len(checkResults) > 0 {
+		lines = append(lines, "")
+		for _, node := range m.ServerEnv.Nodes {
+			results, ok := checkResults[node.Name]
+			if !ok {
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("  [%s]", node.Name))
+			for _, r := range results {
+				icon := "✓"
+				style := SuccessStyle
+				if r.Status != serverpkg.CheckStatusOK {
+					icon = "✗"
+					style = ChangeDeleteStyle
+				}
+				lines = append(lines, style.Render(fmt.Sprintf("    %s %s: %s", icon, r.Name, r.Message)))
+			}
+			lines = append(lines, "")
+		}
+	}
+
+	if len(syncResults) > 0 {
+		lines = append(lines, "  --- Sync Results ---")
+		for _, node := range m.ServerEnv.Nodes {
+			results, ok := syncResults[node.Name]
+			if !ok {
+				continue
+			}
+			lines = append(lines, fmt.Sprintf("  [%s]", node.Name))
+			for _, r := range results {
+				icon := "✓"
+				style := SuccessStyle
+				if !r.Success {
+					icon = "✗"
+					style = ChangeDeleteStyle
+				}
+				lines = append(lines, style.Render(fmt.Sprintf("    %s %s: %s", icon, r.Name, r.Message)))
+			}
+			lines = append(lines, "")
+		}
+	}
+
+	totalChecks := 0
+	passedChecks := 0
+	for _, results := range checkResults {
+		for _, r := range results {
+			totalChecks++
+			if r.Status == serverpkg.CheckStatusOK {
+				passedChecks++
+			}
+		}
+	}
+	totalSyncs := 0
+	passedSyncs := 0
+	for _, results := range syncResults {
+		for _, r := range results {
+			totalSyncs++
+			if r.Success {
+				passedSyncs++
+			}
+		}
+	}
+
+	summaryParts := []string{}
+	if totalChecks > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("Check: %d/%d passed", passedChecks, totalChecks))
+	}
+	if totalSyncs > 0 {
+		summaryParts = append(summaryParts, fmt.Sprintf("Sync: %d/%d passed", passedSyncs, totalSyncs))
+	}
+	if len(summaryParts) > 0 {
+		lines = append(lines, fmt.Sprintf("  Summary: %s", strings.Join(summaryParts, ", ")))
+	}
 
 	availableHeight := m.UI.Height - 8
 	if availableHeight < 5 {
 		availableHeight = 5
 	}
 
-	serverListHeight := availableHeight - len(actions) - 4
-	if serverListHeight < 3 {
-		serverListHeight = 3
-	}
-
-	totalServers := len(m.Server.ServerList)
-	serverViewport := NewViewport(0, totalServers, serverListHeight)
-	serverViewport.CursorIndex = m.Server.ServerIndex
-	serverViewport.EnsureCursorVisible()
-
-	var sb strings.Builder
-	title := TitleStyle.Render("  Server Setup")
-	sb.WriteString(title + "\n\n")
-
-	serverPanelTitle := "  Select Server:"
-	if m.Server.ServerFocusPanel == 0 {
-		serverPanelTitle = TabActiveStyle.Render("  ▸ Select Server:")
-	}
-	sb.WriteString(serverPanelTitle + "\n")
-
-	for i := serverViewport.VisibleStart(); i < serverViewport.VisibleEnd() && i < totalServers; i++ {
-		srv := m.Server.ServerList[i]
-		line := fmt.Sprintf("%s (%s)", srv.Name, srv.Zone)
-		if i == m.Server.ServerIndex {
-			if m.Server.ServerFocusPanel == 0 {
-				sb.WriteString(MenuSelectedStyle.Render("> "+line) + "\n")
-			} else {
-				sb.WriteString(SelectedStyle.Render("  "+line) + "\n")
-			}
-		} else {
-			sb.WriteString(MenuItemStyle.Render("  "+line) + "\n")
-		}
-	}
-
-	if serverViewport.TotalRows > serverViewport.VisibleRows {
-		sb.WriteString("  " + serverViewport.RenderSimpleScrollIndicator() + "\n")
-	}
-
-	actionPanelTitle := "\n  Actions:"
-	if m.Server.ServerFocusPanel == 1 {
-		actionPanelTitle = "\n" + TabActiveStyle.Render("  ▸ Actions:")
-	}
-	sb.WriteString(actionPanelTitle + "\n")
-
-	for i, action := range actions {
-		if m.Server.ServerFocusPanel == 1 && i == m.Server.ServerAction {
-			sb.WriteString(MenuSelectedStyle.Render("> "+action) + "\n")
-		} else {
-			sb.WriteString(MenuItemStyle.Render("  "+action) + "\n")
-		}
-	}
-
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Tab switch panel  Enter select  Esc back  q quit"))
-
-	return BaseStyle.Render(sb.String())
-}
-
-func (m Model) renderServerCheck() string {
-	var lines []string
-
-	if len(m.Server.ServerCheckResults) > 0 && m.Server.ServerIndex < len(m.Server.ServerList) {
-		name := m.Server.ServerList[m.Server.ServerIndex].Name
-		lines = append(lines, serverpkg.FormatResults(name, m.Server.ServerCheckResults))
-	}
-
-	if len(m.Server.ServerSyncResults) > 0 {
-		lines = append(lines, "")
-		for _, r := range m.Server.ServerSyncResults {
-			icon := "✅"
-			if !r.Success {
-				icon = "❌"
-			}
-			lines = append(lines, fmt.Sprintf("  %s %s: %s", icon, r.Name, r.Message))
-		}
-	}
-
-	lines = append(lines, "")
-	lines = append(lines, HelpStyle.Render("  Esc back  q quit"))
-
-	availableHeight := m.UI.Height - 4
-	if availableHeight < 5 {
-		availableHeight = 5
-	}
-
 	totalLines := len(lines)
 	viewport := NewViewport(0, totalLines, availableHeight)
-	viewport.Offset = m.UI.ScrollOffset
+	viewport.Offset = m.ServerEnv.ResultsScrollY
 	maxOffset := max(0, totalLines-viewport.VisibleRows)
 	if viewport.Offset > maxOffset {
 		viewport.Offset = maxOffset
+		m.ServerEnv.ResultsScrollY = viewport.Offset
 	}
-	m.UI.ScrollOffset = viewport.Offset
+	if viewport.Offset < 0 {
+		viewport.Offset = 0
+		m.ServerEnv.ResultsScrollY = 0
+	}
 
 	var sb strings.Builder
+	sb.WriteString(TitleStyle.Render("  Environment Results") + "\n")
+
 	for i := viewport.VisibleStart(); i < viewport.VisibleEnd() && i < len(lines); i++ {
 		sb.WriteString(lines[i] + "\n")
 	}
@@ -120,194 +234,219 @@ func (m Model) renderServerCheck() string {
 		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
 	}
 
+	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ scroll  Enter back  r re-check  s sync selected  Esc back  q quit"))
+
 	return BaseStyle.Render(sb.String())
 }
 
-func (m *Model) executeServerCheck() {
-	if len(m.Server.ServerList) == 0 || m.Server.ServerIndex >= len(m.Server.ServerList) {
-		return
+func (m Model) countServerEnvLines() int {
+	count := 0
+	for _, node := range m.ServerEnv.Nodes {
+		count++
+		if node.Expanded && m.ServerEnv.Results != nil {
+			if results, ok := m.ServerEnv.Results[node.Name]; ok {
+				count += len(results)
+			}
+		}
 	}
-
-	srv := m.Server.ServerList[m.Server.ServerIndex]
-	secrets := m.Config.GetSecretsMap()
-
-	password, err := srv.SSH.Password.Resolve(secrets)
-	if err != nil {
-		m.UI.ErrorMessage = fmt.Sprintf("Cannot resolve password: %v", err)
-		return
-	}
-
-	client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
-	if err != nil {
-		m.UI.ErrorMessage = fmt.Sprintf("Connection failed: %v", err)
-		return
-	}
-	defer client.Close()
-
-	registries := make([]entity.Registry, 0, len(m.Config.Registries))
-	for i := range m.Config.Registries {
-		registries = append(registries, m.Config.Registries[i])
-	}
-	checker := serverpkg.NewChecker(client, srv, registries, secrets)
-	m.Server.ServerCheckResults = checker.CheckAll()
-	m.Server.ServerSyncResults = nil
-	m.ViewState = ViewStateServerCheck
+	return count
 }
 
-func (m *Model) executeServerCheckAsync() tea.Cmd {
+func (m Model) countServerEnvResultLines() int {
+	count := 0
+
+	checkResults := m.ServerEnv.Results
+	syncResults := m.ServerEnv.SyncResults
+
+	if len(checkResults) > 0 {
+		count++
+		for _, node := range m.ServerEnv.Nodes {
+			results, ok := checkResults[node.Name]
+			if !ok {
+				continue
+			}
+			count++
+			count += len(results)
+			count++
+		}
+	}
+
+	if len(syncResults) > 0 {
+		count++
+		for _, node := range m.ServerEnv.Nodes {
+			results, ok := syncResults[node.Name]
+			if !ok {
+				continue
+			}
+			count++
+			count += len(results)
+			count++
+		}
+	}
+
+	count++
+	return count
+}
+
+func (m *Model) executeServerEnvCheckAsync() tea.Cmd {
 	return func() tea.Msg {
-		if len(m.Server.ServerList) == 0 || m.Server.ServerIndex >= len(m.Server.ServerList) {
-			return serverCheckCompleteMsg{}
+		servers := m.ServerEnv.GetSelectedServers()
+		if len(servers) == 0 {
+			return serverEnvCheckAllMsg{}
 		}
 
-		srv := m.Server.ServerList[m.Server.ServerIndex]
+		results := make(map[string][]serverpkg.CheckResult)
 		secrets := m.Config.GetSecretsMap()
-
-		password, err := srv.SSH.Password.Resolve(secrets)
-		if err != nil {
-			return serverCheckCompleteMsg{err: fmt.Errorf("cannot resolve password: %v", err)}
-		}
-
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
-		if err != nil {
-			return serverCheckCompleteMsg{err: fmt.Errorf("connection failed: %v", err)}
-		}
-		defer client.Close()
 
 		registries := make([]entity.Registry, 0, len(m.Config.Registries))
 		for i := range m.Config.Registries {
 			registries = append(registries, m.Config.Registries[i])
 		}
-		checker := serverpkg.NewChecker(client, srv, registries, secrets)
-		results := checker.CheckAll()
-		return serverCheckCompleteMsg{results: results}
+
+		for _, srv := range servers {
+			password, err := srv.SSH.Password.Resolve(secrets)
+			if err != nil {
+				results[srv.Name] = []serverpkg.CheckResult{{
+					Name:    "Connection",
+					Status:  serverpkg.CheckStatusError,
+					Message: fmt.Sprintf("Cannot resolve password: %v", err),
+				}}
+				continue
+			}
+
+			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			if err != nil {
+				results[srv.Name] = []serverpkg.CheckResult{{
+					Name:    "Connection",
+					Status:  serverpkg.CheckStatusError,
+					Message: fmt.Sprintf("Connection failed: %v", err),
+				}}
+				continue
+			}
+
+			checker := serverpkg.NewChecker(client, srv, registries, secrets)
+			results[srv.Name] = checker.CheckAll()
+			client.Close()
+		}
+
+		return serverEnvCheckAllMsg{results: results}
 	}
 }
 
-func (m *Model) executeServerSync() {
-	if len(m.Server.ServerList) == 0 || m.Server.ServerIndex >= len(m.Server.ServerList) {
-		return
-	}
-
-	srv := m.Server.ServerList[m.Server.ServerIndex]
-	secrets := m.Config.GetSecretsMap()
-
-	password, err := srv.SSH.Password.Resolve(secrets)
-	if err != nil {
-		m.UI.ErrorMessage = fmt.Sprintf("Cannot resolve password: %v", err)
-		return
-	}
-
-	client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
-	if err != nil {
-		m.UI.ErrorMessage = fmt.Sprintf("Connection failed: %v", err)
-		return
-	}
-	defer client.Close()
-
-	registries := make([]entity.Registry, 0, len(m.Config.Registries))
-	for i := range m.Config.Registries {
-		registries = append(registries, m.Config.Registries[i])
-	}
-	syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), secrets, registries)
-	m.Server.ServerSyncResults = syncer.SyncAll()
-	m.Server.ServerCheckResults = nil
-	m.ViewState = ViewStateServerCheck
-}
-
-func (m *Model) executeServerSyncAsync() tea.Cmd {
+func (m *Model) executeServerEnvSyncAsync() tea.Cmd {
 	return func() tea.Msg {
-		if len(m.Server.ServerList) == 0 || m.Server.ServerIndex >= len(m.Server.ServerList) {
-			return serverSyncCompleteMsg{}
+		servers := m.ServerEnv.GetSelectedServers()
+		if len(servers) == 0 {
+			return serverEnvSyncAllMsg{}
 		}
 
-		srv := m.Server.ServerList[m.Server.ServerIndex]
+		results := make(map[string][]serverpkg.SyncResult)
 		secrets := m.Config.GetSecretsMap()
-
-		password, err := srv.SSH.Password.Resolve(secrets)
-		if err != nil {
-			return serverSyncCompleteMsg{err: fmt.Errorf("cannot resolve password: %v", err)}
-		}
-
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
-		if err != nil {
-			return serverSyncCompleteMsg{err: fmt.Errorf("connection failed: %v", err)}
-		}
-		defer client.Close()
 
 		registries := make([]entity.Registry, 0, len(m.Config.Registries))
 		for i := range m.Config.Registries {
 			registries = append(registries, m.Config.Registries[i])
 		}
-		syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), secrets, registries)
-		results := syncer.SyncAll()
-		return serverSyncCompleteMsg{results: results}
+
+		for _, srv := range servers {
+			password, err := srv.SSH.Password.Resolve(secrets)
+			if err != nil {
+				results[srv.Name] = []serverpkg.SyncResult{{
+					Name:    "Connection",
+					Success: false,
+					Message: fmt.Sprintf("Cannot resolve password: %v", err),
+				}}
+				continue
+			}
+
+			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			if err != nil {
+				results[srv.Name] = []serverpkg.SyncResult{{
+					Name:    "Connection",
+					Success: false,
+					Message: fmt.Sprintf("Connection failed: %v", err),
+				}}
+				continue
+			}
+
+			syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), secrets, registries)
+			results[srv.Name] = syncer.SyncAll()
+			client.Close()
+		}
+
+		return serverEnvSyncAllMsg{results: results}
 	}
 }
 
-func (m *Model) executeServerFullSetup() {
-	if len(m.Server.ServerList) == 0 || m.Server.ServerIndex >= len(m.Server.ServerList) {
-		return
-	}
-
-	srv := m.Server.ServerList[m.Server.ServerIndex]
-	secrets := m.Config.GetSecretsMap()
-
-	password, err := srv.SSH.Password.Resolve(secrets)
-	if err != nil {
-		m.UI.ErrorMessage = fmt.Sprintf("Cannot resolve password: %v", err)
-		return
-	}
-
-	client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
-	if err != nil {
-		m.UI.ErrorMessage = fmt.Sprintf("Connection failed: %v", err)
-		return
-	}
-	defer client.Close()
-
-	registries := make([]entity.Registry, 0, len(m.Config.Registries))
-	for i := range m.Config.Registries {
-		registries = append(registries, m.Config.Registries[i])
-	}
-	checker := serverpkg.NewChecker(client, srv, registries, secrets)
-	m.Server.ServerCheckResults = checker.CheckAll()
-
-	syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), secrets, registries)
-	m.Server.ServerSyncResults = syncer.SyncAll()
-
-	m.ViewState = ViewStateServerCheck
-}
-
-func (m *Model) executeServerFullSetupAsync() tea.Cmd {
+func (m *Model) executeServerEnvFullSetupAsync() tea.Cmd {
 	return func() tea.Msg {
-		if len(m.Server.ServerList) == 0 || m.Server.ServerIndex >= len(m.Server.ServerList) {
-			return serverSyncCompleteMsg{}
+		servers := m.ServerEnv.GetSelectedServers()
+		if len(servers) == 0 {
+			return serverEnvCheckAllMsg{}
 		}
 
-		srv := m.Server.ServerList[m.Server.ServerIndex]
+		checkResults := make(map[string][]serverpkg.CheckResult)
+		syncResults := make(map[string][]serverpkg.SyncResult)
 		secrets := m.Config.GetSecretsMap()
-
-		password, err := srv.SSH.Password.Resolve(secrets)
-		if err != nil {
-			return serverSyncCompleteMsg{err: fmt.Errorf("cannot resolve password: %v", err)}
-		}
-
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
-		if err != nil {
-			return serverSyncCompleteMsg{err: fmt.Errorf("connection failed: %v", err)}
-		}
-		defer client.Close()
 
 		registries := make([]entity.Registry, 0, len(m.Config.Registries))
 		for i := range m.Config.Registries {
 			registries = append(registries, m.Config.Registries[i])
 		}
-		checker := serverpkg.NewChecker(client, srv, registries, secrets)
-		m.Server.ServerCheckResults = checker.CheckAll()
 
-		syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), secrets, registries)
-		results := syncer.SyncAll()
-		return serverSyncCompleteMsg{results: results}
+		for _, srv := range servers {
+			password, err := srv.SSH.Password.Resolve(secrets)
+			if err != nil {
+				checkResults[srv.Name] = []serverpkg.CheckResult{{
+					Name:    "Connection",
+					Status:  serverpkg.CheckStatusError,
+					Message: fmt.Sprintf("Cannot resolve password: %v", err),
+				}}
+				continue
+			}
+
+			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			if err != nil {
+				checkResults[srv.Name] = []serverpkg.CheckResult{{
+					Name:    "Connection",
+					Status:  serverpkg.CheckStatusError,
+					Message: fmt.Sprintf("Connection failed: %v", err),
+				}}
+				continue
+			}
+
+			checker := serverpkg.NewChecker(client, srv, registries, secrets)
+			checkResults[srv.Name] = checker.CheckAll()
+
+			syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), secrets, registries)
+			syncResults[srv.Name] = syncer.SyncAll()
+
+			client.Close()
+		}
+
+		return serverEnvCheckAllMsg{results: checkResults, syncResults: syncResults}
 	}
+}
+
+func (m *Model) getServerEnvNodeAtIndex(idx int) *ServerEnvNode {
+	currentIdx := 0
+	for _, node := range m.ServerEnv.Nodes {
+		if currentIdx == idx {
+			return node
+		}
+		currentIdx++
+		if node.Expanded && m.ServerEnv.Results != nil {
+			if results, ok := m.ServerEnv.Results[node.Name]; ok {
+				if currentIdx+len(results) > idx {
+					return node
+				}
+				currentIdx += len(results)
+			}
+		}
+	}
+	return nil
+}
+
+func (m *Model) countServerEnvNodes() int {
+	return m.countServerEnvLines()
 }

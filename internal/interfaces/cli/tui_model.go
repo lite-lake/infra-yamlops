@@ -42,6 +42,11 @@ type serviceStatusFetchedMsg struct {
 	err       error
 }
 
+type restartStatusFetchedMsg struct {
+	statusMap map[string]NodeStatus
+	err       error
+}
+
 type dnsDomainsFetchedMsg struct {
 	diffs []DomainDiff
 	err   error
@@ -64,6 +69,17 @@ type serverCheckCompleteMsg struct {
 
 type serverSyncCompleteMsg struct {
 	results []serverpkg.SyncResult
+	err     error
+}
+
+type serverEnvCheckAllMsg struct {
+	results     map[string][]serverpkg.CheckResult
+	syncResults map[string][]serverpkg.SyncResult
+	err         error
+}
+
+type serverEnvSyncAllMsg struct {
+	results map[string][]serverpkg.SyncResult
 	err     error
 }
 
@@ -322,6 +338,51 @@ type ServerState struct {
 	ServiceMenuIndex   int
 }
 
+type ServerEnvNode struct {
+	Name     string
+	Zone     string
+	Selected bool
+	Expanded bool
+	Server   *entity.Server
+}
+
+type ServerEnvState struct {
+	Nodes           []*ServerEnvNode
+	CursorIndex     int
+	OperationIndex  int
+	Results         map[string][]serverpkg.CheckResult
+	SyncResults     map[string][]serverpkg.SyncResult
+	ResultsScrollY  int
+	ProgressCurrent int
+	ProgressTotal   int
+}
+
+func (s *ServerEnvState) CountSelected() int {
+	count := 0
+	for _, node := range s.Nodes {
+		if node.Selected {
+			count++
+		}
+	}
+	return count
+}
+
+func (s *ServerEnvState) GetSelectedServers() []*entity.Server {
+	var servers []*entity.Server
+	for _, node := range s.Nodes {
+		if node.Selected && node.Server != nil {
+			servers = append(servers, node.Server)
+		}
+	}
+	return servers
+}
+
+func (s *ServerEnvState) SelectAll(selected bool) {
+	for _, node := range s.Nodes {
+		node.Selected = selected
+	}
+}
+
 type DNSState struct {
 	DNSMenuIndex    int
 	DNSISPIndex     int
@@ -371,15 +432,16 @@ type Model struct {
 	ConfigDir   string
 	Config      *entity.Config
 
-	UI      *UIState
-	Tree    *TreeState
-	Server  *ServerState
-	DNS     *DNSState
-	Cleanup *CleanupState
-	Stop    *StopState
-	Restart *RestartState
-	Action  *ActionState
-	Loading *LoadingState
+	UI        *UIState
+	Tree      *TreeState
+	Server    *ServerState
+	ServerEnv *ServerEnvState
+	DNS       *DNSState
+	Cleanup   *CleanupState
+	Stop      *StopState
+	Restart   *RestartState
+	Action    *ActionState
+	Loading   *LoadingState
 }
 
 func NewModel(env string, configDir string) Model {
@@ -404,12 +466,13 @@ func NewModel(env string, configDir string) Model {
 			Height:        24,
 			MainMenuIndex: 0,
 		},
-		Tree:    &TreeState{},
-		Server:  &ServerState{ServerFocusPanel: 0},
-		DNS:     &DNSState{},
-		Cleanup: &CleanupState{},
-		Stop:    &StopState{},
-		Restart: &RestartState{},
+		Tree:      &TreeState{},
+		Server:    &ServerState{ServerFocusPanel: 0},
+		ServerEnv: &ServerEnvState{},
+		DNS:       &DNSState{},
+		Cleanup:   &CleanupState{},
+		Stop:      &StopState{},
+		Restart:   &RestartState{},
 		Action: &ActionState{
 			PlanScope: &valueobject.Scope{},
 		},

@@ -17,9 +17,9 @@ func (m Model) View() string {
 	case ViewStateServiceManagement:
 		return m.renderServiceManagement()
 	case ViewStateServerSetup:
-		return m.renderServerSetup()
+		return m.renderServerEnvSetup()
 	case ViewStateServerCheck:
-		return m.renderServerCheck()
+		return m.renderServerEnvResults()
 	case ViewStateDNSManagement:
 		return m.renderDNSManagement()
 	case ViewStateDNSPullDomains:

@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
+	serverpkg "github.com/litelake/yamlops/internal/environment"
 )
 
 func tickSpinner() tea.Cmd {
@@ -64,7 +65,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.Stop.ServiceStatusMap = msg.statusMap
+		m.Tree.TreeNodes = m.buildAppTree()
+		m.Stop.StopSelected = make(map[int]bool)
+		for _, node := range m.Tree.TreeNodes {
+			node.SelectRecursive(false)
+		}
 		m.applyServiceStatusToTree()
+		m.ViewState = ViewStateServiceStop
+		return m, nil
+
+	case restartStatusFetchedMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Failed to fetch service status: %v", msg.err)
+			return m, nil
+		}
+		m.Restart.ServiceStatusMap = msg.statusMap
+		m.Tree.TreeNodes = m.buildAppTree()
+		m.Restart.RestartSelected = make(map[int]bool)
+		for _, node := range m.Tree.TreeNodes {
+			node.SelectRecursive(false)
+		}
+		m.applyRestartServiceStatusToTree()
+		m.ViewState = ViewStateServiceRestart
 		return m, nil
 
 	case dnsDomainsFetchedMsg:
@@ -144,6 +167,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.Server.ServerSyncResults = msg.results
 		m.Server.ServerCheckResults = nil
+		m.ViewState = ViewStateServerCheck
+		return m, nil
+
+	case serverEnvCheckAllMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Server check failed: %v", msg.err)
+			return m, nil
+		}
+		m.ServerEnv.Results = msg.results
+		m.ServerEnv.SyncResults = msg.syncResults
+		m.ServerEnv.ResultsScrollY = 0
+		m.ViewState = ViewStateServerCheck
+		return m, nil
+
+	case serverEnvSyncAllMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Server sync failed: %v", msg.err)
+			return m, nil
+		}
+		if m.ServerEnv.Results == nil {
+			m.ServerEnv.Results = make(map[string][]serverpkg.CheckResult)
+		}
+		m.ServerEnv.SyncResults = msg.results
+		m.ServerEnv.ResultsScrollY = 0
 		m.ViewState = ViewStateServerCheck
 		return m, nil
 
@@ -244,7 +293,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "p":
 			return m.handlePlan()
 		case "r":
+			if m.ViewState == ViewStateServerCheck {
+				if m.ServerEnv.CountSelected() > 0 {
+					m.Loading.Active = true
+					m.Loading.Message = "Checking server environments..."
+					return m, tea.Batch(tickSpinner(), m.executeServerEnvCheckAsync())
+				}
+				return m, nil
+			}
 			return m.handleRefresh()
+		case "s":
+			if m.ViewState == ViewStateServerCheck {
+				if m.ServerEnv.CountSelected() > 0 {
+					m.Loading.Active = true
+					m.Loading.Message = "Syncing server environments..."
+					return m, tea.Batch(tickSpinner(), m.executeServerEnvSyncAsync())
+				}
+				return m, nil
+			}
+			return m, nil
 		}
 	}
 	return m, nil
@@ -261,8 +328,11 @@ func (m Model) handleEscape() (tea.Model, tea.Cmd) {
 		m.UI.ErrorMessage = ""
 	case ViewStateServiceManagement:
 		m.ViewState = ViewStateMainMenu
-	case ViewStateServerSetup, ViewStateServerCheck:
+	case ViewStateServerSetup:
 		m.ViewState = ViewStateServiceManagement
+		m.UI.ErrorMessage = ""
+	case ViewStateServerCheck:
+		m.ViewState = ViewStateServerSetup
 		m.UI.ErrorMessage = ""
 	case ViewStateDNSManagement:
 		m.ViewState = ViewStateMainMenu

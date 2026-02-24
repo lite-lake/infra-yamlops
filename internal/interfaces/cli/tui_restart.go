@@ -100,6 +100,87 @@ func (m *Model) fetchRestartServiceStatus() {
 	}
 }
 
+func (m *Model) fetchRestartServiceStatusAsync() tea.Cmd {
+	return func() tea.Msg {
+		statusMap := make(map[string]NodeStatus)
+		if m.Config == nil {
+			return restartStatusFetchedMsg{statusMap: statusMap}
+		}
+		secrets := m.Config.GetSecretsMap()
+
+		for _, srv := range m.Config.Servers {
+			password, err := srv.SSH.Password.Resolve(secrets)
+			if err != nil {
+				continue
+			}
+
+			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			if err != nil {
+				continue
+			}
+
+			stdout, _, err := client.Run("sudo docker compose ls -a --format json 2>/dev/null || sudo docker compose ls -a --format json")
+			if err != nil || stdout == "" {
+				client.Close()
+				continue
+			}
+
+			type composeProject struct {
+				Name string `json:"Name"`
+			}
+			var projects []composeProject
+			if err := json.Unmarshal([]byte(stdout), &projects); err != nil {
+				for _, line := range strings.Split(stdout, "\n") {
+					line = strings.TrimSpace(line)
+					if line == "" {
+						continue
+					}
+					var proj composeProject
+					if err := json.Unmarshal([]byte(line), &proj); err == nil && proj.Name != "" {
+						projects = append(projects, proj)
+					}
+				}
+			}
+
+			for _, proj := range projects {
+				statusMap[proj.Name] = StatusRunning
+			}
+
+			for _, infra := range m.Config.InfraServices {
+				if infra.Server != srv.Name {
+					continue
+				}
+				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, infra.Name))
+				key := fmt.Sprintf(constants.ServicePrefixFormat, m.Environment, infra.Name)
+				if _, exists := statusMap[key]; !exists {
+					stdout, _, _ := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
+					if strings.TrimSpace(stdout) == "exists" {
+						statusMap[key] = StatusStopped
+					}
+				}
+			}
+
+			for _, svc := range m.Config.Services {
+				if svc.Server != srv.Name {
+					continue
+				}
+				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, svc.Name))
+				key := fmt.Sprintf(constants.ServicePrefixFormat, m.Environment, svc.Name)
+				if _, exists := statusMap[key]; !exists {
+					stdout, _, _ := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
+					if strings.TrimSpace(stdout) == "exists" {
+						statusMap[key] = StatusStopped
+					}
+				}
+			}
+
+			client.Close()
+		}
+
+		return restartStatusFetchedMsg{statusMap: statusMap}
+	}
+}
+
 func (m *Model) applyRestartServiceStatusToTree() {
 	for _, node := range m.Tree.TreeNodes {
 		m.applyRestartStatusToNode(node)
