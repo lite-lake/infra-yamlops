@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -12,105 +11,20 @@ import (
 
 func (m *Model) fetchRestartServiceStatusAsync() tea.Cmd {
 	return func() tea.Msg {
-		statusMap := make(map[string]NodeStatus)
 		if m.Config == nil {
-			return restartStatusFetchedMsg{statusMap: statusMap}
+			return restartStatusFetchedMsg{statusMap: make(map[string]NodeStatus)}
 		}
 		secrets := m.Config.GetSecretsMap()
-
-		for _, srv := range m.Config.Servers {
-			password, err := srv.SSH.Password.Resolve(secrets)
-			if err != nil {
-				continue
-			}
-
-			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
-			if err != nil {
-				continue
-			}
-
-			stdout, _, err := client.Run("sudo docker compose ls -a --format json 2>/dev/null || sudo docker compose ls -a --format json")
-			if err != nil || stdout == "" {
-				client.Close()
-				continue
-			}
-
-			type composeProject struct {
-				Name string `json:"Name"`
-			}
-			var projects []composeProject
-			if err := json.Unmarshal([]byte(stdout), &projects); err != nil {
-				for _, line := range strings.Split(stdout, "\n") {
-					line = strings.TrimSpace(line)
-					if line == "" {
-						continue
-					}
-					var proj composeProject
-					if err := json.Unmarshal([]byte(line), &proj); err == nil && proj.Name != "" {
-						projects = append(projects, proj)
-					}
-				}
-			}
-
-			for _, proj := range projects {
-				statusMap[proj.Name] = StatusRunning
-			}
-
-			for _, infra := range m.Config.InfraServices {
-				if infra.Server != srv.Name {
-					continue
-				}
-				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, infra.Name))
-				key := fmt.Sprintf(constants.ServicePrefixFormat, m.Environment, infra.Name)
-				if _, exists := statusMap[key]; !exists {
-					stdout, _, err := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
-					if err != nil {
-						statusMap[key] = StatusError
-					} else if strings.TrimSpace(stdout) == "exists" {
-						statusMap[key] = StatusStopped
-					}
-				}
-			}
-
-			for _, svc := range m.Config.Services {
-				if svc.Server != srv.Name {
-					continue
-				}
-				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, svc.Name))
-				key := fmt.Sprintf(constants.ServicePrefixFormat, m.Environment, svc.Name)
-				if _, exists := statusMap[key]; !exists {
-					stdout, _, err := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
-					if err != nil {
-						statusMap[key] = StatusError
-					} else if strings.TrimSpace(stdout) == "exists" {
-						statusMap[key] = StatusStopped
-					}
-				}
-			}
-
-			client.Close()
-		}
-
+		servers := m.buildServerWithSSHList()
+		infraServices := m.buildInfraServicesList()
+		bizServices := m.buildBizServicesList()
+		statusMap := fetchServiceStatus(servers, infraServices, bizServices, secrets, string(m.Environment))
 		return restartStatusFetchedMsg{statusMap: statusMap}
 	}
 }
 
 func (m *Model) applyRestartServiceStatusToTree() {
-	for _, node := range m.Tree.TreeNodes {
-		m.applyRestartStatusToNode(node)
-	}
-}
-
-func (m *Model) applyRestartStatusToNode(node *TreeNode) {
-	if node.Type == NodeTypeInfra || node.Type == NodeTypeBiz {
-		key := fmt.Sprintf(constants.ServicePrefixFormat, m.Environment, node.Name)
-		if status, exists := m.Restart.ServiceStatusMap[key]; exists {
-			node.Status = status
-		}
-	}
-	for _, child := range node.Children {
-		m.applyRestartStatusToNode(child)
-	}
+	applyStatusToNodes(m.Tree.TreeNodes, m.Restart.ServiceStatusMap, string(m.Environment))
 }
 
 func (m *Model) executeServiceRestartAsync() tea.Cmd {
@@ -118,7 +32,7 @@ func (m *Model) executeServiceRestartAsync() tea.Cmd {
 		var results []RestartResult
 		secrets := m.Config.GetSecretsMap()
 
-		servicesToRestart := m.getSelectedServicesForRestart()
+		servicesToRestart := getSelectedServicesInfo(m.Tree.TreeNodes)
 		if len(servicesToRestart) == 0 {
 			return serviceRestartCompleteMsg{results: results}
 		}
@@ -190,34 +104,6 @@ func (m *Model) executeServiceRestartAsync() tea.Cmd {
 	}
 }
 
-func (m *Model) getSelectedServicesForRestart() []serviceInfo {
-	var services []serviceInfo
-	serviceSet := make(map[string]bool)
-
-	for _, node := range m.Tree.TreeNodes {
-		leaves := node.GetSelectedLeaves()
-		for _, leaf := range leaves {
-			var serverName string
-			if leaf.Parent != nil {
-				serverName = leaf.Parent.Name
-			}
-			switch leaf.Type {
-			case NodeTypeInfra:
-				if !serviceSet[leaf.Name] {
-					services = append(services, serviceInfo{Name: leaf.Name, Server: serverName})
-					serviceSet[leaf.Name] = true
-				}
-			case NodeTypeBiz:
-				if !serviceSet[leaf.Name] {
-					services = append(services, serviceInfo{Name: leaf.Name, Server: serverName})
-					serviceSet[leaf.Name] = true
-				}
-			}
-		}
-	}
-	return services
-}
-
 func (m Model) hasSelectedRestartServices() bool {
 	for _, node := range m.Tree.TreeNodes {
 		if node.CountSelected() > 0 {
@@ -228,11 +114,7 @@ func (m Model) hasSelectedRestartServices() bool {
 }
 
 func (m Model) renderServiceRestart() string {
-	var lines []string
-	idx := 0
-	for _, node := range m.Tree.TreeNodes {
-		m.renderNodeToLinesForRestart(node, 0, &idx, &lines)
-	}
+	lines := renderTreeNodes(m.Tree.TreeNodes, m.Tree.CursorIndex, false)
 
 	availableHeight := m.UI.Height - 10
 	if availableHeight < 5 {
@@ -269,108 +151,6 @@ func (m Model) renderServiceRestart() string {
 	sb.WriteString("\n" + HelpStyle.Render("  Space select  Enter expand  a current  n cancel  A all  N none  p confirm restart  Esc back  q quit"))
 
 	return BaseStyle.Render(sb.String())
-}
-
-func (m Model) renderNodeToLinesForRestart(node *TreeNode, depth int, idx *int, lines *[]string) {
-	indent := strings.Repeat("  ", depth)
-	prefix := indent
-	if depth > 0 {
-		prefix = indent[:len(indent)-2] + "├─"
-	}
-	cursor := "  "
-	if *idx == m.Tree.CursorIndex {
-		cursor = "> "
-	}
-	selectIcon := "○"
-	if node.Selected {
-		selectIcon = "◉"
-	} else if node.IsPartiallySelected() {
-		selectIcon = "◐"
-	}
-	expandIcon := " "
-	if len(node.Children) > 0 {
-		if node.Expanded {
-			expandIcon = "▾"
-		} else {
-			expandIcon = "▸"
-		}
-	}
-	typePrefix := ""
-	switch node.Type {
-	case NodeTypeInfra:
-		typePrefix = "[infra] "
-	case NodeTypeBiz:
-		typePrefix = "[biz] "
-	}
-	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
-	if statusStr := formatNodeStatus(node.Status); statusStr != "" {
-		line = fmt.Sprintf("%s %s", line, statusStr)
-	}
-	if *idx == m.Tree.CursorIndex {
-		line = SelectedStyle.Render(line)
-	}
-	*lines = append(*lines, line)
-	*idx++
-	if node.Expanded {
-		for i, child := range node.Children {
-			if i == len(node.Children)-1 {
-				m.renderNodeLastChildToLinesForRestart(child, depth+1, idx, lines)
-			} else {
-				m.renderNodeToLinesForRestart(child, depth+1, idx, lines)
-			}
-		}
-	}
-}
-
-func (m Model) renderNodeLastChildToLinesForRestart(node *TreeNode, depth int, idx *int, lines *[]string) {
-	indent := strings.Repeat("  ", depth)
-	prefix := indent
-	if depth > 0 {
-		prefix = indent[:len(indent)-2] + "└─"
-	}
-	cursor := "  "
-	if *idx == m.Tree.CursorIndex {
-		cursor = "> "
-	}
-	selectIcon := "○"
-	if node.Selected {
-		selectIcon = "◉"
-	} else if node.IsPartiallySelected() {
-		selectIcon = "◐"
-	}
-	expandIcon := " "
-	if len(node.Children) > 0 {
-		if node.Expanded {
-			expandIcon = "▾"
-		} else {
-			expandIcon = "▸"
-		}
-	}
-	typePrefix := ""
-	switch node.Type {
-	case NodeTypeInfra:
-		typePrefix = "[infra] "
-	case NodeTypeBiz:
-		typePrefix = "[biz] "
-	}
-	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
-	if statusStr := formatNodeStatus(node.Status); statusStr != "" {
-		line = fmt.Sprintf("%s %s", line, statusStr)
-	}
-	if *idx == m.Tree.CursorIndex {
-		line = SelectedStyle.Render(line)
-	}
-	*lines = append(*lines, line)
-	*idx++
-	if node.Expanded {
-		for i, child := range node.Children {
-			if i == len(node.Children)-1 {
-				m.renderNodeLastChildToLinesForRestart(child, depth+1, idx, lines)
-			} else {
-				m.renderNodeToLinesForRestart(child, depth+1, idx, lines)
-			}
-		}
-	}
 }
 
 func (m Model) countSelectedForRestart() int {

@@ -2,10 +2,6 @@ package dns
 
 import (
 	"context"
-	"fmt"
-	"slices"
-	"strconv"
-	"strings"
 
 	"github.com/cloudflare/cloudflare-go/v2"
 	"github.com/cloudflare/cloudflare-go/v2/dns"
@@ -180,14 +176,7 @@ func (p *CloudflareProvider) buildRecordParam(record *DNSRecord, ttl int) dns.Re
 }
 
 func parseSRVValue(value string) (priority, weight, port float64, target string) {
-	parts := strings.Fields(value)
-	if len(parts) >= 4 {
-		priority, _ = strconv.ParseFloat(parts[0], 64)
-		weight, _ = strconv.ParseFloat(parts[1], 64)
-		port, _ = strconv.ParseFloat(parts[2], 64)
-		target = parts[3]
-	}
-	return
+	return ParseSRVValue(value)
 }
 
 func (p *CloudflareProvider) DeleteRecord(domainName string, recordID string) error {
@@ -313,20 +302,4 @@ func (p *CloudflareProvider) BatchDeleteRecords(domainName string, recordIDs []s
 
 func (p *CloudflareProvider) EnsureRecord(domainName string, record *DNSRecord) error {
 	return EnsureRecordSimple(p, domainName, record)
-}
-
-func ParseTTL(ttlStr string) (int, error) {
-	ttl, err := strconv.Atoi(ttlStr)
-	if err != nil {
-		return 0, fmt.Errorf("invalid TTL: %s", ttlStr)
-	}
-	validTTLs := []int{1, 5, 10, 20, 30, 60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 18000, 43200, 86400}
-	idx, _ := slices.BinarySearch(validTTLs, ttl)
-	if idx < len(validTTLs) && validTTLs[idx] == ttl {
-		return ttl, nil
-	}
-	if idx > 0 {
-		return validTTLs[idx-1], nil
-	}
-	return 1, nil
 }

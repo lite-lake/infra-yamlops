@@ -25,43 +25,45 @@ type Planner struct {
 	env           string
 }
 
-func NewPlanner(cfg *entity.Config, env string) *Planner {
-	if env == "" {
-		env = "dev"
+type PlannerOption func(*Planner)
+
+func WithConfig(cfg *entity.Config) PlannerOption {
+	return func(p *Planner) { p.config = cfg }
+}
+
+func WithEnv(env string) PlannerOption {
+	return func(p *Planner) {
+		if env != "" {
+			p.env = env
+		}
 	}
-	return &Planner{
-		config:        cfg,
+}
+
+func WithState(st *DeploymentState) PlannerOption {
+	return func(p *Planner) { p.differService = service.NewDifferService(st) }
+}
+
+func WithGenerator(gen DeploymentGenerator) PlannerOption {
+	return func(p *Planner) { p.deployGen = gen }
+}
+
+func WithOutputDir(dir string) PlannerOption {
+	return func(p *Planner) { p.outputDir = dir }
+}
+
+func NewPlanner(opts ...PlannerOption) *Planner {
+	p := &Planner{
+		env:           "dev",
+		outputDir:     "deployments",
 		differService: service.NewDifferService(nil),
-		deployGen:     NewDeploymentGeneratorAdapter(env, "deployments"),
-		outputDir:     "deployments",
-		env:           env,
 	}
-}
-
-func NewPlannerWithState(cfg *entity.Config, st *DeploymentState, env string) *Planner {
-	if env == "" {
-		env = "dev"
+	for _, opt := range opts {
+		opt(p)
 	}
-	return &Planner{
-		config:        cfg,
-		differService: service.NewDifferService(st),
-		deployGen:     NewDeploymentGeneratorAdapter(env, "deployments"),
-		outputDir:     "deployments",
-		env:           env,
+	if p.deployGen == nil {
+		p.deployGen = NewDeploymentGeneratorAdapter(p.env, p.outputDir)
 	}
-}
-
-func NewPlannerWithGenerator(cfg *entity.Config, st *DeploymentState, env string, gen DeploymentGenerator) *Planner {
-	if env == "" {
-		env = "dev"
-	}
-	return &Planner{
-		config:        cfg,
-		differService: service.NewDifferService(st),
-		deployGen:     gen,
-		outputDir:     "deployments",
-		env:           env,
-	}
+	return p
 }
 
 func (p *Planner) SetOutputDir(dir string) {

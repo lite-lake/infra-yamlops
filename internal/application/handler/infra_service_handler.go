@@ -22,91 +22,49 @@ func (h *InfraServiceHandler) EntityType() string {
 }
 
 func (h *InfraServiceHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
-	result := &Result{Change: change, Success: false}
-
-	serverName := ExtractServerFromChange(change)
-	if serverName == "" {
-		result.Error = fmt.Errorf("cannot determine server for change %s", change.Name)
+	deployCtx, result := PrepareServiceDeploy(change, deps)
+	if result != nil {
 		return result, nil
 	}
 
-	if _, ok := deps.ServerInfo(serverName); !ok {
-		result.Error = fmt.Errorf("server %s not registered", serverName)
+	if _, ok := deps.ServerInfo(deployCtx.ServerName); !ok {
+		result = &Result{Change: change, Success: false}
+		result.Error = fmt.Errorf("server %s not registered", deployCtx.ServerName)
 		return result, nil
 	}
-
-	client, err := deps.SSHClient(serverName)
-	if err != nil {
-		result.Error = err
-		return result, nil
-	}
-
-	remoteDir := GetRemoteDir(deps, change.Name)
 
 	if change.Type == valueobject.ChangeTypeDelete {
-		return DeleteServiceRemote(change, client, remoteDir)
+		return DeleteServiceRemote(change, deployCtx.Client, deployCtx.RemoteDir)
 	}
 
-	return h.deployInfraService(change, client, remoteDir, deps, serverName)
-}
-
-func (h *InfraServiceHandler) deployInfraService(change *valueobject.Change, client SSHClient, remoteDir string, deps DepsProvider, serverName string) (*Result, error) {
-	result := &Result{Change: change, Success: false}
-
-	infra, ok := change.NewState.(*entity.InfraService)
-	if !ok && change.NewState != nil {
-		result.Error = fmt.Errorf("invalid infra service state")
-		return result, nil
-	}
-
-	requiredNetworks, err := GetRequiredNetworks(change, deps, serverName)
-	if err != nil {
-		result.Error = err
-		return result, nil
-	}
-
-	if err := EnsureNetworks(client, requiredNetworks); err != nil {
-		result.Error = err
-		return result, nil
-	}
-
-	if err := EnsureRemoteDir(client, remoteDir); err != nil {
-		result.Error = fmt.Errorf("failed to create remote directory: %w", err)
-		return result, nil
-	}
-
-	if infra != nil && infra.Type == entity.InfraServiceTypeGateway {
-		if err := h.deployGatewayType(change, client, remoteDir, deps); err != nil {
-			result.Error = err
-			return result, nil
-		}
-	}
-
-	if infra != nil && infra.Type == entity.InfraServiceTypeSSL {
-		if err := h.deploySSLType(change, client, remoteDir, deps); err != nil {
-			result.Error = err
-			return result, nil
-		}
-	}
-
-	composeFile := GetComposeFilePath(change, deps)
-	if !DeployComposeFile(client, &DeployComposeConfig{
-		RemoteDir:      remoteDir,
-		ComposeFile:    composeFile,
-		Env:            deps.Env(),
-		ServiceName:    change.Name,
+	infra, _ := change.NewState.(*entity.InfraService)
+	return ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{
+		PostDeployHook: h.createInfraTypeHook(infra, change.Name, deployCtx, deps),
 		RestartAfterUp: true,
-	}, result) {
-		return result, nil
-	}
-
-	result.Success = true
-	result.Output = fmt.Sprintf("deployed infra service %s", change.Name)
-	return result, nil
+	})
 }
 
-func (h *InfraServiceHandler) deployGatewayType(change *valueobject.Change, client SSHClient, remoteDir string, deps DepsProvider) error {
-	gatewayFile := h.getGatewayFilePath(change, deps)
+func (h *InfraServiceHandler) createInfraTypeHook(infra *entity.InfraService, serviceName string, deployCtx *ServiceDeployContext, deps DepsProvider) func(*Result) error {
+	return func(result *Result) error {
+		if infra != nil && infra.Type == entity.InfraServiceTypeGateway {
+			if err := h.deployGatewayType(serviceName, deployCtx, deps); err != nil {
+				result.Error = err
+				return err
+			}
+		}
+
+		if infra != nil && infra.Type == entity.InfraServiceTypeSSL {
+			if err := h.deploySSLType(infra, deployCtx, deps); err != nil {
+				result.Error = err
+				return err
+			}
+		}
+		return nil
+	}
+}
+
+func (h *InfraServiceHandler) deployGatewayType(serviceName string, deployCtx *ServiceDeployContext, deps DepsProvider) error {
+	gatewayFile := h.getGatewayFilePath(deployCtx.ServerName, serviceName, deps)
 	if gatewayFile == "" {
 		return nil
 	}
@@ -120,16 +78,15 @@ func (h *InfraServiceHandler) deployGatewayType(change *valueobject.Change, clie
 		return fmt.Errorf("failed to read gateway file: %w", err)
 	}
 
-	if err := SyncContent(client, string(content), remoteDir+"/gateway.yml"); err != nil {
+	if err := SyncContent(deployCtx.Client, string(content), deployCtx.RemoteDir+"/gateway.yml"); err != nil {
 		return fmt.Errorf("failed to sync gateway file: %w", err)
 	}
 
 	return nil
 }
 
-func (h *InfraServiceHandler) deploySSLType(change *valueobject.Change, client SSHClient, remoteDir string, deps DepsProvider) error {
-	infra, ok := change.NewState.(*entity.InfraService)
-	if !ok || infra == nil || infra.SSLConfig == nil || infra.SSLConfig.Config == nil {
+func (h *InfraServiceHandler) deploySSLType(infra *entity.InfraService, deployCtx *ServiceDeployContext, deps DepsProvider) error {
+	if infra == nil || infra.SSLConfig == nil || infra.SSLConfig.Config == nil {
 		return nil
 	}
 
@@ -147,23 +104,19 @@ func (h *InfraServiceHandler) deploySSLType(change *valueobject.Change, client S
 		return fmt.Errorf("failed to read ssl config file: %w", err)
 	}
 
-	if err := client.MkdirAllSudoWithPerm(remoteDir+"/ssl-config", "755"); err != nil {
+	if err := deployCtx.Client.MkdirAllSudoWithPerm(deployCtx.RemoteDir+"/ssl-config", "755"); err != nil {
 		return fmt.Errorf("failed to create ssl-config directory: %w", err)
 	}
 
-	if err := SyncContent(client, string(content), remoteDir+"/ssl-config/config.yml"); err != nil {
+	if err := SyncContent(deployCtx.Client, string(content), deployCtx.RemoteDir+"/ssl-config/config.yml"); err != nil {
 		return fmt.Errorf("failed to sync ssl config file: %w", err)
 	}
 
 	return nil
 }
 
-func (h *InfraServiceHandler) getGatewayFilePath(ch *valueobject.Change, deps DepsProvider) string {
-	serverName := ExtractServerFromChange(ch)
-	if serverName == "" {
-		return ""
-	}
-	return filepath.Join(deps.WorkDir(), "deployments", serverName, ch.Name+".gate.yaml")
+func (h *InfraServiceHandler) getGatewayFilePath(serverName, serviceName string, deps DepsProvider) string {
+	return filepath.Join(deps.WorkDir(), "deployments", serverName, serviceName+".gate.yaml")
 }
 
 func (h *InfraServiceHandler) getSSLConfigFilePath(infra *entity.InfraService, deps DepsProvider) string {

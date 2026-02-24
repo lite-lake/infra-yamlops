@@ -109,11 +109,7 @@ func (m Model) countTotal() int {
 }
 
 func (m Model) renderTree() string {
-	var lines []string
-	idx := 0
-	for _, node := range m.getCurrentTree() {
-		m.renderNodeToLines(node, 0, &idx, &lines)
-	}
+	lines := renderTreeNodes(m.getCurrentTree(), m.Tree.CursorIndex, true)
 
 	availableHeight := m.UI.Height - 8
 	if availableHeight < 5 {
@@ -159,115 +155,6 @@ func (m Model) renderTree() string {
 	}
 
 	return content.String()
-}
-
-func (m Model) renderNodeToLines(node *TreeNode, depth int, idx *int, lines *[]string) {
-	indent := strings.Repeat("  ", depth)
-	prefix := indent
-	if depth > 0 {
-		prefix = indent[:len(indent)-2] + "├─"
-	}
-	cursor := "  "
-	if *idx == m.Tree.CursorIndex {
-		cursor = "> "
-	}
-	selectIcon := "○"
-	if node.Selected {
-		selectIcon = "◉"
-	} else if node.IsPartiallySelected() {
-		selectIcon = "◐"
-	}
-	expandIcon := " "
-	if len(node.Children) > 0 {
-		if node.Expanded {
-			expandIcon = "▾"
-		} else {
-			expandIcon = "▸"
-		}
-	}
-	typePrefix := ""
-	switch node.Type {
-	case NodeTypeInfra:
-		typePrefix = "[infra] "
-	case NodeTypeBiz:
-		typePrefix = "[biz] "
-	case NodeTypeDNSRecord:
-	}
-	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
-	if statusStr := formatNodeStatus(node.Status); statusStr != "" {
-		line = fmt.Sprintf("%s %s", line, statusStr)
-	}
-	if node.Info != "" {
-		line = fmt.Sprintf("%s  %s", line, node.Info)
-	}
-	if *idx == m.Tree.CursorIndex {
-		line = SelectedStyle.Render(line)
-	}
-	*lines = append(*lines, line)
-	*idx++
-	if node.Expanded {
-		for i, child := range node.Children {
-			if i == len(node.Children)-1 {
-				m.renderNodeLastChildToLines(child, depth+1, idx, lines)
-			} else {
-				m.renderNodeToLines(child, depth+1, idx, lines)
-			}
-		}
-	}
-}
-
-func (m Model) renderNodeLastChildToLines(node *TreeNode, depth int, idx *int, lines *[]string) {
-	indent := strings.Repeat("  ", depth)
-	prefix := indent
-	if depth > 0 {
-		prefix = indent[:len(indent)-2] + "└─"
-	}
-	cursor := "  "
-	if *idx == m.Tree.CursorIndex {
-		cursor = "> "
-	}
-	selectIcon := "○"
-	if node.Selected {
-		selectIcon = "◉"
-	} else if node.IsPartiallySelected() {
-		selectIcon = "◐"
-	}
-	expandIcon := " "
-	if len(node.Children) > 0 {
-		if node.Expanded {
-			expandIcon = "▾"
-		} else {
-			expandIcon = "▸"
-		}
-	}
-	typePrefix := ""
-	switch node.Type {
-	case NodeTypeInfra:
-		typePrefix = "[infra] "
-	case NodeTypeBiz:
-		typePrefix = "[biz] "
-	}
-	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
-	if statusStr := formatNodeStatus(node.Status); statusStr != "" {
-		line = fmt.Sprintf("%s %s", line, statusStr)
-	}
-	if node.Info != "" {
-		line = fmt.Sprintf("%s  %s", line, node.Info)
-	}
-	if *idx == m.Tree.CursorIndex {
-		line = SelectedStyle.Render(line)
-	}
-	*lines = append(*lines, line)
-	*idx++
-	if node.Expanded {
-		for i, child := range node.Children {
-			if i == len(node.Children)-1 {
-				m.renderNodeLastChildToLines(child, depth+1, idx, lines)
-			} else {
-				m.renderNodeToLines(child, depth+1, idx, lines)
-			}
-		}
-	}
 }
 
 func (m Model) renderTabs() string {

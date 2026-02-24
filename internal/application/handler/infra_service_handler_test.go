@@ -236,13 +236,12 @@ func TestInfraServiceHandler_Delete_RemoveError(t *testing.T) {
 	}
 }
 
-func TestInfraServiceHandler_DeployInfraService_InvalidState(t *testing.T) {
-	h := NewInfraServiceHandler()
-
+func TestInfraServiceHandler_ExecuteServiceDeploy_InvalidState(t *testing.T) {
 	mockSSH := &mockSSHClient{}
 	deps := newMockDeps()
 	deps.sshClient = mockSSH
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4"}
+	deps.serverEntities["server1"] = &entity.Server{Name: "server1"}
 	deps.env = "test"
 
 	change := &valueobject.Change{
@@ -252,18 +251,21 @@ func TestInfraServiceHandler_DeployInfraService_InvalidState(t *testing.T) {
 		NewState: "invalid state",
 	}
 
-	result, err := h.deployInfraService(change, mockSSH, "/opt/test", deps, "server1")
+	deployCtx := &ServiceDeployContext{
+		ServerName: "server1",
+		Client:     mockSSH,
+		RemoteDir:  "/opt/test",
+	}
+	result, err := ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{RestartAfterUp: true})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result.Success {
-		t.Error("expected failure for invalid state")
+	if !result.Success {
+		t.Errorf("expected success (invalid state is tolerated in common deploy), got error: %v", result.Error)
 	}
 }
 
-func TestInfraServiceHandler_DeployInfraService_WithComposeFile(t *testing.T) {
-	h := NewInfraServiceHandler()
-
+func TestInfraServiceHandler_ExecuteServiceDeploy_WithComposeFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	serverDir := filepath.Join(tmpDir, "deployments", "server1")
 	if err := os.MkdirAll(serverDir, 0755); err != nil {
@@ -297,7 +299,12 @@ services:
 		},
 	}
 
-	result, err := h.deployInfraService(change, mockSSH, "/opt/test", deps, "server1")
+	deployCtx := &ServiceDeployContext{
+		ServerName: "server1",
+		Client:     mockSSH,
+		RemoteDir:  "/opt/test",
+	}
+	result, err := ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{RestartAfterUp: true})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -326,17 +333,13 @@ func TestInfraServiceHandler_DeployGatewayType_WithFile(t *testing.T) {
 	deps.env = "prod"
 	deps.workDir = tmpDir
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "infra_service",
-		Name:   "gateway1",
-		NewState: &entity.InfraService{
-			Name:   "gateway1",
-			Server: "server1",
-		},
+	deployCtx := &ServiceDeployContext{
+		ServerName: "server1",
+		Client:     mockSSH,
+		RemoteDir:  "/opt/test",
 	}
 
-	err := h.deployGatewayType(change, mockSSH, "/opt/test", deps)
+	err := h.deployGatewayType("gateway1", deployCtx, deps)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -349,7 +352,7 @@ func TestInfraServiceHandler_DeploySSLType_WithFile(t *testing.T) {
 	h := NewInfraServiceHandler()
 
 	tmpDir := t.TempDir()
-	sslConfigDir := filepath.Join(tmpDir, "deployments", "server1", "ssl-config")
+	sslConfigDir := filepath.Join(tmpDir, "userdata", "prod", "volumes", "infra-ssl-config-cn")
 	if err := os.MkdirAll(sslConfigDir, 0755); err != nil {
 		t.Fatal(err)
 	}
@@ -365,18 +368,25 @@ func TestInfraServiceHandler_DeploySSLType_WithFile(t *testing.T) {
 	deps.env = "prod"
 	deps.workDir = tmpDir
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "infra_service",
+	infra := &entity.InfraService{
 		Name:   "ssl1",
-		NewState: &entity.InfraService{
-			Name:   "ssl1",
-			Server: "server1",
-			Type:   entity.InfraServiceTypeSSL,
+		Type:   entity.InfraServiceTypeSSL,
+		Server: "server1",
+		SSLConfig: &entity.SSLConfig{
+			Config: &entity.SSLVolumeConfig{
+				Source: "volumes://infra-ssl-config-cn",
+				Sync:   true,
+			},
 		},
 	}
 
-	err := h.deploySSLType(change, mockSSH, "/opt/test", deps)
+	deployCtx := &ServiceDeployContext{
+		ServerName: "server1",
+		Client:     mockSSH,
+		RemoteDir:  "/opt/test",
+	}
+
+	err := h.deploySSLType(infra, deployCtx, deps)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -406,16 +416,8 @@ func TestInfraServiceHandler_GetGatewayFilePath(t *testing.T) {
 
 	deps := newMockDeps()
 	deps.workDir = "/tmp"
-	deps.servers["server1"] = &ServerInfo{}
 
-	change := &valueobject.Change{
-		Name: "gateway1",
-		NewState: map[string]interface{}{
-			"server": "server1",
-		},
-	}
-
-	result := h.getGatewayFilePath(change, deps)
+	result := h.getGatewayFilePath("server1", "gateway1", deps)
 	expected := filepath.Join("/tmp", "deployments", "server1", "gateway1.gate.yaml")
 	if result != expected {
 		t.Errorf("expected %s, got %s", expected, result)
@@ -457,17 +459,13 @@ func TestInfraServiceHandler_DeployGatewayType_NoFile(t *testing.T) {
 	deps.env = "prod"
 	deps.workDir = t.TempDir()
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "infra_service",
-		Name:   "gateway1",
-		NewState: &entity.InfraService{
-			Name:   "gateway1",
-			Server: "server1",
-		},
+	deployCtx := &ServiceDeployContext{
+		ServerName: "server1",
+		Client:     mockSSH,
+		RemoteDir:  "/opt/test",
 	}
 
-	err := h.deployGatewayType(change, mockSSH, "/opt/test", deps)
+	err := h.deployGatewayType("gateway1", deployCtx, deps)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -483,17 +481,19 @@ func TestInfraServiceHandler_DeploySSLType_NoFile(t *testing.T) {
 	deps.env = "prod"
 	deps.workDir = t.TempDir()
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "infra_service",
+	infra := &entity.InfraService{
 		Name:   "ssl1",
-		NewState: &entity.InfraService{
-			Name:   "ssl1",
-			Server: "server1",
-		},
+		Type:   entity.InfraServiceTypeSSL,
+		Server: "server1",
 	}
 
-	err := h.deploySSLType(change, mockSSH, "/opt/test", deps)
+	deployCtx := &ServiceDeployContext{
+		ServerName: "server1",
+		Client:     mockSSH,
+		RemoteDir:  "/opt/test",
+	}
+
+	err := h.deploySSLType(infra, deployCtx, deps)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

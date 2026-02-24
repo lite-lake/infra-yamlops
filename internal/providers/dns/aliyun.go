@@ -1,10 +1,6 @@
 package dns
 
 import (
-	"fmt"
-	"strconv"
-	"strings"
-
 	alidns "github.com/alibabacloud-go/alidns-20150109/v4/client"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	"github.com/alibabacloud-go/tea/tea"
@@ -211,36 +207,9 @@ func (p *AliyunProvider) EnsureRecord(domainName string, record *DNSRecord) erro
 }
 
 func ParseAliyunTTL(ttlStr string) (int64, error) {
-	ttl, err := strconv.ParseInt(ttlStr, 10, 64)
+	ttl, err := ParseTTL(ttlStr)
 	if err != nil {
-		return 600, fmt.Errorf("invalid TTL: %s", ttlStr)
+		return int64(DefaultTTL()), err
 	}
-	validTTLs := []int64{1, 5, 10, 20, 30, 60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 18000, 43200, 86400}
-	for _, validTTL := range validTTLs {
-		if ttl <= validTTL {
-			return validTTL, nil
-		}
-	}
-	return 86400, nil
-}
-
-func GetFullDomain(subDomain, domain string) string {
-	if subDomain == "@" {
-		return domain
-	}
-	if subDomain == "" {
-		return domain
-	}
-	return strings.Join([]string{subDomain, domain}, ".")
-}
-
-func GetSubDomain(fullDomain, domain string) string {
-	if fullDomain == domain {
-		return "@"
-	}
-	suffix := "." + domain
-	if strings.HasSuffix(fullDomain, suffix) {
-		return strings.TrimSuffix(fullDomain, suffix)
-	}
-	return fullDomain
+	return int64(ttl), nil
 }

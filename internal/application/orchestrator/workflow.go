@@ -61,11 +61,14 @@ func (w *Workflow) ResolveSecrets(cfg *entity.Config) error {
 }
 
 func (w *Workflow) CreatePlanner(cfg *entity.Config, outputDir string) *plan.Planner {
-	planner := plan.NewPlanner(cfg, w.env)
-	if outputDir != "" {
-		planner.SetOutputDir(outputDir)
+	opts := []plan.PlannerOption{
+		plan.WithConfig(cfg),
+		plan.WithEnv(w.env),
 	}
-	return planner
+	if outputDir != "" {
+		opts = append(opts, plan.WithOutputDir(outputDir))
+	}
+	return plan.NewPlanner(opts...)
 }
 
 func (w *Workflow) Plan(ctx context.Context, outputDir string, scope *valueobject.Scope) (*valueobject.Plan, *entity.Config, error) {
@@ -82,10 +85,15 @@ func (w *Workflow) Plan(ctx context.Context, outputDir string, scope *valueobjec
 	}
 
 	remoteState := w.stateFetcher.Fetch(ctx, cfg)
-	planner := plan.NewPlannerWithState(cfg, remoteState, w.env)
-	if outputDir != "" {
-		planner.SetOutputDir(outputDir)
+	opts := []plan.PlannerOption{
+		plan.WithConfig(cfg),
+		plan.WithEnv(w.env),
+		plan.WithState(remoteState),
 	}
+	if outputDir != "" {
+		opts = append(opts, plan.WithOutputDir(outputDir))
+	}
+	planner := plan.NewPlanner(opts...)
 	p, err := planner.Plan(scope)
 	if err != nil {
 		return nil, nil, fmt.Errorf("plan: %w", err)

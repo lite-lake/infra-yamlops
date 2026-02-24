@@ -256,15 +256,9 @@ func (p *TencentProvider) SetDomainStatus(domain string, status string) error {
 }
 
 func ParseTencentTTL(ttlStr string) (uint64, error) {
-	ttl, err := strconv.ParseUint(ttlStr, 10, 64)
+	ttl, err := ParseTTL(ttlStr)
 	if err != nil {
-		return 600, fmt.Errorf("invalid TTL: %s", ttlStr)
+		return uint64(DefaultTTL()), err
 	}
-	validTTLs := []uint64{1, 5, 10, 20, 30, 60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 18000, 43200, 86400}
-	for _, validTTL := range validTTLs {
-		if ttl <= validTTL {
-			return validTTL, nil
-		}
-	}
-	return 86400, nil
+	return uint64(ttl), nil
 }

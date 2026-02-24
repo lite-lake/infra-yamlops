@@ -37,6 +37,7 @@ func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 		HealthCheck:   svc.HealthCheck,
 		Networks:      svc.Networks,
 		Restart:       "unless-stopped",
+		ExtraHosts:    svc.ExtraHosts,
 	}
 
 	if svc.Resources != nil {

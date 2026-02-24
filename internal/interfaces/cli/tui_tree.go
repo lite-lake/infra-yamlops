@@ -204,7 +204,11 @@ func (m *Model) generatePlan() {
 		state = fetcher.Fetch(context.Background(), m.Config)
 	}
 
-	planner := plan.NewPlannerWithState(m.Config, state, string(m.Environment))
+	planner := plan.NewPlanner(
+		plan.WithConfig(m.Config),
+		plan.WithEnv(string(m.Environment)),
+		plan.WithState(state),
+	)
 	executionPlan, err := planner.Plan(m.Action.PlanScope)
 	if err != nil {
 		m.UI.ErrorMessage = fmt.Sprintf("Failed to generate plan: %v", err)
@@ -277,7 +281,11 @@ func (m *Model) generatePlanAsync() tea.Cmd {
 			state = fetcher.Fetch(context.Background(), m.Config)
 		}
 
-		planner := plan.NewPlannerWithState(m.Config, state, string(m.Environment))
+		planner := plan.NewPlanner(
+			plan.WithConfig(m.Config),
+			plan.WithEnv(string(m.Environment)),
+			plan.WithState(state),
+		)
 		executionPlan, err := planner.Plan(scope)
 		if err != nil {
 			return planGeneratedMsg{err: err}
@@ -422,7 +430,10 @@ func (m *Model) executeApplyAsync() tea.Cmd {
 			}
 			m.Config = cfg
 		}
-		planner := plan.NewPlanner(m.Config, string(m.Environment))
+		planner := plan.NewPlanner(
+			plan.WithConfig(m.Config),
+			plan.WithEnv(string(m.Environment)),
+		)
 		if err := planner.GenerateDeployments(); err != nil {
 			return applyCompleteAsyncMsg{err: err}
 		}

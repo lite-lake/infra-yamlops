@@ -32,6 +32,7 @@ type Service struct {
 	Deploy        *Deploy           `yaml:"deploy,omitempty"`
 	Networks      []string          `yaml:"networks,omitempty"`
 	Restart       string            `yaml:"restart,omitempty"`
+	ExtraHosts    []string          `yaml:"extra_hosts,omitempty"`
 }
 
 type ExternalNetwork struct {
@@ -54,4 +55,5 @@ type ComposeService struct {
 	Resources   *Resources
 	Internal    bool
 	Networks    []string
+	ExtraHosts  []string
 }

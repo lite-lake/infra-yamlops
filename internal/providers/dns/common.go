@@ -2,12 +2,69 @@ package dns
 
 import (
 	"context"
+	"fmt"
 	"net"
+	"slices"
+	"strconv"
 	"strings"
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/retry"
 )
+
+var validTTLs = []int{1, 5, 10, 20, 30, 60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 18000, 43200, 86400}
+
+func ParseTTL(ttlStr string) (int, error) {
+	ttl, err := strconv.Atoi(ttlStr)
+	if err != nil {
+		return 0, fmt.Errorf("invalid TTL: %s", ttlStr)
+	}
+	return NormalizeTTL(ttl), nil
+}
+
+func NormalizeTTL(ttl int) int {
+	idx, _ := slices.BinarySearch(validTTLs, ttl)
+	if idx < len(validTTLs) && validTTLs[idx] == ttl {
+		return ttl
+	}
+	if idx > 0 {
+		return validTTLs[idx-1]
+	}
+	return 1
+}
+
+func DefaultTTL() int {
+	return 600
+}
+
+func GetFullDomain(subDomain, domain string) string {
+	if subDomain == "@" || subDomain == "" {
+		return domain
+	}
+	return strings.Join([]string{subDomain, domain}, ".")
+}
+
+func GetSubDomain(fullDomain, domain string) string {
+	if fullDomain == domain {
+		return "@"
+	}
+	suffix := "." + domain
+	if strings.HasSuffix(fullDomain, suffix) {
+		return strings.TrimSuffix(fullDomain, suffix)
+	}
+	return fullDomain
+}
+
+func ParseSRVValue(value string) (priority, weight, port float64, target string) {
+	parts := strings.Fields(value)
+	if len(parts) >= 4 {
+		priority, _ = strconv.ParseFloat(parts[0], 64)
+		weight, _ = strconv.ParseFloat(parts[1], 64)
+		port, _ = strconv.ParseFloat(parts[2], 64)
+		target = parts[3]
+	}
+	return
+}
 
 func IsRetryableDNSError(err error) bool {
 	if err == nil {

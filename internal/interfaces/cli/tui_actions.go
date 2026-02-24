@@ -13,6 +13,7 @@ import (
 
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
+	infradns "github.com/litelake/yamlops/internal/infrastructure/dns"
 	"github.com/litelake/yamlops/internal/providers/dns"
 )
 
@@ -950,46 +951,6 @@ func saveYAMLConfig(path, key string, data interface{}) {
 }
 
 func createDNSProviderFromConfig(isp *entity.ISP, secrets map[string]string) (dns.Provider, error) {
-	switch isp.Type {
-	case entity.ISPTypeAliyun:
-		accessKeyIDRef := isp.Credentials["access_key_id"]
-		accessKeyID, err := (&accessKeyIDRef).Resolve(secrets)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve access_key_id: %w", err)
-		}
-		accessKeySecretRef := isp.Credentials["access_key_secret"]
-		accessKeySecret, err := (&accessKeySecretRef).Resolve(secrets)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve access_key_secret: %w", err)
-		}
-		return dns.NewAliyunProvider(accessKeyID, accessKeySecret)
-	case entity.ISPTypeCloudflare:
-		apiTokenRef := isp.Credentials["api_token"]
-		apiToken, err := (&apiTokenRef).Resolve(secrets)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve api_token: %w", err)
-		}
-		accountID := ""
-		if accountIDRef, ok := isp.Credentials["account_id"]; ok {
-			accountID, err = (&accountIDRef).Resolve(secrets)
-			if err != nil {
-				return nil, fmt.Errorf("failed to resolve account_id: %w", err)
-			}
-		}
-		return dns.NewCloudflareProvider(apiToken, accountID), nil
-	case entity.ISPTypeTencent:
-		secretIDRef := isp.Credentials["secret_id"]
-		secretID, err := (&secretIDRef).Resolve(secrets)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve secret_id: %w", err)
-		}
-		secretKeyRef := isp.Credentials["secret_key"]
-		secretKey, err := (&secretKeyRef).Resolve(secrets)
-		if err != nil {
-			return nil, fmt.Errorf("failed to resolve secret_key: %w", err)
-		}
-		return dns.NewTencentProvider(secretID, secretKey)
-	default:
-		return nil, fmt.Errorf("unsupported DNS provider type: %s (ISP name: %s)", isp.Type, isp.Name)
-	}
+	factory := infradns.NewFactory()
+	return factory.Create(isp, secrets)
 }

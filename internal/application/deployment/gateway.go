@@ -6,8 +6,16 @@ import (
 	"path/filepath"
 
 	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/infrastructure/generator/compose"
 	"github.com/litelake/yamlops/internal/infrastructure/generator/gate"
 )
+
+type gatewayRouteResult struct {
+	hosts         []gate.HostRoute
+	gatewayConfig *gate.GatewayConfig
+	httpPort      int
+	httpsPort     int
+}
 
 func (g *Generator) generateGatewayConfigs(config *entity.Config) error {
 	gatewayServers := make(map[string][]*entity.InfraService)
@@ -34,7 +42,7 @@ func (g *Generator) generateGatewayConfigs(config *entity.Config) error {
 	return nil
 }
 
-func (g *Generator) generateGatewayConfig(serverDir string, gw *entity.InfraService, config *entity.Config) error {
+func (g *Generator) buildGatewayRoutes(gw *entity.InfraService, config *entity.Config) *gatewayRouteResult {
 	serverMap := config.GetServerMap()
 	var hosts []gate.HostRoute
 
@@ -117,7 +125,6 @@ func (g *Generator) generateGatewayConfig(serverDir string, gw *entity.InfraServ
 	var whitelist []string
 	sslMode := ""
 	sslEndpoint := ""
-	logLevel := 0
 
 	if gw.GatewayWAF != nil {
 		wafEnabled = gw.GatewayWAF.Enabled
@@ -127,7 +134,6 @@ func (g *Generator) generateGatewayConfig(serverDir string, gw *entity.InfraServ
 		sslMode = gw.GatewaySSL.Mode
 		sslEndpoint = gw.GatewaySSL.Endpoint
 	}
-	logLevel = gw.GatewayLogLevel
 
 	httpPort := 80
 	httpsPort := 443
@@ -138,7 +144,7 @@ func (g *Generator) generateGatewayConfig(serverDir string, gw *entity.InfraServ
 
 	gatewayConfig := &gate.GatewayConfig{
 		Port:               httpPort,
-		LogLevel:           logLevel,
+		LogLevel:           gw.GatewayLogLevel,
 		WAFEnabled:         wafEnabled,
 		Whitelist:          whitelist,
 		SSLMode:            sslMode,
@@ -147,7 +153,18 @@ func (g *Generator) generateGatewayConfig(serverDir string, gw *entity.InfraServ
 		SSLUpdateCheckTime: "00:00-00:59",
 	}
 
-	content, err := g.gateGen.Generate(gatewayConfig, hosts)
+	return &gatewayRouteResult{
+		hosts:         hosts,
+		gatewayConfig: gatewayConfig,
+		httpPort:      httpPort,
+		httpsPort:     httpsPort,
+	}
+}
+
+func (g *Generator) generateGatewayConfig(serverDir string, gw *entity.InfraService, config *entity.Config) error {
+	result := g.buildGatewayRoutes(gw, config)
+
+	content, err := g.gateGen.Generate(result.gatewayConfig, result.hosts)
 	if err != nil {
 		return fmt.Errorf("failed to generate gateway config for %s: %w", gw.Name, err)
 	}
@@ -157,7 +174,7 @@ func (g *Generator) generateGatewayConfig(serverDir string, gw *entity.InfraServ
 		return fmt.Errorf("failed to write gateway config file %s: %w", configFile, err)
 	}
 
-	composeContent, err := g.generateGatewayCompose(gw, httpPort, httpsPort)
+	composeContent, err := g.generateGatewayCompose(gw, result.httpPort, result.httpsPort)
 	if err != nil {
 		return fmt.Errorf("failed to generate gateway compose for %s: %w", gw.Name, err)
 	}
@@ -171,140 +188,31 @@ func (g *Generator) generateGatewayConfig(serverDir string, gw *entity.InfraServ
 }
 
 func (g *Generator) generateGatewayCompose(gw *entity.InfraService, httpPort, httpsPort int) (string, error) {
-	serviceName := "yo-" + g.env + "-" + gw.Name
 	networkName := "yamlops-" + g.env
 
-	compose := fmt.Sprintf(`services:
-  %s:
-    image: %s
-    container_name: %s
-    restart: unless-stopped
-    ports:
-      - "%d:%d"
-      - "%d:%d"
-    volumes:
-      - ./gateway.yml:/app/configs/server.yml:ro
-      - ./cache:/app/cache
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
-    networks:
-      - %s
+	ports := []string{
+		fmt.Sprintf("%d:%d", httpPort, httpPort),
+		fmt.Sprintf("%d:%d", httpsPort, httpsPort),
+	}
 
-networks:
-  %s:
-    external: true
-`, serviceName, gw.Image, serviceName, httpPort, httpPort, httpsPort, httpsPort, networkName, networkName)
+	volumes := []string{
+		"./gateway.yml:/app/configs/server.yml:ro",
+		"./cache:/app/cache",
+	}
 
-	return compose, nil
+	composeSvc := &compose.ComposeService{
+		Name:       gw.Name,
+		Image:      gw.Image,
+		Ports:      ports,
+		Volumes:    volumes,
+		Networks:   []string{networkName},
+		ExtraHosts: []string{"host.docker.internal:host-gateway"},
+	}
+
+	return g.composeGen.Generate(composeSvc, g.env)
 }
 
 func (g *Generator) generateInfraGatewayConfig(infra *entity.InfraService, config *entity.Config) (string, error) {
-	var hosts []gate.HostRoute
-
-	serverMap := config.GetServerMap()
-	containerPortToHostPort := make(map[string]int)
-	for _, svc := range config.Services {
-		if svc.Server == infra.Server {
-			for _, port := range svc.Ports {
-				key := fmt.Sprintf("%s:%d", svc.Name, port.Container)
-				containerPortToHostPort[key] = port.Host
-			}
-		}
-	}
-
-	for _, svc := range config.Services {
-		if svc.Server != infra.Server {
-			continue
-		}
-		for _, route := range svc.Gateways {
-			if !route.HasGateway() {
-				continue
-			}
-
-			var backendIP string
-			if server, ok := serverMap[svc.Server]; ok && server.IP.Private != "" {
-				backendIP = server.IP.Private
-			} else {
-				backendIP = "host.docker.internal"
-			}
-
-			hostPort := route.ContainerPort
-			if key := fmt.Sprintf("%s:%d", svc.Name, route.ContainerPort); containerPortToHostPort[key] > 0 {
-				hostPort = containerPortToHostPort[key]
-			}
-			backend := fmt.Sprintf("http://%s:%d", backendIP, hostPort)
-
-			hostname := route.Hostname
-			if hostname == "" {
-				hostname = svc.Name
-			}
-
-			healthPath := "/"
-			if svc.Healthcheck != nil && svc.Healthcheck.Path != "" {
-				healthPath = svc.Healthcheck.Path
-			}
-
-			sslPort := 0
-			if route.HTTPS && infra.GatewayPorts != nil {
-				sslPort = infra.GatewayPorts.HTTPS
-			}
-
-			healthInterval := "30s"
-			healthTimeout := "10s"
-			if svc.Healthcheck != nil {
-				if svc.Healthcheck.Interval != "" {
-					healthInterval = svc.Healthcheck.Interval
-				}
-				if svc.Healthcheck.Timeout != "" {
-					healthTimeout = svc.Healthcheck.Timeout
-				}
-			}
-
-			httpPort := 80
-			if infra.GatewayPorts != nil {
-				httpPort = infra.GatewayPorts.HTTP
-			}
-
-			hosts = append(hosts, gate.HostRoute{
-				Name:                hostname,
-				Port:                httpPort,
-				SSLPort:             sslPort,
-				Backend:             []string{backend},
-				HealthCheck:         healthPath,
-				HealthCheckInterval: healthInterval,
-				HealthCheckTimeout:  healthTimeout,
-			})
-		}
-	}
-
-	wafEnabled := false
-	var whitelist []string
-	sslMode := "local"
-	var sslEndpoint string
-	if infra.GatewayWAF != nil {
-		wafEnabled = infra.GatewayWAF.Enabled
-		whitelist = infra.GatewayWAF.Whitelist
-	}
-	if infra.GatewaySSL != nil {
-		sslMode = infra.GatewaySSL.Mode
-		sslEndpoint = infra.GatewaySSL.Endpoint
-	}
-
-	httpPort := 80
-	if infra.GatewayPorts != nil {
-		httpPort = infra.GatewayPorts.HTTP
-	}
-
-	gatewayConfig := &gate.GatewayConfig{
-		Port:               httpPort,
-		LogLevel:           infra.GatewayLogLevel,
-		WAFEnabled:         wafEnabled,
-		Whitelist:          whitelist,
-		SSLMode:            sslMode,
-		SSLEndpoint:        sslEndpoint,
-		SSLAutoUpdate:      true,
-		SSLUpdateCheckTime: "00:00-00:59",
-	}
-
-	return g.gateGen.Generate(gatewayConfig, hosts)
+	result := g.buildGatewayRoutes(infra, config)
+	return g.gateGen.Generate(result.gatewayConfig, result.hosts)
 }

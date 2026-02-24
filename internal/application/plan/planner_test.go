@@ -9,7 +9,7 @@ import (
 
 func TestNewPlanner(t *testing.T) {
 	cfg := &entity.Config{}
-	planner := NewPlanner(cfg, "dev")
+	planner := NewPlanner(WithConfig(cfg), WithEnv("dev"))
 
 	if planner == nil {
 		t.Fatal("expected non-nil planner")
@@ -21,7 +21,7 @@ func TestNewPlanner(t *testing.T) {
 
 func TestNewPlanner_DefaultEnv(t *testing.T) {
 	cfg := &entity.Config{}
-	planner := NewPlanner(cfg, "")
+	planner := NewPlanner(WithConfig(cfg))
 
 	if planner.env != "dev" {
 		t.Errorf("expected default env 'dev', got %s", planner.env)
@@ -30,10 +30,10 @@ func TestNewPlanner_DefaultEnv(t *testing.T) {
 
 func TestNewPlannerWithState(t *testing.T) {
 	cfg := &entity.Config{}
-	state := &DeploymentState{
+	st := &DeploymentState{
 		Servers: map[string]*entity.Server{"srv1": {Name: "srv1"}},
 	}
-	planner := NewPlannerWithState(cfg, state, "prod")
+	planner := NewPlanner(WithConfig(cfg), WithEnv("prod"), WithState(st))
 
 	if planner == nil {
 		t.Fatal("expected non-nil planner")
@@ -56,7 +56,7 @@ func TestPlanner_Plan(t *testing.T) {
 		},
 	}
 
-	planner := NewPlanner(cfg, "dev")
+	planner := NewPlanner(WithConfig(cfg), WithEnv("dev"))
 	plan, err := planner.Plan(nil)
 
 	if err != nil {
@@ -78,7 +78,7 @@ func TestPlanner_Plan_WithScope(t *testing.T) {
 		},
 	}
 
-	planner := NewPlanner(cfg, "dev")
+	planner := NewPlanner(WithConfig(cfg), WithEnv("dev"))
 	scope := &valueobject.Scope{Zone: "zone1"}
 	plan, err := planner.Plan(scope)
 
@@ -95,7 +95,7 @@ func TestPlanner_Plan_WithScope(t *testing.T) {
 
 func TestPlanner_SetOutputDir(t *testing.T) {
 	cfg := &entity.Config{}
-	planner := NewPlanner(cfg, "dev")
+	planner := NewPlanner(WithConfig(cfg), WithEnv("dev"))
 
 	planner.SetOutputDir("/tmp/test")
 
@@ -108,7 +108,7 @@ func TestPlanner_GetConfig(t *testing.T) {
 	cfg := &entity.Config{
 		ISPs: []entity.ISP{{Name: "isp1"}},
 	}
-	planner := NewPlanner(cfg, "dev")
+	planner := NewPlanner(WithConfig(cfg), WithEnv("dev"))
 
 	retrieved := planner.GetConfig()
 
@@ -122,7 +122,7 @@ func TestPlanner_GetConfig(t *testing.T) {
 
 func TestPlanner_SetState(t *testing.T) {
 	cfg := &entity.Config{}
-	planner := NewPlanner(cfg, "dev")
+	planner := NewPlanner(WithConfig(cfg), WithEnv("dev"))
 
 	newState := &DeploymentState{
 		Servers: map[string]*entity.Server{"srv1": {Name: "srv1"}},

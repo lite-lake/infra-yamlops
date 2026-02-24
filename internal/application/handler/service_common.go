@@ -152,3 +152,85 @@ func GetRemoteDir(deps DepsProvider, serviceName string) string {
 func EnsureRemoteDir(client SSHClient, remoteDir string) error {
 	return client.MkdirAllSudoWithPerm(remoteDir, "755")
 }
+
+type ServiceDeployContext struct {
+	ServerName string
+	Client     SSHClient
+	RemoteDir  string
+}
+
+type DeployServiceOptions struct {
+	PreDeployHook  func(result *Result) error
+	PostDeployHook func(result *Result) error
+	RestartAfterUp bool
+}
+
+func PrepareServiceDeploy(change *valueobject.Change, deps DepsProvider) (*ServiceDeployContext, *Result) {
+	result := &Result{Change: change, Success: false}
+
+	serverName := ExtractServerFromChange(change)
+	if serverName == "" {
+		result.Error = fmt.Errorf("cannot determine server for change %s", change.Name)
+		return nil, result
+	}
+
+	client, err := deps.SSHClient(serverName)
+	if err != nil {
+		result.Error = err
+		return nil, result
+	}
+
+	remoteDir := GetRemoteDir(deps, change.Name)
+
+	return &ServiceDeployContext{
+		ServerName: serverName,
+		Client:     client,
+		RemoteDir:  remoteDir,
+	}, nil
+}
+
+func ExecuteServiceDeploy(change *valueobject.Change, ctx *ServiceDeployContext, deps DepsProvider, opts DeployServiceOptions) (*Result, error) {
+	result := &Result{Change: change, Success: false}
+
+	if opts.PreDeployHook != nil {
+		if err := opts.PreDeployHook(result); err != nil {
+			return result, nil
+		}
+	}
+
+	requiredNetworks, err := GetRequiredNetworks(change, deps, ctx.ServerName)
+	if err != nil {
+		result.Error = err
+		return result, nil
+	}
+
+	if err := EnsureNetworks(ctx.Client, requiredNetworks); err != nil {
+		result.Error = err
+		return result, nil
+	}
+
+	if err := EnsureRemoteDir(ctx.Client, ctx.RemoteDir); err != nil {
+		result.Error = fmt.Errorf("failed to create remote directory: %w", err)
+		return result, nil
+	}
+
+	if opts.PostDeployHook != nil {
+		if err := opts.PostDeployHook(result); err != nil {
+			return result, nil
+		}
+	}
+
+	composeFile := GetComposeFilePath(change, deps)
+	if !DeployComposeFile(ctx.Client, &DeployComposeConfig{
+		RemoteDir:      ctx.RemoteDir,
+		ComposeFile:    composeFile,
+		Env:            deps.Env(),
+		ServiceName:    change.Name,
+		RestartAfterUp: opts.RestartAfterUp,
+	}, result) {
+		return result, nil
+	}
+
+	result.Success = true
+	return result, nil
+}

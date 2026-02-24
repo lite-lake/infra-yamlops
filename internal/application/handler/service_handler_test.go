@@ -299,8 +299,6 @@ func TestServiceHandler_GetComposeFilePath(t *testing.T) {
 }
 
 func TestServiceHandler_DeployService_WithComposeFile(t *testing.T) {
-	h := NewServiceHandler()
-
 	tmpDir := t.TempDir()
 	serverDir := filepath.Join(tmpDir, "deployments", "server1")
 	if err := os.MkdirAll(serverDir, 0755); err != nil {
@@ -334,7 +332,14 @@ services:
 		},
 	}
 
-	result, err := h.deployService(change, mockSSH, "/opt/yamlops/yo-prod-testapp", deps, "server1")
+	deployCtx := &ServiceDeployContext{
+		ServerName: "server1",
+		Client:     mockSSH,
+		RemoteDir:  "/opt/yamlops/yo-prod-testapp",
+	}
+	result, err := ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{
+		RestartAfterUp: false,
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -344,8 +349,6 @@ services:
 }
 
 func TestServiceHandler_DeployService_ReadFileError(t *testing.T) {
-	h := NewServiceHandler()
-
 	tmpDir := t.TempDir()
 	serverDir := filepath.Join(tmpDir, "deployments", "server1")
 	if err := os.MkdirAll(serverDir, 0755); err != nil {
@@ -376,7 +379,14 @@ func TestServiceHandler_DeployService_ReadFileError(t *testing.T) {
 
 	os.Remove(composeFile)
 
-	result, err := h.deployService(change, mockSSH, "/opt/test", deps, "server1")
+	deployCtx := &ServiceDeployContext{
+		ServerName: "server1",
+		Client:     mockSSH,
+		RemoteDir:  "/opt/test",
+	}
+	result, err := ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{
+		RestartAfterUp: false,
+	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
