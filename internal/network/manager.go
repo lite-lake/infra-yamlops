@@ -10,6 +10,7 @@ import (
 
 type SSHClient interface {
 	Run(cmd string) (stdout, stderr string, err error)
+	RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error)
 }
 
 type NetworkInfo struct {
@@ -65,7 +66,7 @@ func (m *Manager) Exists(name string) (bool, error) {
 }
 
 func (m *Manager) Inspect(name string) (*NetworkInfo, error) {
-	cmd := fmt.Sprintf("sudo docker network inspect %s --format '{{json .}}'", name)
+	cmd := fmt.Sprintf("sudo docker network inspect %s --format '{{json .}}'", ShellEscape(name))
 	stdout, stderr, err := m.client.Run(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("failed to inspect network %s: %w, stderr: %s", name, err, stderr)
@@ -89,7 +90,7 @@ func (m *Manager) Inspect(name string) (*NetworkInfo, error) {
 
 func (m *Manager) Create(spec *entity.ServerNetwork) error {
 	driver := spec.GetDriver()
-	cmd := fmt.Sprintf("sudo docker network create --driver %s %s", driver, spec.Name)
+	cmd := fmt.Sprintf("sudo docker network create --driver %s %s", ShellEscape(driver), ShellEscape(spec.Name))
 	_, stderr, err := m.client.Run(cmd)
 	if err != nil {
 		return fmt.Errorf("failed to create network %s: %w, stderr: %s", spec.Name, err, stderr)

@@ -112,6 +112,37 @@ func (c *Client) Run(cmd string) (stdout, stderr string, err error) {
 	return stdoutBuf.String(), stderrBuf.String(), err
 }
 
+func (c *Client) RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error) {
+	session, err := c.client.NewSession()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to create session: %w", err)
+	}
+	defer session.Close()
+
+	var stdoutBuf, stderrBuf bytes.Buffer
+	session.Stdout = &stdoutBuf
+	session.Stderr = &stderrBuf
+
+	stdinPipe, err := session.StdinPipe()
+	if err != nil {
+		return "", "", fmt.Errorf("failed to get stdin pipe: %w", err)
+	}
+
+	if err := session.Start(cmd); err != nil {
+		return "", "", fmt.Errorf("failed to start command: %w", err)
+	}
+
+	_, err = io.WriteString(stdinPipe, stdin)
+	if err != nil {
+		stdinPipe.Close()
+		return "", "", fmt.Errorf("failed to write to stdin: %w", err)
+	}
+	stdinPipe.Close()
+
+	err = session.Wait()
+	return stdoutBuf.String(), stderrBuf.String(), err
+}
+
 func (c *Client) UploadFile(localPath, remotePath string) error {
 	sftpClient, err := c.newSFTPClient()
 	if err != nil {
@@ -150,7 +181,7 @@ func (c *Client) MkdirAll(path string) error {
 }
 
 func (c *Client) MkdirAllSudo(path string) error {
-	_, stderr, err := c.Run(fmt.Sprintf("sudo mkdir -p %s", path))
+	_, stderr, err := c.Run(fmt.Sprintf("sudo mkdir -p %s", ShellEscape(path)))
 	if err != nil {
 		return fmt.Errorf("sudo mkdir failed: %w, stderr: %s", err, stderr)
 	}
@@ -158,7 +189,7 @@ func (c *Client) MkdirAllSudo(path string) error {
 }
 
 func (c *Client) MkdirAllSudoWithPerm(path, perm string) error {
-	cmd := fmt.Sprintf("sudo mkdir -p %s && sudo chown %s:%s %s && sudo chmod %s %s", path, c.user, c.user, path, perm, path)
+	cmd := fmt.Sprintf("sudo mkdir -p %s && sudo chown %s:%s %s && sudo chmod %s %s", ShellEscape(path), ShellEscape(c.user), ShellEscape(c.user), ShellEscape(path), ShellEscape(perm), ShellEscape(path))
 	_, stderr, err := c.Run(cmd)
 	if err != nil {
 		return fmt.Errorf("sudo mkdir failed: %w, stderr: %s", err, stderr)
@@ -195,7 +226,7 @@ func (c *Client) UploadFileSudoWithPerm(localPath, remotePath, perm string) erro
 		return fmt.Errorf("failed to copy file: %w", err)
 	}
 
-	cmd := fmt.Sprintf("sudo mv %s %s && sudo chown %s:%s %s && sudo chmod %s %s", tmpPath, remotePath, c.user, c.user, remotePath, perm, remotePath)
+	cmd := fmt.Sprintf("sudo mv %s %s && sudo chown %s:%s %s && sudo chmod %s %s", ShellEscape(tmpPath), ShellEscape(remotePath), ShellEscape(c.user), ShellEscape(c.user), ShellEscape(remotePath), ShellEscape(perm), ShellEscape(remotePath))
 	_, stderr, err := c.Run(cmd)
 	if err != nil {
 		return fmt.Errorf("sudo mv failed: %w, stderr: %s", err, stderr)

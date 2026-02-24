@@ -4,9 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/litelake/yamlops/internal/domain/entity"
 )
+
+func shellEscape(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
 
 type LoginResult struct {
 	Name    string
@@ -17,9 +22,11 @@ type LoginResult struct {
 
 type SSHRunner interface {
 	Run(cmd string) (stdout, stderr string, err error)
+	RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error)
 }
 
 type Manager struct {
+	mu         sync.RWMutex
 	client     SSHRunner
 	registries map[string]*entity.Registry
 	secrets    map[string]string
@@ -40,13 +47,16 @@ func NewManager(client SSHRunner, registries []*entity.Registry, secrets map[str
 }
 
 func (m *Manager) EnsureLoggedIn(registryName string) (*LoginResult, error) {
+	m.mu.RLock()
 	if m.loggedIn[registryName] {
+		m.mu.RUnlock()
 		return &LoginResult{
 			Name:    registryName,
 			Success: true,
 			Message: "already logged in",
 		}, nil
 	}
+	m.mu.RUnlock()
 
 	registry, ok := m.registries[registryName]
 	if !ok {
@@ -58,7 +68,9 @@ func (m *Manager) EnsureLoggedIn(registryName string) (*LoginResult, error) {
 	}
 
 	if m.isLoggedIn(registry) {
+		m.mu.Lock()
 		m.loggedIn[registryName] = true
+		m.mu.Unlock()
 		return &LoginResult{
 			Name:    registryName,
 			Success: true,
@@ -125,9 +137,9 @@ func (m *Manager) login(r *entity.Registry) (*LoginResult, error) {
 		}, err
 	}
 
-	cmd := fmt.Sprintf("echo '%s' | docker login -u '%s' --password-stdin %s",
-		password, username, r.URL)
-	_, stderr, err := m.client.Run(cmd)
+	cmd := fmt.Sprintf("docker login -u %s --password-stdin %s",
+		shellEscape(username), shellEscape(r.URL))
+	_, stderr, err := m.client.RunWithStdin(password+"\n", cmd)
 
 	if err != nil {
 		return &LoginResult{
@@ -138,7 +150,9 @@ func (m *Manager) login(r *entity.Registry) (*LoginResult, error) {
 		}, err
 	}
 
+	m.mu.Lock()
 	m.loggedIn[r.Name] = true
+	m.mu.Unlock()
 	return &LoginResult{
 		Name:    r.Name,
 		Success: true,

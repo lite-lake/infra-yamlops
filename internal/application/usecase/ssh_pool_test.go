@@ -15,6 +15,10 @@ func (m *mockSSHClient) Run(cmd string) (stdout, stderr string, err error) {
 	return "", "", nil
 }
 
+func (m *mockSSHClient) RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error) {
+	return "", "", nil
+}
+
 func (m *mockSSHClient) MkdirAllSudoWithPerm(path, perm string) error {
 	return nil
 }

@@ -79,6 +79,11 @@ func (m *mockSSHClient) Run(cmd string) (stdout, stderr string, err error) {
 	return m.runStdout, m.runStderr, m.runErr
 }
 
+func (m *mockSSHClient) RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error) {
+	m.commandsRun = append(m.commandsRun, cmd)
+	return m.runStdout, m.runStderr, m.runErr
+}
+
 func (m *mockSSHClient) MkdirAllSudoWithPerm(path, perm string) error {
 	return m.mkdirErr
 }

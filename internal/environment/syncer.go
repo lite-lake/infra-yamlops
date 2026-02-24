@@ -213,9 +213,9 @@ func (s *Syncer) SyncRegistries() []SyncResult {
 			continue
 		}
 
-		cmd := fmt.Sprintf("echo '%s' | sudo docker login -u '%s' --password-stdin %s 2>&1",
-			password, username, registry.URL)
-		stdout, _, err := s.client.Run(cmd)
+		cmd := fmt.Sprintf("sudo docker login -u %s --password-stdin %s 2>&1",
+			ssh.ShellEscape(username), ssh.ShellEscape(registry.URL))
+		stdout, _, err := s.client.RunWithStdin(password+"\n", cmd)
 
 		if err != nil {
 			results = append(results, SyncResult{
