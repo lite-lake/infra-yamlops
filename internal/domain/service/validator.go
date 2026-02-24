@@ -69,10 +69,6 @@ func (v *Validator) Validate() error {
 		return err
 	}
 
-	if err := v.validateCertificateReferences(); err != nil {
-		return err
-	}
-
 	if err := v.validatePortConflicts(); err != nil {
 		return err
 	}
@@ -179,17 +175,6 @@ func (v *Validator) validateDNSReferences() error {
 	for _, record := range v.cfg.GetAllDNSRecords() {
 		if _, ok := v.domainMap[record.Domain]; !ok {
 			return fmt.Errorf("%w: domain '%s' referenced by dns record does not exist", domain.ErrMissingReference, record.Domain)
-		}
-	}
-	return nil
-}
-
-func (v *Validator) validateCertificateReferences() error {
-	for _, cert := range v.cfg.Certificates {
-		for _, domainName := range cert.Domains {
-			if _, ok := v.domainMap[domainName]; !ok {
-				return fmt.Errorf("%w: domain '%s' referenced by certificate '%s' does not exist", domain.ErrMissingReference, domainName, cert.Name)
-			}
 		}
 	}
 	return nil

@@ -219,45 +219,6 @@ func TestValidator_DomainReferences(t *testing.T) {
 	})
 }
 
-func TestValidator_CertificateReferences(t *testing.T) {
-	t.Run("valid certificate references", func(t *testing.T) {
-		cfg := &entity.Config{
-			ISPs: []entity.ISP{{Name: "dns_isp", Services: []entity.ISPService{"dns"}, Credentials: map[string]valueobject.SecretRef{"key": {Plain: "val"}}}},
-			Domains: []entity.Domain{{
-				Name:   "example.com",
-				DNSISP: "dns_isp",
-			}},
-			Certificates: []entity.Certificate{{
-				Name:        "cert1",
-				Domains:     []string{"example.com"},
-				Provider:    entity.CertificateProviderLetsEncrypt,
-				DNSProvider: "dns_isp",
-			}},
-		}
-		validator := NewValidator(cfg)
-		err := validator.Validate()
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-		}
-	})
-
-	t.Run("missing domain reference", func(t *testing.T) {
-		cfg := &entity.Config{
-			Certificates: []entity.Certificate{{
-				Name:        "cert1",
-				Domains:     []string{"nonexistent.com"},
-				Provider:    entity.CertificateProviderLetsEncrypt,
-				DNSProvider: "dns_isp",
-			}},
-		}
-		validator := NewValidator(cfg)
-		err := validator.Validate()
-		if err == nil || !strings.Contains(err.Error(), "domain 'nonexistent.com' referenced by certificate") {
-			t.Errorf("expected missing domain error, got %v", err)
-		}
-	})
-}
-
 func TestValidator_PortConflicts(t *testing.T) {
 	t.Run("no conflict different servers", func(t *testing.T) {
 		cfg := &entity.Config{

@@ -10,10 +10,9 @@ import (
 type ISPService string
 
 const (
-	ISPServiceServer      ISPService = "server"
-	ISPServiceDomain      ISPService = "domain"
-	ISPServiceDNS         ISPService = "dns"
-	ISPServiceCertificate ISPService = "certificate"
+	ISPServiceServer ISPService = "server"
+	ISPServiceDomain ISPService = "domain"
+	ISPServiceDNS    ISPService = "dns"
 )
 
 type ISPType string

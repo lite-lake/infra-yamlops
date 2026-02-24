@@ -49,11 +49,6 @@ var (
 	ErrStateSerializeFail = errors.New("state serialization failed")
 	ErrStateNotFound      = errors.New("state not found")
 
-	ErrCertObtainFailed = errors.New("certificate obtain failed")
-	ErrCertRenewFailed  = errors.New("certificate renew failed")
-	ErrCertExpired      = errors.New("certificate expired")
-	ErrCertInvalid      = errors.New("certificate invalid")
-
 	ErrDNSError          = errors.New("DNS operation failed")
 	ErrDNSRecordExists   = errors.New("DNS record already exists")
 	ErrDNSRecordNotFound = errors.New("DNS record not found")

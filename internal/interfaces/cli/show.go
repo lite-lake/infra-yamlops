@@ -72,10 +72,6 @@ func runShow(ctx *Context, entity, name string) {
 		if m := cfg.GetDomainMap(); m[name] != nil {
 			found = m[name]
 		}
-	case "certificate", "cert":
-		if m := cfg.GetCertificateMap(); m[name] != nil {
-			found = m[name]
-		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown entity type: %s\n", entity)
 		os.Exit(1)

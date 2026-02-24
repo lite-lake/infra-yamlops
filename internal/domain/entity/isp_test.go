@@ -46,7 +46,7 @@ func TestISP_Validate(t *testing.T) {
 			isp: ISP{
 				Name:     "cloudflare",
 				Type:     ISPTypeCloudflare,
-				Services: []ISPService{ISPServiceDNS, ISPServiceCertificate},
+				Services: []ISPService{ISPServiceDNS},
 				Credentials: map[string]valueobject.SecretRef{
 					"api_token": {Plain: "token"},
 				},
@@ -83,7 +83,7 @@ func TestISP_Validate(t *testing.T) {
 func TestISP_HasService(t *testing.T) {
 	isp := ISP{
 		Name:     "cloudflare",
-		Services: []ISPService{ISPServiceDNS, ISPServiceCertificate},
+		Services: []ISPService{ISPServiceDNS},
 	}
 
 	tests := []struct {
@@ -91,7 +91,6 @@ func TestISP_HasService(t *testing.T) {
 		expected bool
 	}{
 		{ISPServiceDNS, true},
-		{ISPServiceCertificate, true},
 		{ISPServiceServer, false},
 		{ISPServiceDomain, false},
 	}

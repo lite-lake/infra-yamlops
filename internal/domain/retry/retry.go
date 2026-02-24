@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"time"
-
-	"github.com/litelake/yamlops/internal/infrastructure/logger"
 )
 
 var (
@@ -60,6 +58,16 @@ func WithOnRetry(fn func(attempt int, delay time.Duration, err error)) Option {
 	}
 }
 
+type LogFunc func(msg string, args ...any)
+
+func WithLogger(log LogFunc) Option {
+	return func(c *Config) {
+		c.OnRetry = func(attempt int, delay time.Duration, err error) {
+			log("retry attempt", "attempt", attempt, "error", err, "delay", delay)
+		}
+	}
+}
+
 func DefaultConfig() *Config {
 	return &Config{
 		MaxAttempts:  3,
@@ -67,7 +75,7 @@ func DefaultConfig() *Config {
 		MaxDelay:     30 * time.Second,
 		Multiplier:   2.0,
 		IsRetryable:  DefaultIsRetryable,
-		OnRetry:      defaultOnRetry,
+		OnRetry:      nil,
 	}
 }
 
@@ -76,10 +84,6 @@ func DefaultIsRetryable(err error) bool {
 		return false
 	}
 	return true
-}
-
-func defaultOnRetry(attempt int, delay time.Duration, err error) {
-	logger.Debug("retry attempt", "attempt", attempt, "error", err, "delay", delay)
 }
 
 func Do(ctx context.Context, fn func() error, opts ...Option) error {

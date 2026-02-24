@@ -279,42 +279,6 @@ func TestRecordEquals(t *testing.T) {
 	}
 }
 
-func TestCertificateEquals(t *testing.T) {
-	tests := []struct {
-		name     string
-		a, b     *entity.Certificate
-		expected bool
-	}{
-		{
-			name:     "equal certificates",
-			a:        &entity.Certificate{Name: "cert1", Provider: "letsencrypt", DNSProvider: "cloudflare", Domains: []string{"example.com"}},
-			b:        &entity.Certificate{Name: "cert1", Provider: "letsencrypt", DNSProvider: "cloudflare", Domains: []string{"example.com"}},
-			expected: true,
-		},
-		{
-			name:     "different domains length",
-			a:        &entity.Certificate{Name: "cert1", Domains: []string{"example.com"}},
-			b:        &entity.Certificate{Name: "cert1", Domains: []string{"example.com", "www.example.com"}},
-			expected: false,
-		},
-		{
-			name:     "different provider",
-			a:        &entity.Certificate{Name: "cert1", Provider: "letsencrypt"},
-			b:        &entity.Certificate{Name: "cert1", Provider: "zerossl"},
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := CertificateEquals(tt.a, tt.b)
-			if result != tt.expected {
-				t.Errorf("CertificateEquals() = %v, expected %v", result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestServiceEquals(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -404,22 +368,6 @@ func TestDifferService_PlanRecords(t *testing.T) {
 	}
 
 	svc.PlanRecords(plan, cfgRecords, scope)
-
-	if len(plan.Changes) != 1 {
-		t.Errorf("expected 1 change, got %d", len(plan.Changes))
-	}
-}
-
-func TestDifferService_PlanCertificates(t *testing.T) {
-	svc := NewDifferService(nil)
-	plan := valueobject.NewPlan()
-	scope := &valueobject.Scope{}
-
-	cfgMap := map[string]*entity.Certificate{
-		"cert1": {Name: "cert1", Provider: "letsencrypt", Domains: []string{"example.com"}},
-	}
-
-	svc.PlanCertificates(plan, cfgMap, scope)
 
 	if len(plan.Changes) != 1 {
 		t.Errorf("expected 1 change, got %d", len(plan.Changes))

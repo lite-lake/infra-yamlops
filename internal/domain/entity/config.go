@@ -16,7 +16,6 @@ type Config struct {
 	InfraServices []InfraService `yaml:"infra_services,omitempty"`
 	Services      []BizService   `yaml:"services,omitempty"`
 	Domains       []Domain       `yaml:"domains,omitempty"`
-	Certificates  []Certificate  `yaml:"certificates,omitempty"`
 }
 
 func (c *Config) Validate() error {
@@ -59,11 +58,6 @@ func (c *Config) Validate() error {
 	for i, d := range c.Domains {
 		if err := d.Validate(); err != nil {
 			return fmt.Errorf("domains[%d]: %w", i, err)
-		}
-	}
-	for i, cert := range c.Certificates {
-		if err := cert.Validate(); err != nil {
-			return fmt.Errorf("certificates[%d]: %w", i, err)
 		}
 	}
 	return nil
@@ -119,10 +113,6 @@ func (c *Config) GetAllDNSRecords() []DNSRecord {
 		records = append(records, d.FlattenRecords()...)
 	}
 	return records
-}
-
-func (c *Config) GetCertificateMap() map[string]*Certificate {
-	return toMapPtr(c.Certificates, func(cert Certificate) string { return cert.Name })
 }
 
 func ParsePort(s string) (int, error) {

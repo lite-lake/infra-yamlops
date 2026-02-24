@@ -41,7 +41,6 @@ func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, er
 		{"services_biz.yaml", loadServices},
 		{"registries.yaml", loadRegistries},
 		{"dns.yaml", loadDomains},
-		{"certificates.yaml", loadCertificates},
 	}
 
 	for _, f := range loaders {
@@ -158,15 +157,6 @@ func loadDomains(fp string, cfg *entity.Config) error {
 		return err
 	}
 	cfg.Domains = items
-	return nil
-}
-
-func loadCertificates(fp string, cfg *entity.Config) error {
-	items, err := loadEntity[entity.Certificate](fp, "certificates")
-	if err != nil {
-		return err
-	}
-	cfg.Certificates = items
 	return nil
 }
 

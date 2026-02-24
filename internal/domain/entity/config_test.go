@@ -193,9 +193,6 @@ func TestConfig_GetMapsAndHelpers(t *testing.T) {
 		InfraServices: []InfraService{
 			{Name: "gateway"},
 		},
-		Certificates: []Certificate{
-			{Name: "cert-1"},
-		},
 	}
 
 	t.Run("GetSecretsMap", func(t *testing.T) {
@@ -251,13 +248,6 @@ func TestConfig_GetMapsAndHelpers(t *testing.T) {
 		m := config.GetInfraServiceMap()
 		if m["gateway"] == nil {
 			t.Error("GetInfraServiceMap()[gateway] is nil")
-		}
-	})
-
-	t.Run("GetCertificateMap", func(t *testing.T) {
-		m := config.GetCertificateMap()
-		if m["cert-1"] == nil {
-			t.Error("GetCertificateMap()[cert-1] is nil")
 		}
 	})
 

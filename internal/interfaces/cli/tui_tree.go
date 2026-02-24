@@ -294,7 +294,6 @@ func (m *Model) fetchDNSRemoteState() *plan.DeploymentState {
 		Zones:         make(map[string]*entity.Zone),
 		Domains:       make(map[string]*entity.Domain),
 		Records:       make(map[string]*entity.DNSRecord),
-		Certs:         make(map[string]*entity.Certificate),
 		ISPs:          make(map[string]*entity.ISP),
 	}
 
@@ -408,43 +407,6 @@ func (m *Model) buildScopeFromSelection() {
 		m.Action.PlanScope.Domain = d
 		break
 	}
-}
-
-func (m *Model) executeApply() {
-	if m.Action.PlanResult == nil || !m.Action.PlanResult.HasChanges() {
-		m.Action.ApplyComplete = true
-		return
-	}
-	m.loadConfig()
-	if m.Config == nil {
-		m.Action.ApplyComplete = true
-		return
-	}
-	planner := plan.NewPlanner(m.Config, string(m.Environment))
-	if err := planner.GenerateDeployments(); err != nil {
-		m.UI.ErrorMessage = fmt.Sprintf("Failed to generate deployments: %v", err)
-		m.Action.ApplyComplete = true
-		return
-	}
-	executor := usecase.NewExecutor(&usecase.ExecutorConfig{
-		Plan: m.Action.PlanResult,
-		Env:  string(m.Environment),
-	})
-	executor.SetSecrets(m.Config.GetSecretsMap())
-	executor.SetDomains(m.Config.GetDomainMap())
-	executor.SetISPs(m.Config.GetISPMap())
-	executor.SetServerEntities(m.Config.GetServerMap())
-	executor.SetWorkDir(m.ConfigDir)
-	secrets := m.Config.GetSecretsMap()
-	for _, srv := range m.Config.Servers {
-		password, err := srv.SSH.Password.Resolve(secrets)
-		if err != nil {
-			continue
-		}
-		executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
-	}
-	m.Action.ApplyResults = executor.Apply()
-	m.Action.ApplyComplete = true
 }
 
 func (m *Model) executeApplyAsync() tea.Cmd {

@@ -72,13 +72,9 @@ func runList(ctx *Context, entity string) {
 		for _, r := range cfg.GetAllDNSRecords() {
 			fmt.Printf("- %s %s %s -> %s (ttl: %d)\n", r.Domain, r.Type, r.Name, r.Value, r.TTL)
 		}
-	case "certificates", "certs":
-		for _, c := range cfg.Certificates {
-			fmt.Printf("- %s (domains: %v, provider: %s)\n", c.Name, c.Domains, c.Provider)
-		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown entity type: %s\n", entity)
-		fmt.Fprintf(os.Stderr, "Valid types: secrets, isps, zones, servers, services, registries, domains, records, certificates\n")
+		fmt.Fprintf(os.Stderr, "Valid types: secrets, isps, zones, servers, services, registries, domains, records\n")
 		os.Exit(1)
 	}
 }
