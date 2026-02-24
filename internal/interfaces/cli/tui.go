@@ -167,6 +167,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ViewState = ViewStateServiceStopComplete
 		return m, nil
 
+	case serviceRestartCompleteMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Restart failed: %v", msg.err)
+			return m, nil
+		}
+		m.Restart.RestartResults = msg.results
+		m.ViewState = ViewStateServiceRestartComplete
+		return m, nil
+
 	case applyProgressMsg:
 		if m.ViewState == ViewStateApplyProgress && !m.Action.ApplyComplete {
 			if m.Action.ApplyInProgress {
@@ -281,6 +291,15 @@ func (m Model) handleEscape() (tea.Model, tea.Cmd) {
 	case ViewStateServiceStopComplete:
 		m.Stop.StopResults = nil
 		m.Stop.StopSelected = nil
+		m.ViewState = ViewStateServiceManagement
+	case ViewStateServiceRestart:
+		m.ViewState = ViewStateServiceManagement
+		m.Restart.RestartSelected = nil
+	case ViewStateServiceRestartConfirm:
+		m.ViewState = ViewStateServiceRestart
+	case ViewStateServiceRestartComplete:
+		m.Restart.RestartResults = nil
+		m.Restart.RestartSelected = nil
 		m.ViewState = ViewStateServiceManagement
 	case ViewStatePlan:
 		m.ViewState = ViewStateTree

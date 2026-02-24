@@ -42,6 +42,7 @@ func (m Model) renderServiceManagement() string {
 	items := []string{
 		"Service Deploy",
 		"Service Stop",
+		"Service Restart",
 		"Service Cleanup",
 		"Server Environment",
 		"Back to Main Menu",

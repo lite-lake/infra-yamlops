@@ -96,6 +96,14 @@ func (m Model) handleUp() Model {
 		if m.Action.ConfirmSelected > 0 {
 			m.Action.ConfirmSelected--
 		}
+	case ViewStateServiceRestart:
+		if m.Tree.CursorIndex > 0 {
+			m.Tree.CursorIndex--
+		}
+	case ViewStateServiceRestartConfirm:
+		if m.Action.ConfirmSelected > 0 {
+			m.Action.ConfirmSelected--
+		}
 	}
 	return m
 }
@@ -107,7 +115,7 @@ func (m Model) handleDown() Model {
 			m.UI.MainMenuIndex++
 		}
 	case ViewStateServiceManagement:
-		if m.Server.ServiceMenuIndex < 4 {
+		if m.Server.ServiceMenuIndex < 5 {
 			m.Server.ServiceMenuIndex++
 		}
 	case ViewStateServerSetup:
@@ -169,6 +177,15 @@ func (m Model) handleDown() Model {
 		if m.Action.ConfirmSelected < 1 {
 			m.Action.ConfirmSelected++
 		}
+	case ViewStateServiceRestart:
+		totalNodes := m.countVisibleNodes()
+		if m.Tree.CursorIndex < totalNodes-1 {
+			m.Tree.CursorIndex++
+		}
+	case ViewStateServiceRestartConfirm:
+		if m.Action.ConfirmSelected < 1 {
+			m.Action.ConfirmSelected++
+		}
 	}
 	return m
 }
@@ -187,6 +204,15 @@ func (m Model) handleSpace() Model {
 		return m
 	}
 	if m.ViewState == ViewStateServiceStop {
+		node := m.getNodeAtIndex(m.Tree.CursorIndex)
+		if node == nil || len(node.Children) > 0 {
+			return m
+		}
+		node.Selected = !node.Selected
+		node.UpdateParentSelection()
+		return m
+	}
+	if m.ViewState == ViewStateServiceRestart {
 		node := m.getNodeAtIndex(m.Tree.CursorIndex)
 		if node == nil || len(node.Children) > 0 {
 			return m
@@ -250,16 +276,21 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 			m.buildStopTree()
 			return m, nil
 		case 2:
+			m.ViewState = ViewStateServiceRestart
+			m.Restart.RestartCursor = 0
+			m.buildRestartTree()
+			return m, nil
+		case 3:
 			m.Loading.Active = true
 			m.Loading.Message = "Scanning orphan services..."
 			return m, tea.Batch(tickSpinner(), m.scanOrphanServicesAsync())
-		case 3:
+		case 4:
 			m.ViewState = ViewStateServerSetup
 			m.Server.ServerIndex = 0
 			m.Server.ServerAction = 0
 			m.Server.ServerFocusPanel = 0
 			return m, nil
-		case 4:
+		case 5:
 			m.ViewState = ViewStateMainMenu
 			return m, nil
 		}
@@ -394,6 +425,26 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		m.Stop.StopResults = nil
 		m.Stop.StopSelected = nil
 		return m, nil
+	case ViewStateServiceRestart:
+		node := m.getNodeAtIndex(m.Tree.CursorIndex)
+		if node == nil {
+			return m, nil
+		}
+		node.Expanded = !node.Expanded
+		return m, nil
+	case ViewStateServiceRestartConfirm:
+		if m.Action.ConfirmSelected == 0 {
+			m.Loading.Active = true
+			m.Loading.Message = "Restarting services..."
+			return m, tea.Batch(tickSpinner(), m.executeServiceRestartAsync())
+		}
+		m.ViewState = ViewStateServiceRestart
+		return m, nil
+	case ViewStateServiceRestartComplete:
+		m.ViewState = ViewStateServiceManagement
+		m.Restart.RestartResults = nil
+		m.Restart.RestartSelected = nil
+		return m, nil
 	}
 	return m, nil
 }
@@ -418,7 +469,7 @@ func (m Model) handleTab() Model {
 }
 
 func (m Model) handleSelectCurrent(selected bool) Model {
-	if m.ViewState != ViewStateTree && m.ViewState != ViewStateServiceStop {
+	if m.ViewState != ViewStateTree && m.ViewState != ViewStateServiceStop && m.ViewState != ViewStateServiceRestart {
 		return m
 	}
 	node := m.getNodeAtIndex(m.Tree.CursorIndex)
@@ -431,7 +482,7 @@ func (m Model) handleSelectCurrent(selected bool) Model {
 }
 
 func (m Model) handleSelectAll(selected bool) Model {
-	if m.ViewState != ViewStateTree && m.ViewState != ViewStateServiceStop {
+	if m.ViewState != ViewStateTree && m.ViewState != ViewStateServiceStop && m.ViewState != ViewStateServiceRestart {
 		return m
 	}
 	nodes := m.getCurrentTree()
@@ -450,6 +501,13 @@ func (m Model) handlePlan() (tea.Model, tea.Cmd) {
 	if m.ViewState == ViewStateServiceStop {
 		if m.hasSelectedStopServices() {
 			m.ViewState = ViewStateServiceStopConfirm
+			m.Action.ConfirmSelected = 0
+		}
+		return m, nil
+	}
+	if m.ViewState == ViewStateServiceRestart {
+		if m.hasSelectedRestartServices() {
+			m.ViewState = ViewStateServiceRestartConfirm
 			m.Action.ConfirmSelected = 0
 		}
 		return m, nil

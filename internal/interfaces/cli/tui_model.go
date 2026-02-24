@@ -77,6 +77,11 @@ type serviceStopCompleteMsg struct {
 	err     error
 }
 
+type serviceRestartCompleteMsg struct {
+	results []RestartResult
+	err     error
+}
+
 type dnsProviderCreatedMsg struct {
 	provider dns.Provider
 	ispName  string
@@ -120,6 +125,10 @@ const (
 	ViewStateServiceStopConfirm
 	ViewStateServiceStopProgress
 	ViewStateServiceStopComplete
+	ViewStateServiceRestart
+	ViewStateServiceRestartConfirm
+	ViewStateServiceRestartProgress
+	ViewStateServiceRestartComplete
 )
 
 type ViewMode int
@@ -172,6 +181,17 @@ type StopResult struct {
 }
 
 type StopServiceResult struct {
+	Name    string
+	Success bool
+	Error   string
+}
+
+type RestartResult struct {
+	ServerName string
+	Services   []RestartServiceResult
+}
+
+type RestartServiceResult struct {
 	Name    string
 	Success bool
 	Error   string
@@ -325,6 +345,13 @@ type StopState struct {
 	ServiceStatusMap map[string]NodeStatus
 }
 
+type RestartState struct {
+	RestartResults   []RestartResult
+	RestartSelected  map[int]bool
+	RestartCursor    int
+	ServiceStatusMap map[string]NodeStatus
+}
+
 type ActionState struct {
 	PlanResult      *valueobject.Plan
 	ApplyProgress   int
@@ -350,6 +377,7 @@ type Model struct {
 	DNS     *DNSState
 	Cleanup *CleanupState
 	Stop    *StopState
+	Restart *RestartState
 	Action  *ActionState
 	Loading *LoadingState
 }
@@ -381,6 +409,7 @@ func NewModel(env string, configDir string) Model {
 		DNS:     &DNSState{},
 		Cleanup: &CleanupState{},
 		Stop:    &StopState{},
+		Restart: &RestartState{},
 		Action: &ActionState{
 			PlanScope: &valueobject.Scope{},
 		},

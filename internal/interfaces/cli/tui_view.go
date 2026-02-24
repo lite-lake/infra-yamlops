@@ -40,6 +40,12 @@ func (m Model) View() string {
 		return m.renderServiceStopConfirm()
 	case ViewStateServiceStopComplete:
 		return m.renderServiceStopComplete()
+	case ViewStateServiceRestart:
+		return m.renderServiceRestart()
+	case ViewStateServiceRestartConfirm:
+		return m.renderServiceRestartConfirm()
+	case ViewStateServiceRestartComplete:
+		return m.renderServiceRestartComplete()
 	}
 	var content strings.Builder
 	content.WriteString(m.renderHeader())
