@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/cloudflare/cloudflare-go/v2"
 	"github.com/cloudflare/cloudflare-go/v2/dns"
@@ -94,14 +95,10 @@ func (p *CloudflareProvider) CreateRecord(domainName string, record *DNSRecord) 
 		ttl = 1
 	}
 
+	recordParam := p.buildRecordParam(record, ttl)
 	params := dns.RecordNewParams{
 		ZoneID: cloudflare.F(zoneID),
-		Record: dns.ARecordParam{
-			Name:    cloudflare.F(record.Name),
-			Type:    cloudflare.F(dns.ARecordType(record.Type)),
-			Content: cloudflare.F(record.Value),
-			TTL:     cloudflare.F(dns.TTL(ttl)),
-		},
+		Record: recordParam,
 	}
 
 	_, err = p.client.DNS.Records.New(ctx, params)
@@ -112,6 +109,85 @@ func (p *CloudflareProvider) CreateRecord(domainName string, record *DNSRecord) 
 
 	logger.Info("DNS record created", "provider", "cloudflare", "domain", domainName, "name", record.Name, "type", record.Type)
 	return nil
+}
+
+func (p *CloudflareProvider) buildRecordParam(record *DNSRecord, ttl int) dns.RecordUnionParam {
+	switch record.Type {
+	case "A":
+		return dns.ARecordParam{
+			Name:    cloudflare.F(record.Name),
+			Type:    cloudflare.F(dns.ARecordTypeA),
+			Content: cloudflare.F(record.Value),
+			TTL:     cloudflare.F(dns.TTL(ttl)),
+		}
+	case "AAAA":
+		return dns.AAAARecordParam{
+			Name:    cloudflare.F(record.Name),
+			Type:    cloudflare.F(dns.AAAARecordTypeAAAA),
+			Content: cloudflare.F(record.Value),
+			TTL:     cloudflare.F(dns.TTL(ttl)),
+		}
+	case "CNAME":
+		return dns.CNAMERecordParam{
+			Name:    cloudflare.F(record.Name),
+			Type:    cloudflare.F(dns.CNAMERecordTypeCNAME),
+			Content: cloudflare.F[interface{}](record.Value),
+			TTL:     cloudflare.F(dns.TTL(ttl)),
+		}
+	case "TXT":
+		return dns.TXTRecordParam{
+			Name:    cloudflare.F(record.Name),
+			Type:    cloudflare.F(dns.TXTRecordTypeTXT),
+			Content: cloudflare.F(record.Value),
+			TTL:     cloudflare.F(dns.TTL(ttl)),
+		}
+	case "MX":
+		return dns.MXRecordParam{
+			Name:     cloudflare.F(record.Name),
+			Type:     cloudflare.F(dns.MXRecordTypeMX),
+			Content:  cloudflare.F(record.Value),
+			TTL:      cloudflare.F(dns.TTL(ttl)),
+			Priority: cloudflare.F(10.0),
+		}
+	case "NS":
+		return dns.NSRecordParam{
+			Name:    cloudflare.F(record.Name),
+			Type:    cloudflare.F(dns.NSRecordTypeNS),
+			Content: cloudflare.F(record.Value),
+			TTL:     cloudflare.F(dns.TTL(ttl)),
+		}
+	case "SRV":
+		priority, weight, port, target := parseSRVValue(record.Value)
+		return dns.SRVRecordParam{
+			Name: cloudflare.F(record.Name),
+			Type: cloudflare.F(dns.SRVRecordTypeSRV),
+			Data: cloudflare.F(dns.SRVRecordDataParam{
+				Priority: cloudflare.F(priority),
+				Weight:   cloudflare.F(weight),
+				Port:     cloudflare.F(port),
+				Target:   cloudflare.F(target),
+			}),
+			TTL: cloudflare.F(dns.TTL(ttl)),
+		}
+	default:
+		return dns.ARecordParam{
+			Name:    cloudflare.F(record.Name),
+			Type:    cloudflare.F(dns.ARecordType(record.Type)),
+			Content: cloudflare.F(record.Value),
+			TTL:     cloudflare.F(dns.TTL(ttl)),
+		}
+	}
+}
+
+func parseSRVValue(value string) (priority, weight, port float64, target string) {
+	parts := strings.Fields(value)
+	if len(parts) >= 4 {
+		priority, _ = strconv.ParseFloat(parts[0], 64)
+		weight, _ = strconv.ParseFloat(parts[1], 64)
+		port, _ = strconv.ParseFloat(parts[2], 64)
+		target = parts[3]
+	}
+	return
 }
 
 func (p *CloudflareProvider) DeleteRecord(domainName string, recordID string) error {
@@ -149,14 +225,10 @@ func (p *CloudflareProvider) UpdateRecord(domainName string, recordID string, re
 		ttl = 1
 	}
 
+	recordParam := p.buildRecordParam(record, ttl)
 	params := dns.RecordEditParams{
 		ZoneID: cloudflare.F(zoneID),
-		Record: dns.ARecordParam{
-			Name:    cloudflare.F(record.Name),
-			Type:    cloudflare.F(dns.ARecordType(record.Type)),
-			Content: cloudflare.F(record.Value),
-			TTL:     cloudflare.F(dns.TTL(ttl)),
-		},
+		Record: recordParam,
 	}
 
 	_, err = p.client.DNS.Records.Edit(ctx, recordID, params)

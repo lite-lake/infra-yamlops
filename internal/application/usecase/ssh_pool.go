@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/litelake/yamlops/internal/application/handler"
@@ -32,7 +33,7 @@ func NewSSHPoolWithFactory(factory SSHClientFactory) *SSHPool {
 }
 
 func (p *SSHPool) Get(info *handler.ServerInfo) (handler.SSHClient, error) {
-	key := info.Host
+	key := fmt.Sprintf("%s:%d:%s", info.Host, info.Port, info.User)
 
 	p.mu.RLock()
 	if client, ok := p.clients[key]; ok {

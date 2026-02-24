@@ -63,8 +63,30 @@ func (s *DifferService) PlanServers(plan *valueobject.Plan, cfgMap map[string]*e
 }
 
 func ServerEquals(a, b *entity.Server) bool {
-	return a.Name == b.Name && a.Zone == b.Zone && a.ISP == b.ISP &&
-		a.IP.Public == b.IP.Public && a.IP.Private == b.IP.Private
+	if a.Name != b.Name || a.Zone != b.Zone || a.ISP != b.ISP || a.OS != b.OS {
+		return false
+	}
+	if a.IP.Public != b.IP.Public || a.IP.Private != b.IP.Private {
+		return false
+	}
+	if a.SSH.Host != b.SSH.Host || a.SSH.Port != b.SSH.Port || a.SSH.User != b.SSH.User {
+		return false
+	}
+	if !a.SSH.Password.Equals(&b.SSH.Password) {
+		return false
+	}
+	if a.Environment.APTSource != b.Environment.APTSource {
+		return false
+	}
+	if len(a.Environment.Registries) != len(b.Environment.Registries) {
+		return false
+	}
+	for i, reg := range a.Environment.Registries {
+		if i >= len(b.Environment.Registries) || reg != b.Environment.Registries[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *DifferService) PlanServices(plan *valueobject.Plan, cfgMap map[string]*entity.BizService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
@@ -145,7 +167,29 @@ func ServiceEquals(a, b *entity.BizService) bool {
 		return false
 	}
 	for k, v := range a.Env {
-		if bv, ok := b.Env[k]; !ok || bv != v {
+		if bv, ok := b.Env[k]; !ok || !v.Equals(&bv) {
+			return false
+		}
+	}
+	if len(a.Secrets) != len(b.Secrets) {
+		return false
+	}
+	for i, sec := range a.Secrets {
+		if i >= len(b.Secrets) || sec != b.Secrets[i] {
+			return false
+		}
+	}
+	if !healthcheckEqual(a.Healthcheck, b.Healthcheck) {
+		return false
+	}
+	if a.Resources != b.Resources {
+		return false
+	}
+	if len(a.Volumes) != len(b.Volumes) {
+		return false
+	}
+	for i, vol := range a.Volumes {
+		if i >= len(b.Volumes) || vol != b.Volumes[i] {
 			return false
 		}
 	}
@@ -157,7 +201,28 @@ func ServiceEquals(a, b *entity.BizService) bool {
 			return false
 		}
 	}
+	if a.Internal != b.Internal {
+		return false
+	}
+	if len(a.Networks) != len(b.Networks) {
+		return false
+	}
+	for i, net := range a.Networks {
+		if i >= len(b.Networks) || net != b.Networks[i] {
+			return false
+		}
+	}
 	return true
+}
+
+func healthcheckEqual(a, b *entity.ServiceHealthcheck) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Path == b.Path && a.Interval == b.Interval && a.Timeout == b.Timeout
 }
 
 func (s *DifferService) PlanInfraServices(plan *valueobject.Plan, cfgMap map[string]*entity.InfraService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {

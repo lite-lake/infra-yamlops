@@ -3,6 +3,10 @@ package retry
 import (
 	"context"
 	"errors"
+	"io"
+	"net"
+	"strings"
+	"syscall"
 	"time"
 )
 
@@ -83,7 +87,56 @@ func DefaultIsRetryable(err error) bool {
 	if err == nil {
 		return false
 	}
-	return true
+
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+
+	var netErr net.Error
+	if errors.As(err, &netErr) {
+		return netErr.Timeout() || netErr.Temporary()
+	}
+
+	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+		return true
+	}
+
+	if isSyscallRetryable(err) {
+		return true
+	}
+
+	errStr := strings.ToLower(err.Error())
+	retryablePatterns := []string{
+		"connection reset",
+		"connection refused",
+		"timeout",
+		"timed out",
+		"temporary",
+		"network is unreachable",
+		"no such host",
+		"dns",
+		"eof",
+		"broken pipe",
+	}
+	for _, pattern := range retryablePatterns {
+		if strings.Contains(errStr, pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func isSyscallRetryable(err error) bool {
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		switch errno {
+		case syscall.ECONNRESET, syscall.ECONNREFUSED, syscall.ETIMEDOUT,
+			syscall.ENETUNREACH, syscall.EHOSTUNREACH, syscall.EPIPE:
+			return true
+		}
+	}
+	return false
 }
 
 func Do(ctx context.Context, fn func() error, opts ...Option) error {

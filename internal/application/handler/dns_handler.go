@@ -102,7 +102,7 @@ func (h *DNSHandler) updateRecord(change *valueobject.Change, record *entity.DNS
 	}
 
 	for _, r := range existingRecords {
-		if r.Name == record.Name && r.Type == string(record.Type) {
+		if r.Name == record.Name && strings.EqualFold(r.Type, string(record.Type)) {
 			if err := provider.UpdateRecord(record.Domain, r.ID, dnsRecord); err != nil {
 				result.Error = fmt.Errorf("failed to update record: %w", err)
 				return result, nil

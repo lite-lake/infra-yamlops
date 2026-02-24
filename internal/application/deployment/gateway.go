@@ -260,9 +260,14 @@ func (g *Generator) generateInfraGatewayConfig(infra *entity.InfraService, confi
 				}
 			}
 
+			httpPort := 80
+			if infra.GatewayPorts != nil {
+				httpPort = infra.GatewayPorts.HTTP
+			}
+
 			hosts = append(hosts, gate.HostRoute{
 				Name:                hostname,
-				Port:                infra.GatewayPorts.HTTP,
+				Port:                httpPort,
 				SSLPort:             sslPort,
 				Backend:             []string{backend},
 				HealthCheck:         healthPath,
@@ -285,8 +290,13 @@ func (g *Generator) generateInfraGatewayConfig(infra *entity.InfraService, confi
 		sslEndpoint = infra.GatewaySSL.Endpoint
 	}
 
+	httpPort := 80
+	if infra.GatewayPorts != nil {
+		httpPort = infra.GatewayPorts.HTTP
+	}
+
 	gatewayConfig := &gate.GatewayConfig{
-		Port:               infra.GatewayPorts.HTTP,
+		Port:               httpPort,
 		LogLevel:           infra.GatewayLogLevel,
 		WAFEnabled:         wafEnabled,
 		Whitelist:          whitelist,

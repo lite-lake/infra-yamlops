@@ -3,6 +3,8 @@ package retry
 import (
 	"context"
 	"errors"
+	"io"
+	"net"
 	"testing"
 	"time"
 )
@@ -12,7 +14,7 @@ func TestDo_Success(t *testing.T) {
 	err := Do(context.Background(), func() error {
 		callCount++
 		if callCount < 2 {
-			return errors.New("temporary error")
+			return &net.DNSError{Err: "temporary error", IsTemporary: true}
 		}
 		return nil
 	}, WithMaxAttempts(3))
@@ -29,7 +31,7 @@ func TestDo_MaxAttemptsExceeded(t *testing.T) {
 	callCount := 0
 	err := Do(context.Background(), func() error {
 		callCount++
-		return errors.New("persistent error")
+		return &net.DNSError{Err: "connection refused", IsTemporary: true}
 	}, WithMaxAttempts(3))
 
 	if !errors.Is(err, ErrMaxAttemptsExceeded) {
@@ -47,7 +49,7 @@ func TestDo_ContextCanceled(t *testing.T) {
 	callCount := 0
 	err := Do(ctx, func() error {
 		callCount++
-		return errors.New("error")
+		return errors.New("timeout error")
 	}, WithMaxAttempts(3))
 
 	if !errors.Is(err, ErrContextCanceled) {
@@ -81,7 +83,7 @@ func TestDoWithResult_Success(t *testing.T) {
 	result, err := DoWithResult(context.Background(), func() (string, error) {
 		callCount++
 		if callCount < 2 {
-			return "", errors.New("temporary error")
+			return "", io.ErrUnexpectedEOF
 		}
 		return "success", nil
 	}, WithMaxAttempts(3))
@@ -98,7 +100,7 @@ func TestDoWithResult_MaxAttemptsExceeded(t *testing.T) {
 	callCount := 0
 	result, err := DoWithResult(context.Background(), func() (string, error) {
 		callCount++
-		return "", errors.New("persistent error")
+		return "", errors.New("connection refused")
 	}, WithMaxAttempts(3))
 
 	if !errors.Is(err, ErrMaxAttemptsExceeded) {
@@ -118,7 +120,7 @@ func TestDo_ExponentialBackoff(t *testing.T) {
 
 	_, _ = DoWithResult(context.Background(), func() (string, error) {
 		callCount++
-		return "", errors.New("error")
+		return "", errors.New("connection reset")
 	}, WithMaxAttempts(4), WithInitialDelay(10*time.Millisecond), WithMultiplier(2.0), WithOnRetry(func(attempt int, delay time.Duration, err error) {
 		delays = append(delays, delay)
 	}))
@@ -139,7 +141,7 @@ func TestDo_MaxDelayCap(t *testing.T) {
 	delays := []time.Duration{}
 
 	_, _ = DoWithResult(context.Background(), func() (string, error) {
-		return "", errors.New("error")
+		return "", errors.New("timeout occurred")
 	}, WithMaxAttempts(5), WithInitialDelay(100*time.Millisecond), WithMaxDelay(150*time.Millisecond), WithMultiplier(10.0), WithOnRetry(func(attempt int, delay time.Duration, err error) {
 		delays = append(delays, delay)
 	}))
@@ -185,3 +187,81 @@ func TestDo_ImmediateSuccess(t *testing.T) {
 		t.Errorf("expected 1 call, got %d", callCount)
 	}
 }
+
+func TestDefaultIsRetryable(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{"nil error", nil, false},
+		{"context.Canceled", context.Canceled, false},
+		{"context.DeadlineExceeded", context.DeadlineExceeded, false},
+		{"io.EOF", io.EOF, true},
+		{"io.ErrUnexpectedEOF", io.ErrUnexpectedEOF, true},
+		{"net timeout error", &net.OpError{Err: &timeoutError{}}, true},
+		{"net temporary error", &net.OpError{Err: &temporaryError{}}, true},
+		{"error with timeout in message", errors.New("connection timeout"), true},
+		{"error with connection refused", errors.New("connection refused by peer"), true},
+		{"error with connection reset", errors.New("connection reset by peer"), true},
+		{"error with temporary", errors.New("temporary failure in name resolution"), true},
+		{"error with network unreachable", errors.New("network is unreachable"), true},
+		{"error with dns", errors.New("dns lookup failed"), true},
+		{"error with eof", errors.New("unexpected eof"), true},
+		{"error with broken pipe", errors.New("broken pipe"), true},
+		{"generic error", errors.New("something went wrong"), false},
+		{"validation error", errors.New("invalid input"), false},
+		{"permission denied", errors.New("permission denied"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := DefaultIsRetryable(tt.err)
+			if result != tt.expected {
+				t.Errorf("DefaultIsRetryable(%v) = %v, want %v", tt.err, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestDo_NonRetryableError_ImmediateReturn(t *testing.T) {
+	callCount := 0
+	err := Do(context.Background(), func() error {
+		callCount++
+		return errors.New("validation failed")
+	}, WithMaxAttempts(3))
+
+	if callCount != 1 {
+		t.Errorf("expected 1 call for non-retryable error, got %d", callCount)
+	}
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestDo_ContextErrorNotRetryable(t *testing.T) {
+	callCount := 0
+	err := Do(context.Background(), func() error {
+		callCount++
+		return context.Canceled
+	}, WithMaxAttempts(3))
+
+	if callCount != 1 {
+		t.Errorf("expected 1 call for context.Canceled, got %d", callCount)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got %v", err)
+	}
+}
+
+type timeoutError struct{}
+
+func (e *timeoutError) Error() string   { return "timeout" }
+func (e *timeoutError) Timeout() bool   { return true }
+func (e *timeoutError) Temporary() bool { return false }
+
+type temporaryError struct{}
+
+func (e *temporaryError) Error() string   { return "temporary" }
+func (e *temporaryError) Timeout() bool   { return false }
+func (e *temporaryError) Temporary() bool { return true }
