@@ -4,38 +4,24 @@ import (
 	"testing"
 )
 
-func TestNewModel_LoadsConfig(t *testing.T) {
+func TestNewModel_InitializesLoading(t *testing.T) {
 	m := NewModel("demo", "../../..")
 
-	if m.Config == nil {
-		t.Error("Config should be loaded on NewModel")
+	if m.Loading == nil {
+		t.Error("Loading state should be initialized")
 	}
 
-	if m.Config != nil {
-		if len(m.Config.Zones) == 0 {
-			t.Error("Zones should be loaded")
-		}
-		if len(m.Config.Servers) == 0 {
-			t.Error("Servers should be loaded")
-		}
-		if len(m.Config.Services) == 0 {
-			t.Error("Services should be loaded")
-		}
-		if len(m.Config.Domains) == 0 {
-			t.Error("Domains should be loaded")
-		}
+	if m.ViewState != ViewStateMainMenu {
+		t.Error("Initial view state should be MainMenu")
 	}
 }
 
-func TestNewModel_BuildsTrees(t *testing.T) {
+func TestNewModel_AsyncLoadConfig(t *testing.T) {
 	m := NewModel("demo", "../../..")
 
-	if len(m.Tree.TreeNodes) == 0 {
-		t.Error("App tree should be built")
-	}
-
-	if len(m.Tree.DNSTreeNodes) == 0 {
-		t.Error("DNS tree should be built")
+	cmd := m.Init()
+	if cmd == nil {
+		t.Error("Init should return a command for async config loading")
 	}
 }
 

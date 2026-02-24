@@ -8,6 +8,9 @@ import (
 )
 
 func (m Model) View() string {
+	if m.Loading.Active {
+		return m.renderLoadingView()
+	}
 	switch m.ViewState {
 	case ViewStateMainMenu:
 		return m.renderMainMenu()
@@ -53,6 +56,21 @@ func (m Model) View() string {
 		content.WriteString(m.renderApplyComplete())
 	}
 	content.WriteString(m.renderHelp())
+	return BaseStyle.Render(content.String())
+}
+
+func (m Model) renderLoadingView() string {
+	var content strings.Builder
+	content.WriteString(TitleStyle.Render("YAMLOps"))
+	content.WriteString(" ")
+	content.WriteString(EnvStyle.Render(fmt.Sprintf("[%s]", strings.ToUpper(string(m.Environment)))))
+	content.WriteString("\n\n")
+
+	spinner := SpinnerFrames[m.Loading.Spinner]
+	loadingText := fmt.Sprintf("  %s %s", spinner, m.Loading.Message)
+	content.WriteString(LoadingOverlayStyle.Render(loadingText))
+	content.WriteString("\n\n")
+	content.WriteString(HelpStyle.Render("  Ctrl+C to cancel"))
 	return BaseStyle.Render(content.String())
 }
 

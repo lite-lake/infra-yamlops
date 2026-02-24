@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbletea"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	serverpkg "github.com/litelake/yamlops/internal/environment"
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
@@ -153,6 +154,36 @@ func (m *Model) executeServerCheck() {
 	m.ViewState = ViewStateServerCheck
 }
 
+func (m *Model) executeServerCheckAsync() tea.Cmd {
+	return func() tea.Msg {
+		if len(m.Server.ServerList) == 0 || m.Server.ServerIndex >= len(m.Server.ServerList) {
+			return serverCheckCompleteMsg{}
+		}
+
+		srv := m.Server.ServerList[m.Server.ServerIndex]
+		secrets := m.Config.GetSecretsMap()
+
+		password, err := srv.SSH.Password.Resolve(secrets)
+		if err != nil {
+			return serverCheckCompleteMsg{err: fmt.Errorf("cannot resolve password: %v", err)}
+		}
+
+		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		if err != nil {
+			return serverCheckCompleteMsg{err: fmt.Errorf("connection failed: %v", err)}
+		}
+		defer client.Close()
+
+		registries := make([]entity.Registry, 0, len(m.Config.Registries))
+		for i := range m.Config.Registries {
+			registries = append(registries, m.Config.Registries[i])
+		}
+		checker := serverpkg.NewChecker(client, srv, registries, secrets)
+		results := checker.CheckAll()
+		return serverCheckCompleteMsg{results: results}
+	}
+}
+
 func (m *Model) executeServerSync() {
 	if len(m.Server.ServerList) == 0 || m.Server.ServerIndex >= len(m.Server.ServerList) {
 		return
@@ -182,6 +213,36 @@ func (m *Model) executeServerSync() {
 	m.Server.ServerSyncResults = syncer.SyncAll()
 	m.Server.ServerCheckResults = nil
 	m.ViewState = ViewStateServerCheck
+}
+
+func (m *Model) executeServerSyncAsync() tea.Cmd {
+	return func() tea.Msg {
+		if len(m.Server.ServerList) == 0 || m.Server.ServerIndex >= len(m.Server.ServerList) {
+			return serverSyncCompleteMsg{}
+		}
+
+		srv := m.Server.ServerList[m.Server.ServerIndex]
+		secrets := m.Config.GetSecretsMap()
+
+		password, err := srv.SSH.Password.Resolve(secrets)
+		if err != nil {
+			return serverSyncCompleteMsg{err: fmt.Errorf("cannot resolve password: %v", err)}
+		}
+
+		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		if err != nil {
+			return serverSyncCompleteMsg{err: fmt.Errorf("connection failed: %v", err)}
+		}
+		defer client.Close()
+
+		registries := make([]entity.Registry, 0, len(m.Config.Registries))
+		for i := range m.Config.Registries {
+			registries = append(registries, m.Config.Registries[i])
+		}
+		syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), secrets, registries)
+		results := syncer.SyncAll()
+		return serverSyncCompleteMsg{results: results}
+	}
 }
 
 func (m *Model) executeServerFullSetup() {
@@ -216,4 +277,37 @@ func (m *Model) executeServerFullSetup() {
 	m.Server.ServerSyncResults = syncer.SyncAll()
 
 	m.ViewState = ViewStateServerCheck
+}
+
+func (m *Model) executeServerFullSetupAsync() tea.Cmd {
+	return func() tea.Msg {
+		if len(m.Server.ServerList) == 0 || m.Server.ServerIndex >= len(m.Server.ServerList) {
+			return serverSyncCompleteMsg{}
+		}
+
+		srv := m.Server.ServerList[m.Server.ServerIndex]
+		secrets := m.Config.GetSecretsMap()
+
+		password, err := srv.SSH.Password.Resolve(secrets)
+		if err != nil {
+			return serverSyncCompleteMsg{err: fmt.Errorf("cannot resolve password: %v", err)}
+		}
+
+		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		if err != nil {
+			return serverSyncCompleteMsg{err: fmt.Errorf("connection failed: %v", err)}
+		}
+		defer client.Close()
+
+		registries := make([]entity.Registry, 0, len(m.Config.Registries))
+		for i := range m.Config.Registries {
+			registries = append(registries, m.Config.Registries[i])
+		}
+		checker := serverpkg.NewChecker(client, srv, registries, secrets)
+		m.Server.ServerCheckResults = checker.CheckAll()
+
+		syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), secrets, registries)
+		results := syncer.SyncAll()
+		return serverSyncCompleteMsg{results: results}
+	}
 }

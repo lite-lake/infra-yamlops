@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbletea"
 	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
@@ -99,6 +100,87 @@ func (m *Model) fetchServiceStatus() {
 	}
 }
 
+func (m *Model) fetchServiceStatusAsync() tea.Cmd {
+	return func() tea.Msg {
+		statusMap := make(map[string]NodeStatus)
+		if m.Config == nil {
+			return serviceStatusFetchedMsg{statusMap: statusMap}
+		}
+		secrets := m.Config.GetSecretsMap()
+
+		for _, srv := range m.Config.Servers {
+			password, err := srv.SSH.Password.Resolve(secrets)
+			if err != nil {
+				continue
+			}
+
+			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			if err != nil {
+				continue
+			}
+
+			stdout, _, err := client.Run("sudo docker compose ls -a --format json 2>/dev/null || sudo docker compose ls -a --format json")
+			if err != nil || stdout == "" {
+				client.Close()
+				continue
+			}
+
+			type composeProject struct {
+				Name string `json:"Name"`
+			}
+			var projects []composeProject
+			if err := json.Unmarshal([]byte(stdout), &projects); err != nil {
+				for _, line := range strings.Split(stdout, "\n") {
+					line = strings.TrimSpace(line)
+					if line == "" {
+						continue
+					}
+					var proj composeProject
+					if err := json.Unmarshal([]byte(line), &proj); err == nil && proj.Name != "" {
+						projects = append(projects, proj)
+					}
+				}
+			}
+
+			for _, proj := range projects {
+				statusMap[proj.Name] = StatusRunning
+			}
+
+			for _, infra := range m.Config.InfraServices {
+				if infra.Server != srv.Name {
+					continue
+				}
+				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, infra.Name))
+				key := fmt.Sprintf(constants.ServicePrefixFormat, m.Environment, infra.Name)
+				if _, exists := statusMap[key]; !exists {
+					stdout, _, _ := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
+					if strings.TrimSpace(stdout) == "exists" {
+						statusMap[key] = StatusStopped
+					}
+				}
+			}
+
+			for _, svc := range m.Config.Services {
+				if svc.Server != srv.Name {
+					continue
+				}
+				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, svc.Name))
+				key := fmt.Sprintf(constants.ServicePrefixFormat, m.Environment, svc.Name)
+				if _, exists := statusMap[key]; !exists {
+					stdout, _, _ := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
+					if strings.TrimSpace(stdout) == "exists" {
+						statusMap[key] = StatusStopped
+					}
+				}
+			}
+
+			client.Close()
+		}
+
+		return serviceStatusFetchedMsg{statusMap: statusMap}
+	}
+}
+
 func (m *Model) applyServiceStatusToTree() {
 	for _, node := range m.Tree.TreeNodes {
 		m.applyStatusToNode(node)
@@ -187,6 +269,83 @@ func (m *Model) executeServiceStop() {
 
 		client.Close()
 		m.Stop.StopResults = append(m.Stop.StopResults, result)
+	}
+}
+
+func (m *Model) executeServiceStopAsync() tea.Cmd {
+	return func() tea.Msg {
+		var results []StopResult
+		secrets := m.Config.GetSecretsMap()
+
+		servicesToStop := m.getSelectedServicesForStop()
+		if len(servicesToStop) == 0 {
+			return serviceStopCompleteMsg{results: results}
+		}
+
+		serverServices := make(map[string][]string)
+		for _, svc := range servicesToStop {
+			if svc.Server != "" {
+				serverServices[svc.Server] = append(serverServices[svc.Server], svc.Name)
+			}
+		}
+
+		for _, srv := range m.Server.ServerList {
+			services, ok := serverServices[srv.Name]
+			if !ok || len(services) == 0 {
+				continue
+			}
+
+			result := StopResult{ServerName: srv.Name}
+
+			password, err := srv.SSH.Password.Resolve(secrets)
+			if err != nil {
+				for _, svcName := range services {
+					result.Services = append(result.Services, StopServiceResult{
+						Name:    svcName,
+						Success: false,
+						Error:   fmt.Sprintf("Cannot resolve password: %v", err),
+					})
+				}
+				results = append(results, result)
+				continue
+			}
+
+			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			if err != nil {
+				for _, svcName := range services {
+					result.Services = append(result.Services, StopServiceResult{
+						Name:    svcName,
+						Success: false,
+						Error:   fmt.Sprintf("Connection failed: %v", err),
+					})
+				}
+				results = append(results, result)
+				continue
+			}
+
+			for _, svcName := range services {
+				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, svcName))
+				cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml down 2>/dev/null || true", remoteDir)
+				_, stderr, err := client.Run(cmd)
+				if err != nil {
+					result.Services = append(result.Services, StopServiceResult{
+						Name:    svcName,
+						Success: false,
+						Error:   stderr,
+					})
+				} else {
+					result.Services = append(result.Services, StopServiceResult{
+						Name:    svcName,
+						Success: true,
+					})
+				}
+			}
+
+			client.Close()
+			results = append(results, result)
+		}
+
+		return serviceStopCompleteMsg{results: results}
 	}
 }
 

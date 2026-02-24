@@ -8,6 +8,7 @@ import (
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	infra "github.com/litelake/yamlops/internal/infrastructure/dns"
+	"github.com/litelake/yamlops/internal/infrastructure/logger"
 	"github.com/litelake/yamlops/internal/providers/dns"
 )
 
@@ -91,11 +92,38 @@ func (e *Executor) RegisterServer(name, host string, port int, user, password st
 
 func (e *Executor) Apply() []*handler.Result {
 	e.registerHandlers()
+	ctx := logger.WithOperation(context.Background(), "apply")
+	log := logger.FromContext(ctx)
+
+	log.Info("starting apply", "changes", len(e.plan.Changes))
+
 	results := make([]*handler.Result, 0, len(e.plan.Changes))
-	ctx := context.Background()
-	for _, ch := range e.plan.Changes {
+	for i, ch := range e.plan.Changes {
+		log.Debug("applying change",
+			"index", i+1,
+			"type", ch.Type,
+			"entity", ch.Entity,
+			"name", ch.Name,
+		)
 		results = append(results, e.applyChange(ctx, ch))
 	}
+
+	successCount := 0
+	failedCount := 0
+	for _, r := range results {
+		if r.Error != nil {
+			failedCount++
+		} else {
+			successCount++
+		}
+	}
+
+	log.Info("apply completed",
+		"total", len(results),
+		"success", successCount,
+		"failed", failedCount,
+	)
+
 	e.sshPool.CloseAll()
 	return results
 }
@@ -119,14 +147,21 @@ func (e *Executor) registerHandlers() {
 }
 
 func (e *Executor) applyChange(ctx context.Context, ch *valueobject.Change) *handler.Result {
+	log := logger.FromContext(ctx)
+
 	h, ok := e.registry.Get(ch.Entity)
 	if !ok {
+		log.Error("no handler found", "entity", ch.Entity)
 		return &handler.Result{Change: ch, Error: fmt.Errorf("no handler for: %s", ch.Entity)}
 	}
+
 	result, err := h.Apply(ctx, ch, e.buildDeps(ch))
 	if err != nil {
+		log.Error("change failed", "entity", ch.Entity, "name", ch.Name, "error", err)
 		return &handler.Result{Change: ch, Error: err}
 	}
+
+	log.Debug("change applied", "entity", ch.Entity, "name", ch.Name)
 	return result
 }
 

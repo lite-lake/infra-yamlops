@@ -9,6 +9,7 @@ import (
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/repository"
 	"github.com/litelake/yamlops/internal/domain/service"
+	"github.com/litelake/yamlops/internal/infrastructure/logger"
 	"gopkg.in/yaml.v3"
 )
 
@@ -17,8 +18,13 @@ type ConfigLoader struct{ baseDir string }
 func NewConfigLoader(baseDir string) *ConfigLoader { return &ConfigLoader{baseDir: baseDir} }
 
 func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, error) {
+	log := logger.FromContext(ctx)
+
 	configDir := filepath.Join(l.baseDir, "userdata", env)
+	log.Debug("loading config", "env", env, "dir", configDir)
+
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		log.Error("config directory not found", "dir", configDir)
 		return nil, fmt.Errorf("config directory does not exist: %s", configDir)
 	}
 
@@ -41,12 +47,17 @@ func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, er
 	for _, f := range loaders {
 		filePath := filepath.Join(configDir, f.filename)
 		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			log.Debug("config file skipped", "file", f.filename, "reason", "not found")
 			continue
 		}
+		log.Debug("loading config file", "file", f.filename)
 		if err := f.loader(filePath, cfg); err != nil {
+			log.Error("failed to load config file", "file", f.filename, "error", err)
 			return nil, fmt.Errorf("failed to load %s: %w", f.filename, err)
 		}
 	}
+
+	log.Info("config loaded", "env", env)
 	return cfg, nil
 }
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbletea"
 	"github.com/litelake/yamlops/internal/application/orchestrator"
 	"github.com/litelake/yamlops/internal/application/plan"
 	"github.com/litelake/yamlops/internal/application/usecase"
@@ -29,6 +30,20 @@ func (m *Model) loadConfig() {
 	}
 	m.Config = cfg
 	m.buildTrees()
+}
+
+func (m *Model) loadConfigAsync() tea.Cmd {
+	return func() tea.Msg {
+		loader := persistence.NewConfigLoader(m.ConfigDir)
+		cfg, err := loader.Load(nil, string(m.Environment))
+		if err != nil {
+			return configLoadedMsg{err: err}
+		}
+		if err := loader.Validate(cfg); err != nil {
+			return configLoadedMsg{err: err}
+		}
+		return configLoadedMsg{config: cfg}
+	}
 }
 
 func (m *Model) buildTrees() {
@@ -202,6 +217,75 @@ func (m *Model) generatePlan() {
 	}
 }
 
+func (m *Model) generatePlanAsync() tea.Cmd {
+	return func() tea.Msg {
+		executionPlan := valueobject.NewPlan()
+		if m.Config == nil {
+			loader := persistence.NewConfigLoader(m.ConfigDir)
+			cfg, err := loader.Load(nil, string(m.Environment))
+			if err != nil {
+				return planGeneratedMsg{err: err}
+			}
+			if err := loader.Validate(cfg); err != nil {
+				return planGeneratedMsg{err: err}
+			}
+			m.Config = cfg
+		}
+
+		scope := &valueobject.Scope{
+			DNSOnly: m.ViewMode == ViewModeDNS,
+		}
+		services := make(map[string]bool)
+		infraServices := make(map[string]bool)
+		domains := make(map[string]bool)
+		currentTree := m.getCurrentTree()
+		for _, node := range currentTree {
+			leaves := node.GetSelectedLeaves()
+			for _, leaf := range leaves {
+				switch leaf.Type {
+				case NodeTypeInfra:
+					infraServices[leaf.Name] = true
+				case NodeTypeBiz:
+					services[leaf.Name] = true
+				case NodeTypeDNSRecord:
+					parts := strings.Split(leaf.ID, ":")
+					if len(parts) >= 2 {
+						domains[parts[1]] = true
+					}
+				}
+			}
+		}
+		for svc := range services {
+			scope.Services = append(scope.Services, svc)
+		}
+		for infra := range infraServices {
+			scope.InfraServices = append(scope.InfraServices, infra)
+		}
+		if len(scope.Services) > 0 || len(scope.InfraServices) > 0 {
+			scope.ForceDeploy = true
+		}
+		for d := range domains {
+			scope.Domain = d
+			break
+		}
+
+		var state *plan.DeploymentState
+		if m.ViewMode == ViewModeDNS {
+			state = m.fetchDNSRemoteState()
+		} else {
+			fetcher := orchestrator.NewStateFetcher(string(m.Environment), m.ConfigDir)
+			state = fetcher.Fetch(context.Background(), m.Config)
+		}
+
+		planner := plan.NewPlannerWithState(m.Config, state, string(m.Environment))
+		executionPlan, err := planner.Plan(scope)
+		if err != nil {
+			return planGeneratedMsg{err: err}
+		}
+		return planGeneratedMsg{plan: executionPlan}
+	}
+}
+
 func (m *Model) fetchDNSRemoteState() *plan.DeploymentState {
 	state := &plan.DeploymentState{
 		Services:      make(map[string]*entity.BizService),
@@ -361,6 +445,45 @@ func (m *Model) executeApply() {
 	}
 	m.Action.ApplyResults = executor.Apply()
 	m.Action.ApplyComplete = true
+}
+
+func (m *Model) executeApplyAsync() tea.Cmd {
+	return func() tea.Msg {
+		if m.Action.PlanResult == nil || !m.Action.PlanResult.HasChanges() {
+			return applyCompleteAsyncMsg{}
+		}
+		if m.Config == nil {
+			loader := persistence.NewConfigLoader(m.ConfigDir)
+			cfg, err := loader.Load(nil, string(m.Environment))
+			if err != nil {
+				return applyCompleteAsyncMsg{err: err}
+			}
+			m.Config = cfg
+		}
+		planner := plan.NewPlanner(m.Config, string(m.Environment))
+		if err := planner.GenerateDeployments(); err != nil {
+			return applyCompleteAsyncMsg{err: err}
+		}
+		executor := usecase.NewExecutor(&usecase.ExecutorConfig{
+			Plan: m.Action.PlanResult,
+			Env:  string(m.Environment),
+		})
+		executor.SetSecrets(m.Config.GetSecretsMap())
+		executor.SetDomains(m.Config.GetDomainMap())
+		executor.SetISPs(m.Config.GetISPMap())
+		executor.SetServerEntities(m.Config.GetServerMap())
+		executor.SetWorkDir(m.ConfigDir)
+		secrets := m.Config.GetSecretsMap()
+		for _, srv := range m.Config.Servers {
+			password, err := srv.SSH.Password.Resolve(secrets)
+			if err != nil {
+				continue
+			}
+			executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		}
+		results := executor.Apply()
+		return applyCompleteAsyncMsg{results: results}
+	}
 }
 
 func (m Model) getCurrentTree() []*TreeNode {

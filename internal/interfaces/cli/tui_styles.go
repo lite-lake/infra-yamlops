@@ -14,6 +14,8 @@ const (
 	ColorBgSelected = "#1E1B4B"
 )
 
+var SpinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
 var (
 	BaseStyle = lipgloss.NewStyle().Padding(1, 2)
 
@@ -78,6 +80,11 @@ var (
 	ScrollIndicatorStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color(ColorSecondary)).
 				Padding(0, 1)
+
+	LoadingOverlayStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color(ColorPrimary)).
+				Bold(true).
+				Padding(1, 2)
 )
 
 func FormatChangeType(changeType valueobject.ChangeType) (prefix string, style lipgloss.Style) {

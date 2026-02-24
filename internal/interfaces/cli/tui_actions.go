@@ -24,6 +24,18 @@ func tickApply() tea.Cmd {
 	})
 }
 
+func (m Model) startLoading(message string) tea.Cmd {
+	m.Loading.Active = true
+	m.Loading.Message = message
+	m.Loading.Spinner = 0
+	return tickSpinner()
+}
+
+func (m *Model) stopLoading() {
+	m.Loading.Active = false
+	m.Loading.Message = ""
+}
+
 func (m Model) handleUp() Model {
 	switch m.ViewState {
 	case ViewStateMainMenu:
@@ -229,22 +241,18 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		case 0:
 			m.ViewState = ViewStateTree
 			m.TreeSource = ViewStateServiceManagement
-			m.fetchServiceStatus()
-			m.applyServiceStatusToTree()
-			return m, nil
+			m.Loading.Active = true
+			m.Loading.Message = "Fetching service status..."
+			return m, tea.Batch(tickSpinner(), m.fetchServiceStatusAsync())
 		case 1:
 			m.ViewState = ViewStateServiceStop
 			m.Stop.StopCursor = 0
 			m.buildStopTree()
 			return m, nil
 		case 2:
-			m.scanOrphanServices()
-			if m.UI.ErrorMessage == "" {
-				m.ViewState = ViewStateServiceCleanup
-				m.Cleanup.CleanupCursor = 0
-				m.buildCleanupSelected()
-			}
-			return m, nil
+			m.Loading.Active = true
+			m.Loading.Message = "Scanning orphan services..."
+			return m, tea.Batch(tickSpinner(), m.scanOrphanServicesAsync())
 		case 3:
 			m.ViewState = ViewStateServerSetup
 			m.Server.ServerIndex = 0
@@ -278,38 +286,18 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		isps := m.getDNSISPs()
 		if len(isps) > 0 && m.DNS.DNSISPIndex < len(isps) {
 			ispName := isps[m.DNS.DNSISPIndex]
-			m.fetchDomainDiffs(ispName)
-			if len(m.DNS.DNSPullDiffs) > 0 {
-				m.ViewState = ViewStateDNSPullDiff
-				m.DNS.DNSPullCursor = 0
-				m.DNS.DNSPullSelected = make(map[int]bool)
-				for i, diff := range m.DNS.DNSPullDiffs {
-					if diff.ChangeType == valueobject.ChangeTypeCreate {
-						m.DNS.DNSPullSelected[i] = true
-					}
-				}
-			} else {
-				m.ViewState = ViewStateDNSPullDiff
-			}
+			m.Loading.Active = true
+			m.Loading.Message = "Fetching domains from " + ispName + "..."
+			return m, tea.Batch(tickSpinner(), m.fetchDomainDiffsAsync(ispName))
 		}
 		return m, nil
 	case ViewStateDNSPullRecords:
 		domains := m.getDNSDomains()
 		if len(domains) > 0 && m.DNS.DNSDomainIndex < len(domains) {
 			domainName := domains[m.DNS.DNSDomainIndex]
-			m.fetchRecordDiffs(domainName)
-			if len(m.DNS.DNSRecordDiffs) > 0 {
-				m.ViewState = ViewStateDNSPullDiff
-				m.DNS.DNSPullCursor = 0
-				m.DNS.DNSPullSelected = make(map[int]bool)
-				for i, diff := range m.DNS.DNSRecordDiffs {
-					if diff.ChangeType == valueobject.ChangeTypeCreate || diff.ChangeType == valueobject.ChangeTypeUpdate {
-						m.DNS.DNSPullSelected[i] = true
-					}
-				}
-			} else {
-				m.ViewState = ViewStateDNSPullDiff
-			}
+			m.Loading.Active = true
+			m.Loading.Message = "Fetching records for " + domainName + "..."
+			return m, tea.Batch(tickSpinner(), m.fetchRecordDiffsAsync(domainName))
 		}
 		return m, nil
 	case ViewStateDNSPullDiff:
@@ -324,11 +312,17 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 	case ViewStateServerSetup:
 		switch m.Server.ServerAction {
 		case 0:
-			m.executeServerCheck()
+			m.Loading.Active = true
+			m.Loading.Message = "Checking server environment..."
+			return m, tea.Batch(tickSpinner(), m.executeServerCheckAsync())
 		case 1:
-			m.executeServerSync()
+			m.Loading.Active = true
+			m.Loading.Message = "Syncing server environment..."
+			return m, tea.Batch(tickSpinner(), m.executeServerSyncAsync())
 		case 2:
-			m.executeServerFullSetup()
+			m.Loading.Active = true
+			m.Loading.Message = "Running full setup..."
+			return m, tea.Batch(tickSpinner(), m.executeServerFullSetupAsync())
 		case 3:
 			m.ViewState = ViewStateServiceManagement
 		}
@@ -369,11 +363,11 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		return m, nil
 	case ViewStateServiceCleanupConfirm:
 		if m.Action.ConfirmSelected == 0 {
-			m.executeServiceCleanup()
-			m.ViewState = ViewStateServiceCleanupComplete
-		} else {
-			m.ViewState = ViewStateServiceCleanup
+			m.Loading.Active = true
+			m.Loading.Message = "Cleaning up services..."
+			return m, tea.Batch(tickSpinner(), m.executeServiceCleanupAsync())
 		}
+		m.ViewState = ViewStateServiceCleanup
 		return m, nil
 	case ViewStateServiceCleanupComplete:
 		m.ViewState = ViewStateServiceManagement
@@ -389,11 +383,11 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		return m, nil
 	case ViewStateServiceStopConfirm:
 		if m.Action.ConfirmSelected == 0 {
-			m.executeServiceStop()
-			m.ViewState = ViewStateServiceStopComplete
-		} else {
-			m.ViewState = ViewStateServiceStop
+			m.Loading.Active = true
+			m.Loading.Message = "Stopping services..."
+			return m, tea.Batch(tickSpinner(), m.executeServiceStopAsync())
 		}
+		m.ViewState = ViewStateServiceStop
 		return m, nil
 	case ViewStateServiceStopComplete:
 		m.ViewState = ViewStateServiceManagement
@@ -449,11 +443,9 @@ func (m Model) handleSelectAll(selected bool) Model {
 
 func (m Model) handlePlan() (tea.Model, tea.Cmd) {
 	if m.ViewState == ViewStateTree {
-		m.generatePlan()
-		if m.UI.ErrorMessage == "" {
-			m.ViewState = ViewStatePlan
-		}
-		return m, nil
+		m.Loading.Active = true
+		m.Loading.Message = "Generating plan..."
+		return m, tea.Batch(tickSpinner(), m.generatePlanAsync())
 	}
 	if m.ViewState == ViewStateServiceStop {
 		if m.hasSelectedStopServices() {
@@ -465,11 +457,11 @@ func (m Model) handlePlan() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleRefresh() Model {
+func (m Model) handleRefresh() (tea.Model, tea.Cmd) {
 	m.Config = nil
-	m.loadConfig()
-	m.buildTrees()
-	return m
+	m.Loading.Active = true
+	m.Loading.Message = "Reloading config..."
+	return m, tea.Batch(tickSpinner(), m.loadConfigAsync())
 }
 
 func (m *Model) fetchDomainDiffs(ispName string) {
@@ -526,6 +518,61 @@ func (m *Model) fetchDomainDiffs(ispName string) {
 	sort.Slice(m.DNS.DNSPullDiffs, func(i, j int) bool {
 		return m.DNS.DNSPullDiffs[i].Name < m.DNS.DNSPullDiffs[j].Name
 	})
+}
+
+func (m *Model) fetchDomainDiffsAsync(ispName string) tea.Cmd {
+	return func() tea.Msg {
+		isp := m.Config.GetISPMap()[ispName]
+		if isp == nil {
+			return dnsDomainsFetchedMsg{err: fmt.Errorf("ISP '%s' not found", ispName)}
+		}
+
+		provider, err := createDNSProviderFromConfig(isp, m.Config.GetSecretsMap())
+		if err != nil {
+			return dnsDomainsFetchedMsg{err: err}
+		}
+
+		remoteDomains, err := provider.ListDomains()
+		if err != nil {
+			return dnsDomainsFetchedMsg{err: err}
+		}
+
+		localDomainMap := make(map[string]*entity.Domain)
+		for i := range m.Config.Domains {
+			localDomainMap[m.Config.Domains[i].Name] = &m.Config.Domains[i]
+		}
+
+		var diffs []DomainDiff
+		for _, domainName := range remoteDomains {
+			if _, exists := localDomainMap[domainName]; !exists {
+				diffs = append(diffs, DomainDiff{
+					Name:       domainName,
+					DNSISP:     ispName,
+					ChangeType: valueobject.ChangeTypeCreate,
+				})
+			} else {
+				delete(localDomainMap, domainName)
+			}
+		}
+
+		for _, localDomain := range localDomainMap {
+			if localDomain.DNSISP == ispName {
+				diffs = append(diffs, DomainDiff{
+					Name:       localDomain.Name,
+					DNSISP:     localDomain.DNSISP,
+					ISP:        localDomain.ISP,
+					Parent:     localDomain.Parent,
+					ChangeType: valueobject.ChangeTypeDelete,
+				})
+			}
+		}
+
+		sort.Slice(diffs, func(i, j int) bool {
+			return diffs[i].Name < diffs[j].Name
+		})
+
+		return dnsDomainsFetchedMsg{diffs: diffs}
+	}
 }
 
 func (m *Model) fetchRecordDiffs(domainName string) {
@@ -613,6 +660,91 @@ func (m *Model) fetchRecordDiffs(domainName string) {
 		}
 		return m.DNS.DNSRecordDiffs[i].Type < m.DNS.DNSRecordDiffs[j].Type
 	})
+}
+
+func (m *Model) fetchRecordDiffsAsync(domainName string) tea.Cmd {
+	return func() tea.Msg {
+		domain := m.Config.GetDomainMap()[domainName]
+		if domain == nil {
+			return dnsRecordsFetchedMsg{err: fmt.Errorf("domain '%s' not found", domainName)}
+		}
+
+		isp := m.Config.GetISPMap()[domain.DNSISP]
+		if isp == nil {
+			return dnsRecordsFetchedMsg{err: fmt.Errorf("DNS ISP '%s' not found", domain.DNSISP)}
+		}
+
+		provider, err := createDNSProviderFromConfig(isp, m.Config.GetSecretsMap())
+		if err != nil {
+			return dnsRecordsFetchedMsg{err: err}
+		}
+
+		remoteRecords, err := provider.ListRecords(domainName)
+		if err != nil {
+			return dnsRecordsFetchedMsg{err: err}
+		}
+
+		localRecordMap := make(map[string]*entity.DNSRecord)
+		for i := range domain.Records {
+			key := fmt.Sprintf("%s:%s:%s", domain.Records[i].Type, domain.Records[i].Name, domain.Records[i].Value)
+			localRecordMap[key] = &domain.Records[i]
+			localRecordMap[key].Domain = domain.Name
+		}
+
+		var diffs []RecordDiff
+		for _, remote := range remoteRecords {
+			recordName := remote.Name
+			if recordName == domainName || recordName == "" {
+				recordName = "@"
+			} else if strings.HasSuffix(remote.Name, "."+domainName) {
+				recordName = strings.TrimSuffix(remote.Name, "."+domainName)
+			}
+
+			key := fmt.Sprintf("%s:%s:%s", remote.Type, recordName, remote.Value)
+			if local, exists := localRecordMap[key]; exists {
+				if local.TTL != remote.TTL {
+					diffs = append(diffs, RecordDiff{
+						Domain:     domainName,
+						Type:       entity.DNSRecordType(remote.Type),
+						Name:       recordName,
+						Value:      remote.Value,
+						TTL:        remote.TTL,
+						ChangeType: valueobject.ChangeTypeUpdate,
+					})
+				}
+				delete(localRecordMap, key)
+			} else {
+				diffs = append(diffs, RecordDiff{
+					Domain:     domainName,
+					Type:       entity.DNSRecordType(remote.Type),
+					Name:       recordName,
+					Value:      remote.Value,
+					TTL:        remote.TTL,
+					ChangeType: valueobject.ChangeTypeCreate,
+				})
+			}
+		}
+
+		for _, local := range localRecordMap {
+			diffs = append(diffs, RecordDiff{
+				Domain:     local.Domain,
+				Type:       local.Type,
+				Name:       local.Name,
+				Value:      local.Value,
+				TTL:        local.TTL,
+				ChangeType: valueobject.ChangeTypeDelete,
+			})
+		}
+
+		sort.Slice(diffs, func(i, j int) bool {
+			if diffs[i].Name != diffs[j].Name {
+				return diffs[i].Name < diffs[j].Name
+			}
+			return diffs[i].Type < diffs[j].Type
+		})
+
+		return dnsRecordsFetchedMsg{diffs: diffs}
+	}
 }
 
 func (m *Model) saveSelectedDiffs() {

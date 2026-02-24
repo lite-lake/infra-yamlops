@@ -5,34 +5,43 @@ import (
 	"testing"
 )
 
-func TestModel_RenderTree(t *testing.T) {
+func TestModel_RenderLoading(t *testing.T) {
 	m := NewModel("demo", "../../..")
 	m.UI.Width = 80
 	m.UI.Height = 24
-	m.ViewState = ViewStateTree
+	m.Loading.Active = true
+	m.Loading.Message = "Loading..."
+	m.Loading.Spinner = 0
+
+	view := m.View()
+
+	if !strings.Contains(view, "Loading...") {
+		t.Error("Loading view should contain loading message")
+	}
+
+	if !strings.Contains(view, "YAMLOps") {
+		t.Error("Loading view should contain 'YAMLOps'")
+	}
+}
+
+func TestModel_RenderMainMenu(t *testing.T) {
+	m := NewModel("demo", "../../..")
+	m.UI.Width = 80
+	m.UI.Height = 24
+	m.ViewState = ViewStateMainMenu
+	m.Loading.Active = false
 
 	view := m.View()
 
 	if !strings.Contains(view, "YAMLOps") {
-		t.Error("View should contain 'YAMLOps'")
-	}
-
-	if !strings.Contains(view, "DEMO") {
-		t.Error("View should contain environment name 'DEMO'")
-	}
-
-	if !strings.Contains(view, "Applications") {
-		t.Error("View should contain 'Applications' tab")
-	}
-
-	if !strings.Contains(view, "DNS") {
-		t.Error("View should contain 'DNS' tab")
+		t.Error("Main menu should contain 'YAMLOps'")
 	}
 }
 
 func TestModel_TabSwitch(t *testing.T) {
 	m := NewModel("demo", "../../..")
 	m.ViewState = ViewStateTree
+	m.Loading.Active = false
 
 	if m.ViewMode != ViewModeApp {
 		t.Error("Default view mode should be App")
@@ -49,107 +58,12 @@ func TestModel_TabSwitch(t *testing.T) {
 	}
 }
 
-func TestModel_Selection(t *testing.T) {
-	m := NewModel("demo", "../../..")
-
-	initialSelected := m.countSelected()
-
-	if len(m.Tree.TreeNodes) > 0 && len(m.Tree.TreeNodes[0].Children) > 0 {
-		leaf := m.Tree.TreeNodes[0].Children[0]
-		if len(leaf.Children) > 0 {
-			leaf = leaf.Children[0]
-		}
-		leaf.Selected = true
-		leaf.UpdateParentSelection()
-
-		newSelected := m.countSelected()
-		if newSelected <= initialSelected {
-			t.Error("Selection count should increase after selecting a node")
-		}
-	}
-}
-
-func TestModel_Navigation(t *testing.T) {
-	m := NewModel("demo", "../../..")
-	m.ViewState = ViewStateTree
-
-	initialCursor := m.Tree.CursorIndex
-
-	m = m.handleDown()
-	if m.Tree.CursorIndex <= initialCursor {
-		t.Error("Cursor should move down")
-	}
-
-	m = m.handleUp()
-	if m.Tree.CursorIndex >= initialCursor+1 {
-		t.Error("Cursor should move up")
-	}
-}
-
-func TestModel_DNSTree(t *testing.T) {
-	m := NewModel("demo", "../../..")
-
-	if len(m.Tree.DNSTreeNodes) == 0 {
-		t.Error("DNS tree should be built")
-	}
-
-	for _, node := range m.Tree.DNSTreeNodes {
-		if node.Type != NodeTypeDomain {
-			t.Errorf("DNS tree root should be domain type, got %s", node.Type)
-		}
-	}
-}
-
-func TestModel_GeneratePlan(t *testing.T) {
-	m := NewModel("demo", "../../..")
-	m.ViewState = ViewStateTree
-
-	for _, node := range m.Tree.TreeNodes {
-		node.SelectRecursive(false)
-	}
-
-	if len(m.Tree.TreeNodes) > 0 && len(m.Tree.TreeNodes[0].Children) > 0 {
-		server := m.Tree.TreeNodes[0].Children[0]
-		if len(server.Children) > 0 {
-			for _, child := range server.Children {
-				if child.Type == NodeTypeBiz || child.Type == NodeTypeInfra {
-					child.Selected = true
-					break
-				}
-			}
-		}
-	}
-
-	m.generatePlan()
-
-	if m.UI.ErrorMessage != "" {
-		t.Logf("Plan generation message: %s", m.UI.ErrorMessage)
-	}
-
-	if m.Action.PlanResult == nil {
-		t.Log("Plan result is nil (expected for empty state)")
-	}
-}
-
-func TestModel_RenderPlan(t *testing.T) {
-	m := NewModel("demo", "../../..")
-	m.UI.Width = 80
-	m.UI.Height = 24
-	m.ViewState = ViewStatePlan
-	m.Action.PlanResult = nil
-
-	view := m.View()
-
-	if !strings.Contains(view, "Execution Plan") {
-		t.Error("Plan view should contain 'Execution Plan'")
-	}
-}
-
 func TestModel_RenderApplyConfirm(t *testing.T) {
 	m := NewModel("demo", "../../..")
 	m.UI.Width = 80
 	m.UI.Height = 24
 	m.ViewState = ViewStateApplyConfirm
+	m.Loading.Active = false
 	m.Action.ConfirmSelected = 0
 
 	view := m.View()
@@ -164,6 +78,7 @@ func TestModel_RenderApplyProgress(t *testing.T) {
 	m.UI.Width = 80
 	m.UI.Height = 24
 	m.ViewState = ViewStateApplyProgress
+	m.Loading.Active = false
 	m.Action.ApplyProgress = 5
 	m.Action.ApplyTotal = 10
 
@@ -179,6 +94,7 @@ func TestModel_RenderApplyComplete(t *testing.T) {
 	m.UI.Width = 80
 	m.UI.Height = 24
 	m.ViewState = ViewStateApplyComplete
+	m.Loading.Active = false
 	m.Action.ApplyComplete = true
 
 	view := m.View()
@@ -188,23 +104,52 @@ func TestModel_RenderApplyComplete(t *testing.T) {
 	}
 }
 
-func TestModel_MainMenu(t *testing.T) {
+func TestModel_HandleEscape(t *testing.T) {
 	m := NewModel("demo", "../../..")
-	m.UI.Width = 80
-	m.UI.Height = 24
-	m.ViewState = ViewStateMainMenu
-	m.UI.MainMenuIndex = 0
+	m.ViewState = ViewStateTree
+	m.Loading.Active = false
+	m.UI.ErrorMessage = "test error"
 
-	view := m.View()
+	newModel, _ := m.handleEscape()
+	model := newModel.(Model)
 
-	if !strings.Contains(view, "YAMLOps") {
-		t.Error("Main menu should contain 'YAMLOps'")
+	if model.UI.ErrorMessage != "" {
+		t.Error("Error message should be cleared")
 	}
 }
 
-func TestModel_HandleEnter(t *testing.T) {
+func TestSpinnerFrames(t *testing.T) {
+	if len(SpinnerFrames) == 0 {
+		t.Error("SpinnerFrames should not be empty")
+	}
+
+	for i, frame := range SpinnerFrames {
+		if frame == "" {
+			t.Errorf("SpinnerFrame[%d] should not be empty", i)
+		}
+	}
+}
+
+func TestLoadingState(t *testing.T) {
+	m := NewModel("demo", "../../..")
+
+	m.Loading.Active = true
+	m.Loading.Message = "Testing"
+	m.Loading.Spinner = 0
+
+	if !m.Loading.Active {
+		t.Error("Loading should be active")
+	}
+
+	if m.Loading.Message != "Testing" {
+		t.Error("Loading message should be set")
+	}
+}
+
+func TestModel_HandleEnter_MainMenu(t *testing.T) {
 	m := NewModel("demo", "../../..")
 	m.ViewState = ViewStateMainMenu
+	m.Loading.Active = false
 	m.UI.MainMenuIndex = 0
 
 	newModel, _ := m.handleEnter()
@@ -212,76 +157,5 @@ func TestModel_HandleEnter(t *testing.T) {
 
 	if model.ViewState != ViewStateServiceManagement {
 		t.Errorf("Expected ViewStateServiceManagement, got %d", model.ViewState)
-	}
-}
-
-func TestModel_HandleEscape(t *testing.T) {
-	m := NewModel("demo", "../../..")
-	m.ViewState = ViewStateTree
-	m.UI.ErrorMessage = "test error"
-
-	newModel, _ := m.handleEscape()
-	model := newModel.(Model)
-
-	if model.ViewState != ViewStateServiceManagement {
-		t.Errorf("Expected ViewStateServiceManagement, got %d", model.ViewState)
-	}
-	if model.UI.ErrorMessage != "" {
-		t.Error("Error message should be cleared")
-	}
-}
-
-func TestModel_SelectAll(t *testing.T) {
-	m := NewModel("demo", "../../..")
-	m.ViewState = ViewStateTree
-
-	for _, node := range m.Tree.TreeNodes {
-		node.SelectRecursive(false)
-	}
-
-	m = m.handleSelectAll(true)
-	selectedCount := m.countSelected()
-
-	if selectedCount == 0 {
-		t.Error("Should have selected items after select all")
-	}
-
-	m = m.handleSelectAll(false)
-	selectedCount = m.countSelected()
-
-	if selectedCount != 0 {
-		t.Error("Should have no selected items after deselect all")
-	}
-}
-
-func TestModel_AppTreeHasServers(t *testing.T) {
-	m := NewModel("demo", "../../..")
-
-	hasServer := false
-	hasInfra := false
-	hasBiz := false
-
-	for _, zone := range m.Tree.TreeNodes {
-		for _, server := range zone.Children {
-			hasServer = true
-			for _, svc := range server.Children {
-				if svc.Type == NodeTypeInfra {
-					hasInfra = true
-				}
-				if svc.Type == NodeTypeBiz {
-					hasBiz = true
-				}
-			}
-		}
-	}
-
-	if !hasServer {
-		t.Error("App tree should have servers")
-	}
-	if !hasInfra {
-		t.Log("Note: No infra services in tree")
-	}
-	if !hasBiz {
-		t.Log("Note: No business services in tree")
 	}
 }

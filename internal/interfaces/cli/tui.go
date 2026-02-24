@@ -3,31 +3,201 @@ package cli
 import (
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/charmbracelet/bubbletea"
+	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
+func tickSpinner() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		return spinnerTickMsg{t}
+	})
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.UI.Width = msg.Width
 		m.UI.Height = msg.Height
 		return m, nil
+
+	case spinnerTickMsg:
+		if m.Loading.Active {
+			m.Loading.Spinner = (m.Loading.Spinner + 1) % len(SpinnerFrames)
+			return m, tickSpinner()
+		}
+
+	case configLoadedMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Failed to load config: %v", msg.err)
+			return m, nil
+		}
+		m.Config = msg.config
+		for i := range m.Config.Servers {
+			m.Server.ServerList = append(m.Server.ServerList, &m.Config.Servers[i])
+		}
+		m.buildTrees()
+		return m, nil
+
+	case planGeneratedMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Failed to generate plan: %v", msg.err)
+			return m, nil
+		}
+		m.Action.PlanResult = msg.plan
+		m.Action.ApplyTotal = len(msg.plan.Changes)
+		if m.Action.ApplyTotal == 0 {
+			m.Action.ApplyTotal = 1
+		}
+		m.ViewState = ViewStatePlan
+		return m, nil
+
+	case serviceStatusFetchedMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Failed to fetch service status: %v", msg.err)
+			return m, nil
+		}
+		m.Stop.ServiceStatusMap = msg.statusMap
+		m.applyServiceStatusToTree()
+		return m, nil
+
+	case dnsDomainsFetchedMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Failed to fetch domains: %v", msg.err)
+			m.ViewState = ViewStateDNSManagement
+			return m, nil
+		}
+		m.DNS.DNSPullDiffs = msg.diffs
+		if len(m.DNS.DNSPullDiffs) > 0 {
+			m.ViewState = ViewStateDNSPullDiff
+			m.DNS.DNSPullCursor = 0
+			m.DNS.DNSPullSelected = make(map[int]bool)
+			for i, diff := range m.DNS.DNSPullDiffs {
+				if diff.ChangeType == valueobject.ChangeTypeCreate {
+					m.DNS.DNSPullSelected[i] = true
+				}
+			}
+		} else {
+			m.ViewState = ViewStateDNSPullDiff
+		}
+		return m, nil
+
+	case dnsRecordsFetchedMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Failed to fetch records: %v", msg.err)
+			m.ViewState = ViewStateDNSManagement
+			return m, nil
+		}
+		m.DNS.DNSRecordDiffs = msg.diffs
+		if len(m.DNS.DNSRecordDiffs) > 0 {
+			m.ViewState = ViewStateDNSPullDiff
+			m.DNS.DNSPullCursor = 0
+			m.DNS.DNSPullSelected = make(map[int]bool)
+			for i, diff := range m.DNS.DNSRecordDiffs {
+				if diff.ChangeType == valueobject.ChangeTypeCreate || diff.ChangeType == valueobject.ChangeTypeUpdate {
+					m.DNS.DNSPullSelected[i] = true
+				}
+			}
+		} else {
+			m.ViewState = ViewStateDNSPullDiff
+		}
+		return m, nil
+
+	case orphanServicesScannedMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = msg.err.Error()
+			return m, nil
+		}
+		m.Cleanup.CleanupResults = msg.results
+		if m.UI.ErrorMessage == "" {
+			m.ViewState = ViewStateServiceCleanup
+			m.Cleanup.CleanupCursor = 0
+			m.buildCleanupSelected()
+		}
+		return m, nil
+
+	case serverCheckCompleteMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Server check failed: %v", msg.err)
+			return m, nil
+		}
+		m.Server.ServerCheckResults = msg.results
+		m.Server.ServerSyncResults = nil
+		m.ViewState = ViewStateServerCheck
+		return m, nil
+
+	case serverSyncCompleteMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Server sync failed: %v", msg.err)
+			return m, nil
+		}
+		m.Server.ServerSyncResults = msg.results
+		m.Server.ServerCheckResults = nil
+		m.ViewState = ViewStateServerCheck
+		return m, nil
+
+	case serviceCleanupCompleteMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Cleanup failed: %v", msg.err)
+			return m, nil
+		}
+		m.Cleanup.CleanupResults = msg.results
+		m.ViewState = ViewStateServiceCleanupComplete
+		return m, nil
+
+	case serviceStopCompleteMsg:
+		m.Loading.Active = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Stop failed: %v", msg.err)
+			return m, nil
+		}
+		m.Stop.StopResults = msg.results
+		m.ViewState = ViewStateServiceStopComplete
+		return m, nil
+
 	case applyProgressMsg:
 		if m.ViewState == ViewStateApplyProgress && !m.Action.ApplyComplete {
 			if m.Action.ApplyInProgress {
 				m.Action.ApplyProgress++
 				if m.Action.ApplyProgress >= m.Action.ApplyTotal {
-					m.executeApply()
-					m.Action.ApplyInProgress = false
-					m.ViewState = ViewStateApplyComplete
-					return m, nil
+					cmds = append(cmds, m.executeApplyAsync())
+					return m, tea.Batch(cmds...)
 				}
 				return m, tickApply()
 			}
 		}
 		return m, nil
+
+	case applyCompleteAsyncMsg:
+		m.Loading.Active = false
+		m.Action.ApplyResults = msg.results
+		m.Action.ApplyComplete = true
+		m.Action.ApplyInProgress = false
+		if msg.err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Apply failed: %v", msg.err)
+		}
+		m.ViewState = ViewStateApplyComplete
+		return m, nil
+
 	case tea.KeyMsg:
+		if m.Loading.Active {
+			if msg.String() == "ctrl+c" || msg.String() == "q" {
+				return m, tea.Quit
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -64,7 +234,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "p":
 			return m.handlePlan()
 		case "r":
-			return m.handleRefresh(), nil
+			return m.handleRefresh()
 		}
 	}
 	return m, nil

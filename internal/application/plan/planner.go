@@ -5,6 +5,7 @@ import (
 	"github.com/litelake/yamlops/internal/domain/repository"
 	"github.com/litelake/yamlops/internal/domain/service"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/litelake/yamlops/internal/infrastructure/logger"
 	"github.com/litelake/yamlops/internal/infrastructure/state"
 )
 
@@ -73,6 +74,8 @@ func (p *Planner) Plan(scope *valueobject.Scope) (*valueobject.Plan, error) {
 		scope = &valueobject.Scope{}
 	}
 
+	logger.Debug("starting plan generation", "env", p.env)
+
 	plan := valueobject.NewPlanWithScope(scope)
 
 	if !scope.HasAnyServiceSelection() {
@@ -92,11 +95,23 @@ func (p *Planner) Plan(scope *valueobject.Scope) (*valueobject.Plan, error) {
 		p.differService.PlanInfraServices(plan, p.config.GetInfraServiceMap(), p.config.GetServerMap(), scope)
 	}
 
+	logger.Info("plan generated",
+		"changes", len(plan.Changes),
+		"env", p.env,
+	)
+
 	return plan, nil
 }
 
 func (p *Planner) GenerateDeployments() error {
-	return p.deployGen.Generate(p.config)
+	logger.Debug("generating deployments", "env", p.env, "output_dir", p.outputDir)
+	err := p.deployGen.Generate(p.config)
+	if err != nil {
+		logger.Error("deployment generation failed", "error", err)
+	} else {
+		logger.Info("deployments generated", "output_dir", p.outputDir)
+	}
+	return err
 }
 
 func (p *Planner) GetConfig() *entity.Config {

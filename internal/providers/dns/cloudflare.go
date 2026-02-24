@@ -11,6 +11,7 @@ import (
 	"github.com/cloudflare/cloudflare-go/v2/option"
 	"github.com/cloudflare/cloudflare-go/v2/zones"
 	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/litelake/yamlops/internal/infrastructure/logger"
 )
 
 type CloudflareProvider struct {
@@ -43,9 +44,12 @@ func (p *CloudflareProvider) getZoneID(ctx context.Context, domainName string) (
 }
 
 func (p *CloudflareProvider) ListRecords(domainName string) ([]DNSRecord, error) {
+	logger.Debug("listing DNS records", "provider", "cloudflare", "domain", domainName)
+
 	ctx := context.Background()
 	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
+		logger.Error("failed to get zone ID", "domain", domainName, "error", err)
 		return nil, err
 	}
 
@@ -68,12 +72,17 @@ func (p *CloudflareProvider) ListRecords(domainName string) ([]DNSRecord, error)
 		})
 	}
 	if err := pager.Err(); err != nil {
+		logger.Error("failed to list records", "domain", domainName, "error", err)
 		return nil, domainerr.WrapOp("list records", err)
 	}
+
+	logger.Debug("listed DNS records", "provider", "cloudflare", "domain", domainName, "count", len(records))
 	return records, nil
 }
 
 func (p *CloudflareProvider) CreateRecord(domainName string, record *DNSRecord) error {
+	logger.Debug("creating DNS record", "provider", "cloudflare", "domain", domainName, "name", record.Name, "type", record.Type)
+
 	ctx := context.Background()
 	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
@@ -97,12 +106,17 @@ func (p *CloudflareProvider) CreateRecord(domainName string, record *DNSRecord) 
 
 	_, err = p.client.DNS.Records.New(ctx, params)
 	if err != nil {
+		logger.Error("failed to create DNS record", "domain", domainName, "name", record.Name, "error", err)
 		return domainerr.WrapOp("create record", err)
 	}
+
+	logger.Info("DNS record created", "provider", "cloudflare", "domain", domainName, "name", record.Name, "type", record.Type)
 	return nil
 }
 
 func (p *CloudflareProvider) DeleteRecord(domainName string, recordID string) error {
+	logger.Debug("deleting DNS record", "provider", "cloudflare", "domain", domainName, "record_id", recordID)
+
 	ctx := context.Background()
 	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
@@ -113,12 +127,17 @@ func (p *CloudflareProvider) DeleteRecord(domainName string, recordID string) er
 		ZoneID: cloudflare.F(zoneID),
 	})
 	if err != nil {
+		logger.Error("failed to delete DNS record", "domain", domainName, "record_id", recordID, "error", err)
 		return domainerr.WrapOp("delete record", err)
 	}
+
+	logger.Info("DNS record deleted", "provider", "cloudflare", "domain", domainName, "record_id", recordID)
 	return nil
 }
 
 func (p *CloudflareProvider) UpdateRecord(domainName string, recordID string, record *DNSRecord) error {
+	logger.Debug("updating DNS record", "provider", "cloudflare", "domain", domainName, "record_id", recordID, "name", record.Name)
+
 	ctx := context.Background()
 	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
@@ -142,8 +161,11 @@ func (p *CloudflareProvider) UpdateRecord(domainName string, recordID string, re
 
 	_, err = p.client.DNS.Records.Edit(ctx, recordID, params)
 	if err != nil {
+		logger.Error("failed to update DNS record", "domain", domainName, "record_id", recordID, "error", err)
 		return domainerr.WrapOp("update record", err)
 	}
+
+	logger.Info("DNS record updated", "provider", "cloudflare", "domain", domainName, "record_id", recordID)
 	return nil
 }
 

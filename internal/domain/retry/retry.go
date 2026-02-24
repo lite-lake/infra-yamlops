@@ -3,8 +3,9 @@ package retry
 import (
 	"context"
 	"errors"
-	"log"
 	"time"
+
+	"github.com/litelake/yamlops/internal/infrastructure/logger"
 )
 
 var (
@@ -78,7 +79,7 @@ func DefaultIsRetryable(err error) bool {
 }
 
 func defaultOnRetry(attempt int, delay time.Duration, err error) {
-	log.Printf("[retry] attempt %d failed: %v, retrying in %v", attempt, err, delay)
+	logger.Debug("retry attempt", "attempt", attempt, "error", err, "delay", delay)
 }
 
 func Do(ctx context.Context, fn func() error, opts ...Option) error {

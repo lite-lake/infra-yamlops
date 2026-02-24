@@ -1,12 +1,92 @@
 package cli
 
 import (
+	"time"
+
 	"github.com/charmbracelet/bubbletea"
 	"github.com/litelake/yamlops/internal/application/handler"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	serverpkg "github.com/litelake/yamlops/internal/environment"
+	"github.com/litelake/yamlops/internal/providers/dns"
 )
+
+type LoadingState struct {
+	Active      bool
+	Message     string
+	Spinner     int
+	OperationID string
+}
+
+type spinnerTickMsg struct {
+	time.Time
+}
+
+type configLoadedMsg struct {
+	config *entity.Config
+	err    error
+}
+
+type planGeneratedMsg struct {
+	plan *valueobject.Plan
+	err  error
+}
+
+type applyCompleteMsg struct {
+	results []*handler.Result
+	err     error
+}
+
+type serviceStatusFetchedMsg struct {
+	statusMap map[string]NodeStatus
+	err       error
+}
+
+type dnsDomainsFetchedMsg struct {
+	diffs []DomainDiff
+	err   error
+}
+
+type dnsRecordsFetchedMsg struct {
+	diffs []RecordDiff
+	err   error
+}
+
+type orphanServicesScannedMsg struct {
+	results []CleanupResult
+	err     error
+}
+
+type serverCheckCompleteMsg struct {
+	results []serverpkg.CheckResult
+	err     error
+}
+
+type serverSyncCompleteMsg struct {
+	results []serverpkg.SyncResult
+	err     error
+}
+
+type serviceCleanupCompleteMsg struct {
+	results []CleanupResult
+	err     error
+}
+
+type serviceStopCompleteMsg struct {
+	results []StopResult
+	err     error
+}
+
+type dnsProviderCreatedMsg struct {
+	provider dns.Provider
+	ispName  string
+	err      error
+}
+
+type applyCompleteAsyncMsg struct {
+	results []*handler.Result
+	err     error
+}
 
 type Environment string
 
@@ -271,6 +351,7 @@ type Model struct {
 	Cleanup *CleanupState
 	Stop    *StopState
 	Action  *ActionState
+	Loading *LoadingState
 }
 
 func NewModel(env string, configDir string) Model {
@@ -303,16 +384,11 @@ func NewModel(env string, configDir string) Model {
 		Action: &ActionState{
 			PlanScope: &valueobject.Scope{},
 		},
-	}
-	m.loadConfig()
-	if m.Config != nil {
-		for i := range m.Config.Servers {
-			m.Server.ServerList = append(m.Server.ServerList, &m.Config.Servers[i])
-		}
+		Loading: &LoadingState{},
 	}
 	return m
 }
 
 func (m Model) Init() tea.Cmd {
-	return nil
+	return m.loadConfigAsync()
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/litelake/yamlops/internal/constants"
 	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/retry"
+	"github.com/litelake/yamlops/internal/infrastructure/logger"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
@@ -24,6 +25,8 @@ type Client struct {
 }
 
 func NewClient(host string, port int, user, password string) (*Client, error) {
+	logger.Debug("connecting to SSH server", "host", host, "port", port, "user", user)
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		homeDir = os.Getenv("HOME")
@@ -32,6 +35,7 @@ func NewClient(host string, port int, user, password string) (*Client, error) {
 
 	hostKeyCallback, err := createHostKeyCallback(knownHosts)
 	if err != nil {
+		logger.Error("failed to create host key callback", "error", err)
 		return nil, domainerr.WrapOp("create host key callback", domainerr.ErrSSHConnectFailed)
 	}
 
@@ -46,9 +50,11 @@ func NewClient(host string, port int, user, password string) (*Client, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	client, err := ssh.Dial("tcp", addr, config)
 	if err != nil {
+		logger.Error("SSH connection failed", "host", host, "port", port, "error", err)
 		return nil, domainerr.WrapOp("dial", domainerr.ErrSSHConnectFailed)
 	}
 
+	logger.Info("SSH connection established", "host", host, "port", port)
 	return &Client{client: client, user: user}, nil
 }
 
@@ -102,6 +108,8 @@ func NewClientWithRetry(ctx context.Context, host string, port int, user, passwo
 		cfg = DefaultSSHRetryConfig()
 	}
 
+	logger.Debug("SSH connection with retry", "host", host, "port", port, "max_attempts", cfg.MaxAttempts)
+
 	var client *Client
 	err := retry.Do(ctx, func() error {
 		var err error
@@ -109,6 +117,9 @@ func NewClientWithRetry(ctx context.Context, host string, port int, user, passwo
 		return err
 	}, retry.WithMaxAttempts(cfg.MaxAttempts), retry.WithInitialDelay(cfg.InitialDelay), retry.WithMaxDelay(cfg.MaxDelay), retry.WithIsRetryable(IsRetryableSSHError))
 
+	if err != nil {
+		logger.Error("SSH connection with retry failed", "host", host, "error", err)
+	}
 	return client, err
 }
 
@@ -163,8 +174,11 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) Run(cmd string) (stdout, stderr string, err error) {
+	logger.Debug("running SSH command", "cmd", cmd)
+
 	session, err := c.client.NewSession()
 	if err != nil {
+		logger.Error("failed to create SSH session", "error", err)
 		return "", "", domainerr.WrapOp("create session", domainerr.ErrSSHSessionFailed)
 	}
 	defer session.Close()
@@ -174,6 +188,9 @@ func (c *Client) Run(cmd string) (stdout, stderr string, err error) {
 	session.Stderr = &stderrBuf
 
 	err = session.Run(cmd)
+	if err != nil {
+		logger.Debug("SSH command failed", "cmd", cmd, "error", err, "stderr", stderrBuf.String())
+	}
 	return stdoutBuf.String(), stderrBuf.String(), err
 }
 

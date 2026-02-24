@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbletea"
 	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
@@ -251,6 +252,87 @@ func (m *Model) scanOrphanServices() {
 	}
 }
 
+func (m *Model) scanOrphanServicesAsync() tea.Cmd {
+	return func() tea.Msg {
+		var results []CleanupResult
+
+		secrets := m.Config.GetSecretsMap()
+		serviceMap := m.Config.GetServiceMap()
+		infraServiceMap := m.Config.GetInfraServiceMap()
+
+		for _, srv := range m.Server.ServerList {
+			password, err := srv.SSH.Password.Resolve(secrets)
+			if err != nil {
+				return orphanServicesScannedMsg{err: fmt.Errorf("[%s] Cannot resolve password: %v", srv.Name, err)}
+			}
+
+			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			if err != nil {
+				return orphanServicesScannedMsg{err: fmt.Errorf("[%s] Connection failed: %v", srv.Name, err)}
+			}
+
+			containerStdout, _, err := client.Run("sudo docker ps -a --format '{{json .}}'")
+			if err != nil {
+				client.Close()
+				return orphanServicesScannedMsg{err: fmt.Errorf("[%s] Failed to list containers: %v", srv.Name, err)}
+			}
+
+			dirStdout, _, err := client.Run("sudo ls -1 " + constants.RemoteBaseDir + " 2>/dev/null || true")
+			if err != nil {
+				client.Close()
+				return orphanServicesScannedMsg{err: fmt.Errorf("[%s] Failed to list directories: %v", srv.Name, err)}
+			}
+
+			client.Close()
+
+			result := CleanupResult{ServerName: srv.Name}
+
+			for _, line := range strings.Split(strings.TrimSpace(containerStdout), "\n") {
+				if line == "" {
+					continue
+				}
+				var container struct {
+					Name string `json:"Names"`
+				}
+				if err := json.Unmarshal([]byte(line), &container); err != nil {
+					continue
+				}
+
+				if !strings.HasPrefix(container.Name, "yo-"+string(m.Environment)+"-") {
+					continue
+				}
+				serviceName := strings.TrimPrefix(container.Name, "yo-"+string(m.Environment)+"-")
+				_, isService := serviceMap[serviceName]
+				_, isInfraService := infraServiceMap[serviceName]
+				if !isService && !isInfraService {
+					result.OrphanContainers = append(result.OrphanContainers, container.Name)
+				}
+			}
+
+			for _, line := range strings.Split(strings.TrimSpace(dirStdout), "\n") {
+				if line == "" {
+					continue
+				}
+				if !strings.HasPrefix(line, "yo-"+string(m.Environment)+"-") {
+					continue
+				}
+				serviceName := strings.TrimPrefix(line, "yo-"+string(m.Environment)+"-")
+				_, isService := serviceMap[serviceName]
+				_, isInfraService := infraServiceMap[serviceName]
+				if !isService && !isInfraService {
+					result.OrphanDirs = append(result.OrphanDirs, line)
+				}
+			}
+
+			if len(result.OrphanContainers) > 0 || len(result.OrphanDirs) > 0 {
+				results = append(results, result)
+			}
+		}
+
+		return orphanServicesScannedMsg{results: results}
+	}
+}
+
 func (m *Model) executeServiceCleanup() {
 	secrets := m.Config.GetSecretsMap()
 
@@ -308,6 +390,72 @@ func (m *Model) executeServiceCleanup() {
 		}
 
 		client.Close()
+	}
+}
+
+func (m *Model) executeServiceCleanupAsync() tea.Cmd {
+	return func() tea.Msg {
+		secrets := m.Config.GetSecretsMap()
+		results := make([]CleanupResult, len(m.Cleanup.CleanupResults))
+		copy(results, m.Cleanup.CleanupResults)
+
+		for i, result := range results {
+			srv := m.findServerByName(result.ServerName)
+			if srv == nil {
+				continue
+			}
+
+			password, err := srv.SSH.Password.Resolve(secrets)
+			if err != nil {
+				for _, c := range result.OrphanContainers {
+					results[i].FailedContainers = append(results[i].FailedContainers, c)
+				}
+				for _, d := range result.OrphanDirs {
+					results[i].FailedDirs = append(results[i].FailedDirs, d)
+				}
+				continue
+			}
+
+			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			if err != nil {
+				for _, c := range result.OrphanContainers {
+					results[i].FailedContainers = append(results[i].FailedContainers, c)
+				}
+				for _, d := range result.OrphanDirs {
+					results[i].FailedDirs = append(results[i].FailedDirs, d)
+				}
+				continue
+			}
+
+			itemIndex := m.getServerCleanupStartIndex(i)
+			for _, container := range result.OrphanContainers {
+				if m.Cleanup.CleanupSelected[itemIndex] {
+					_, stderr, err := client.Run(fmt.Sprintf("sudo docker rm -f %s", container))
+					if err != nil {
+						results[i].FailedContainers = append(results[i].FailedContainers, container+": "+stderr)
+					} else {
+						results[i].RemovedContainers = append(results[i].RemovedContainers, container)
+					}
+				}
+				itemIndex++
+			}
+			for _, dir := range result.OrphanDirs {
+				if m.Cleanup.CleanupSelected[itemIndex] {
+					remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, dir)
+					_, stderr, err := client.Run(fmt.Sprintf("sudo rm -rf %s", remoteDir))
+					if err != nil {
+						results[i].FailedDirs = append(results[i].FailedDirs, dir+": "+stderr)
+					} else {
+						results[i].RemovedDirs = append(results[i].RemovedDirs, dir)
+					}
+				}
+				itemIndex++
+			}
+
+			client.Close()
+		}
+
+		return serviceCleanupCompleteMsg{results: results}
 	}
 }
 
