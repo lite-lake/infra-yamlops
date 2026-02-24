@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
@@ -194,7 +195,7 @@ func TestBaseDeps_SSHClient(t *testing.T) {
 	t.Run("server not registered", func(t *testing.T) {
 		d := NewBaseDeps()
 		_, err := d.SSHClient("unknown")
-		if !errors.Is(err, ErrServerNotRegistered) {
+		if !errors.Is(err, domainerr.ErrServerNotRegistered) {
 			t.Errorf("expected ErrServerNotRegistered, got %v", err)
 		}
 	})
@@ -203,7 +204,7 @@ func TestBaseDeps_SSHClient(t *testing.T) {
 		d := NewBaseDeps()
 		d.SetServers(map[string]*ServerInfo{"server1": {}})
 		_, err := d.SSHClient("server1")
-		if !errors.Is(err, ErrSSHClientNotAvailable) {
+		if !errors.Is(err, domainerr.ErrSSHClientNotAvailable) {
 			t.Errorf("expected ErrSSHClientNotAvailable, got %v", err)
 		}
 	})
@@ -315,7 +316,7 @@ func TestBaseDeps_DNSProvider(t *testing.T) {
 	t.Run("ISP not found", func(t *testing.T) {
 		d := NewBaseDeps()
 		_, err := d.DNSProvider("nonexistent")
-		if !errors.Is(err, ErrISPNotFound) {
+		if !errors.Is(err, domainerr.ErrISPNotFound) {
 			t.Errorf("expected ErrISPNotFound, got %v", err)
 		}
 	})
@@ -326,7 +327,7 @@ func TestBaseDeps_DNSProvider(t *testing.T) {
 			"isp1": {Name: "isp1", Services: []entity.ISPService{"server"}},
 		})
 		_, err := d.DNSProvider("isp1")
-		if !errors.Is(err, ErrISPNoDNSService) {
+		if !errors.Is(err, domainerr.ErrISPNoDNSService) {
 			t.Errorf("expected ErrISPNoDNSService, got %v", err)
 		}
 	})

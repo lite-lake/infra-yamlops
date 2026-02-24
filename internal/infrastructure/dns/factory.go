@@ -3,6 +3,7 @@ package dns
 import (
 	"fmt"
 
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	dnsprovider "github.com/litelake/yamlops/internal/providers/dns"
@@ -27,7 +28,7 @@ func NewFactory() *Factory {
 func (f *Factory) Create(isp *entity.ISP, secrets map[string]string) (dnsprovider.Provider, error) {
 	creator, ok := f.creators[string(isp.Type)]
 	if !ok {
-		return nil, fmt.Errorf("unsupported provider type: %s", isp.Type)
+		return nil, fmt.Errorf("%w: %s", domainerr.ErrUnsupportedProvider, isp.Type)
 	}
 	return creator(isp, secrets)
 }
@@ -39,7 +40,7 @@ func (f *Factory) Register(providerType string, creator CreatorFunc) {
 func resolveCredential(creds map[string]valueobject.SecretRef, key string, secrets map[string]string) (string, error) {
 	ref, ok := creds[key]
 	if !ok {
-		return "", fmt.Errorf("missing credential: %s", key)
+		return "", fmt.Errorf("%w: %s", domainerr.ErrMissingCredential, key)
 	}
 	return ref.Resolve(secrets)
 }

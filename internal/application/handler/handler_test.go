@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/registry"
@@ -146,13 +147,13 @@ func (m *mockDeps) ISP(name string) (*entity.ISP, bool) {
 
 func (m *mockDeps) SSHClient(server string) (SSHClient, error) {
 	if _, ok := m.servers[server]; !ok {
-		return nil, ErrServerNotRegistered
+		return nil, domainerr.ErrServerNotRegistered
 	}
 	if m.sshErr != nil {
 		return nil, m.sshErr
 	}
 	if m.sshClient == nil {
-		return nil, ErrSSHClientNotAvailable
+		return nil, domainerr.ErrSSHClientNotAvailable
 	}
 	return m.sshClient, nil
 }

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
 )
 
@@ -64,7 +65,7 @@ func (m *Manager) EnsureLoggedIn(registryName string) (*LoginResult, error) {
 			Name:    registryName,
 			Success: false,
 			Message: "registry not found in config",
-		}, fmt.Errorf("registry %s not found", registryName)
+		}, fmt.Errorf("%w: %s", domainerr.ErrRegistryNotFound, registryName)
 	}
 
 	if m.isLoggedIn(registry) {
@@ -146,7 +147,7 @@ func (m *Manager) login(r *entity.Registry) (*LoginResult, error) {
 			Name:    r.Name,
 			Success: false,
 			Message: "docker login failed",
-			Error:   fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr)),
+			Error:   fmt.Errorf("%w: %s", domainerr.ErrRegistryLoginFailed, strings.TrimSpace(stderr)),
 		}, err
 	}
 
@@ -163,7 +164,7 @@ func (m *Manager) login(r *entity.Registry) (*LoginResult, error) {
 func (m *Manager) GetRegistryURL(registryName string) (string, error) {
 	registry, ok := m.registries[registryName]
 	if !ok {
-		return "", fmt.Errorf("registry %s not found", registryName)
+		return "", fmt.Errorf("%w: %s", domainerr.ErrRegistryNotFound, registryName)
 	}
 	return registry.URL, nil
 }

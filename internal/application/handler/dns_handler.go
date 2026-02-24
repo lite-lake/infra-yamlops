@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/providers/dns"
@@ -31,13 +32,13 @@ func (h *DNSHandler) Apply(ctx context.Context, change *valueobject.Change, deps
 
 	domain, ok := deps.Domain(record.Domain)
 	if !ok {
-		result.Error = fmt.Errorf("domain %s not found", record.Domain)
+		result.Error = fmt.Errorf("%w: %s", domainerr.ErrDNSDomainNotFound, record.Domain)
 		return result, nil
 	}
 
 	provider, err := deps.DNSProvider(domain.DNSISP)
 	if err != nil {
-		result.Error = fmt.Errorf("failed to get DNS provider: %w", err)
+		result.Error = fmt.Errorf("get DNS provider: %w", err)
 		return result, nil
 	}
 
@@ -76,7 +77,7 @@ func (h *DNSHandler) createRecord(change *valueobject.Change, record *entity.DNS
 	}
 
 	if err := provider.CreateRecord(record.Domain, dnsRecord); err != nil {
-		result.Error = fmt.Errorf("failed to create record: %w", err)
+		result.Error = fmt.Errorf("%w: create record: %w", domainerr.ErrDNSError, err)
 		return result, nil
 	}
 
@@ -90,7 +91,7 @@ func (h *DNSHandler) updateRecord(change *valueobject.Change, record *entity.DNS
 
 	existingRecords, err := provider.ListRecords(record.Domain)
 	if err != nil {
-		result.Error = fmt.Errorf("failed to list existing records: %w", err)
+		result.Error = fmt.Errorf("%w: list existing records: %w", domainerr.ErrDNSError, err)
 		return result, nil
 	}
 
@@ -104,7 +105,7 @@ func (h *DNSHandler) updateRecord(change *valueobject.Change, record *entity.DNS
 	for _, r := range existingRecords {
 		if r.Name == record.Name && strings.EqualFold(r.Type, string(record.Type)) {
 			if err := provider.UpdateRecord(record.Domain, r.ID, dnsRecord); err != nil {
-				result.Error = fmt.Errorf("failed to update record: %w", err)
+				result.Error = fmt.Errorf("%w: update record: %w", domainerr.ErrDNSError, err)
 				return result, nil
 			}
 			result.Success = true
@@ -114,7 +115,7 @@ func (h *DNSHandler) updateRecord(change *valueobject.Change, record *entity.DNS
 	}
 
 	if err := provider.CreateRecord(record.Domain, dnsRecord); err != nil {
-		result.Error = fmt.Errorf("failed to create record: %w", err)
+		result.Error = fmt.Errorf("%w: create record: %w", domainerr.ErrDNSError, err)
 		return result, nil
 	}
 
@@ -128,14 +129,14 @@ func (h *DNSHandler) deleteRecord(change *valueobject.Change, record *entity.DNS
 
 	existingRecords, err := provider.ListRecords(record.Domain)
 	if err != nil {
-		result.Error = fmt.Errorf("failed to list existing records: %w", err)
+		result.Error = fmt.Errorf("%w: list existing records: %w", domainerr.ErrDNSError, err)
 		return result, nil
 	}
 
 	for _, r := range existingRecords {
 		if r.Name == record.Name && strings.EqualFold(r.Type, string(record.Type)) {
 			if err := provider.DeleteRecord(record.Domain, r.ID); err != nil {
-				result.Error = fmt.Errorf("failed to delete record: %w", err)
+				result.Error = fmt.Errorf("%w: delete record: %w", domainerr.ErrDNSError, err)
 				return result, nil
 			}
 			result.Success = true

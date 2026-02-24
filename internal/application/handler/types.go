@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/registry"
@@ -102,13 +103,13 @@ func (d *BaseDeps) GetAllRegistries() []*entity.Registry {
 
 func (d *BaseDeps) RegistryManager(server string) (*registry.Manager, error) {
 	if _, ok := d.servers[server]; !ok {
-		return nil, ErrServerNotRegistered
+		return nil, domainerr.ErrServerNotRegistered
 	}
 	if d.sshClient == nil {
 		if d.sshError != nil {
 			return nil, d.sshError
 		}
-		return nil, ErrSSHClientNotAvailable
+		return nil, domainerr.ErrSSHClientNotAvailable
 	}
 
 	// Convert map to slice
@@ -123,10 +124,10 @@ func (d *BaseDeps) RegistryManager(server string) (*registry.Manager, error) {
 func (d *BaseDeps) DNSProvider(ispName string) (DNSProvider, error) {
 	isp, ok := d.isps[ispName]
 	if !ok {
-		return nil, ErrISPNotFound
+		return nil, domainerr.ErrISPNotFound
 	}
 	if !isp.HasService(entity.ISPServiceDNS) {
-		return nil, ErrISPNoDNSService
+		return nil, domainerr.ErrISPNoDNSService
 	}
 	provider, err := d.dnsFactory.Create(isp, d.secrets)
 	if err != nil {
@@ -147,13 +148,13 @@ func (d *BaseDeps) ISP(name string) (*entity.ISP, bool) {
 
 func (d *BaseDeps) SSHClient(server string) (SSHClient, error) {
 	if _, ok := d.servers[server]; !ok {
-		return nil, ErrServerNotRegistered
+		return nil, domainerr.ErrServerNotRegistered
 	}
 	if d.sshClient == nil {
 		if d.sshError != nil {
 			return nil, d.sshError
 		}
-		return nil, ErrSSHClientNotAvailable
+		return nil, domainerr.ErrSSHClientNotAvailable
 	}
 	return d.sshClient, nil
 }

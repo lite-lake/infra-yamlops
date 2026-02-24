@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
 )
 
@@ -31,7 +32,7 @@ func (m *Manager) List() ([]NetworkInfo, error) {
 	cmd := "sudo docker network ls --format '{{.Name}}|{{.Driver}}|{{.Scope}}'"
 	stdout, stderr, err := m.client.Run(cmd)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list networks: %w, stderr: %s", err, stderr)
+		return nil, fmt.Errorf("%w: %w, stderr: %s", domainerr.ErrNetworkListFailed, err, stderr)
 	}
 
 	var networks []NetworkInfo
@@ -69,7 +70,7 @@ func (m *Manager) Inspect(name string) (*NetworkInfo, error) {
 	cmd := fmt.Sprintf("sudo docker network inspect %s --format '{{json .}}'", ShellEscape(name))
 	stdout, stderr, err := m.client.Run(cmd)
 	if err != nil {
-		return nil, fmt.Errorf("failed to inspect network %s: %w, stderr: %s", name, err, stderr)
+		return nil, fmt.Errorf("%w: %s: %w, stderr: %s", domainerr.ErrNetworkInspectFailed, name, err, stderr)
 	}
 
 	var raw struct {
@@ -78,7 +79,7 @@ func (m *Manager) Inspect(name string) (*NetworkInfo, error) {
 		Scope  string `json:"Scope"`
 	}
 	if err := json.Unmarshal([]byte(stdout), &raw); err != nil {
-		return nil, fmt.Errorf("failed to parse network inspect result: %w", err)
+		return nil, fmt.Errorf("%w: %w", domainerr.ErrNetworkInspectFailed, err)
 	}
 
 	return &NetworkInfo{
@@ -93,7 +94,7 @@ func (m *Manager) Create(spec *entity.ServerNetwork) error {
 	cmd := fmt.Sprintf("sudo docker network create --driver %s %s", ShellEscape(driver), ShellEscape(spec.Name))
 	_, stderr, err := m.client.Run(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to create network %s: %w, stderr: %s", spec.Name, err, stderr)
+		return fmt.Errorf("%w: %s: %w, stderr: %s", domainerr.ErrNetworkCreateFailed, spec.Name, err, stderr)
 	}
 	return nil
 }
@@ -101,7 +102,7 @@ func (m *Manager) Create(spec *entity.ServerNetwork) error {
 func (m *Manager) Ensure(spec *entity.ServerNetwork) error {
 	exists, err := m.Exists(spec.Name)
 	if err != nil {
-		return fmt.Errorf("failed to check network existence: %w", err)
+		return fmt.Errorf("%w: %w", domainerr.ErrNetworkCheckFailed, err)
 	}
 	if exists {
 		return nil

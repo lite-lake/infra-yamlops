@@ -1,19 +1,12 @@
 package handler
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
 	"github.com/litelake/yamlops/internal/constants"
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
-)
-
-var (
-	ErrSSHClientNotAvailable = errors.New("SSH client not available")
-	ErrISPNotFound           = errors.New("ISP not found")
-	ErrISPNoDNSService       = errors.New("ISP does not provide DNS service")
-	ErrServerNotRegistered   = errors.New("server not registered")
 )
 
 func ExtractServerFromChange(ch *valueobject.Change) string {
@@ -45,15 +38,15 @@ func ExtractServerFromChange(ch *valueobject.Change) string {
 func SyncContent(client SSHClient, content, remotePath string) error {
 	tmpFile, err := os.CreateTemp("", constants.TempFilePattern)
 	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
+		return fmt.Errorf("syncing to %s: %w: %w", remotePath, domainerr.ErrTempFileFailed, err)
 	}
 	defer os.Remove(tmpFile.Name())
 
 	if _, err := tmpFile.WriteString(content); err != nil {
-		return fmt.Errorf("failed to write temp file: %w", err)
+		return fmt.Errorf("syncing to %s: %w: %w", remotePath, domainerr.ErrTempFileFailed, err)
 	}
 	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %w", err)
+		return fmt.Errorf("syncing to %s: %w: %w", remotePath, domainerr.ErrTempFileFailed, err)
 	}
 
 	return client.UploadFileSudo(tmpFile.Name(), remotePath)

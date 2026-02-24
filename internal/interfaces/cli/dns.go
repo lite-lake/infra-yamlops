@@ -128,10 +128,7 @@ func runDNSApply(ctx *Context, domain, record string, autoApprove bool) {
 	displayChanges(dnsChanges)
 
 	if !autoApprove {
-		fmt.Print("\nProceed? (y/N): ")
-		var response string
-		fmt.Scanln(&response)
-		if strings.ToLower(response) != "y" {
+		if !Confirm("\nProceed?", false) {
 			fmt.Println("Cancelled.")
 			return
 		}

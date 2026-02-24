@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
@@ -29,7 +30,7 @@ func (h *InfraServiceHandler) Apply(ctx context.Context, change *valueobject.Cha
 
 	if _, ok := deps.ServerInfo(deployCtx.ServerName); !ok {
 		result = &Result{Change: change, Success: false}
-		result.Error = fmt.Errorf("server %s not registered", deployCtx.ServerName)
+		result.Error = fmt.Errorf("%w: %s", domainerr.ErrServerNotRegistered, deployCtx.ServerName)
 		return result, nil
 	}
 
@@ -75,11 +76,11 @@ func (h *InfraServiceHandler) deployGatewayType(serviceName string, deployCtx *S
 
 	content, err := os.ReadFile(gatewayFile)
 	if err != nil {
-		return fmt.Errorf("failed to read gateway file: %w", err)
+		return fmt.Errorf("%w: gateway file %s: %w", domainerr.ErrFileReadFailed, gatewayFile, err)
 	}
 
 	if err := SyncContent(deployCtx.Client, string(content), deployCtx.RemoteDir+"/gateway.yml"); err != nil {
-		return fmt.Errorf("failed to sync gateway file: %w", err)
+		return fmt.Errorf("%w: gateway file %s to %s/gateway.yml: %w", domainerr.ErrComposeSyncFailed, gatewayFile, deployCtx.RemoteDir, err)
 	}
 
 	return nil
@@ -96,20 +97,20 @@ func (h *InfraServiceHandler) deploySSLType(infra *entity.InfraService, deployCt
 	}
 
 	if _, err := os.Stat(sslConfigFile); os.IsNotExist(err) {
-		return fmt.Errorf("ssl config file not found: %s", sslConfigFile)
+		return fmt.Errorf("%w: %s", domainerr.ErrFileNotFound, sslConfigFile)
 	}
 
 	content, err := os.ReadFile(sslConfigFile)
 	if err != nil {
-		return fmt.Errorf("failed to read ssl config file: %w", err)
+		return fmt.Errorf("%w: SSL config file %s: %w", domainerr.ErrFileReadFailed, sslConfigFile, err)
 	}
 
 	if err := deployCtx.Client.MkdirAllSudoWithPerm(deployCtx.RemoteDir+"/ssl-config", "755"); err != nil {
-		return fmt.Errorf("failed to create ssl-config directory: %w", err)
+		return fmt.Errorf("%w: ssl-config directory at %s/ssl-config: %w", domainerr.ErrDirectoryCreateFailed, deployCtx.RemoteDir, err)
 	}
 
 	if err := SyncContent(deployCtx.Client, string(content), deployCtx.RemoteDir+"/ssl-config/config.yml"); err != nil {
-		return fmt.Errorf("failed to sync ssl config file: %w", err)
+		return fmt.Errorf("%w: SSL config file %s to %s/ssl-config/config.yml: %w", domainerr.ErrComposeSyncFailed, sslConfigFile, deployCtx.RemoteDir, err)
 	}
 
 	return nil

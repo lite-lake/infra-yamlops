@@ -150,16 +150,16 @@ func NewClientWithRetry(ctx context.Context, host string, port int, user, passwo
 func createHostKeyCallback(knownHostsPath string, strict bool) (ssh.HostKeyCallback, error) {
 	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(filepath.Dir(knownHostsPath), 0700); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("creating known_hosts directory %s: %w", filepath.Dir(knownHostsPath), err)
 		}
 		if err := os.WriteFile(knownHostsPath, []byte{}, 0600); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("creating known_hosts file %s: %w", knownHostsPath, err)
 		}
 	}
 
 	callback, err := knownhosts.New(knownHostsPath)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("loading known_hosts from %s: %w", knownHostsPath, err)
 	}
 
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {

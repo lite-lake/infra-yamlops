@@ -3,6 +3,7 @@ package compose
 import (
 	"fmt"
 
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"gopkg.in/yaml.v3"
 )
 
@@ -14,13 +15,13 @@ func NewGenerator() *Generator {
 
 func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 	if svc == nil {
-		return "", fmt.Errorf("service cannot be nil")
+		return "", fmt.Errorf("%w: service cannot be nil", domainerr.ErrServiceInvalid)
 	}
 	if svc.Name == "" {
-		return "", fmt.Errorf("service name cannot be empty")
+		return "", fmt.Errorf("%w: service name cannot be empty", domainerr.ErrRequired)
 	}
 	if svc.Image == "" {
-		return "", fmt.Errorf("service image cannot be empty")
+		return "", fmt.Errorf("%w: service image cannot be empty", domainerr.ErrRequired)
 	}
 	if env == "" {
 		env = "dev"
@@ -61,7 +62,7 @@ func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 
 	data, err := yaml.Marshal(&compose)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal compose file: %w", err)
+		return "", fmt.Errorf("%w: %w", domainerr.ErrComposeGenerateFailed, err)
 	}
 
 	return string(data), nil

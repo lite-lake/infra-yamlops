@@ -32,12 +32,13 @@ var (
 	ErrConnectionRefused  = errors.New("connection refused")
 	ErrConnectionReset    = errors.New("connection reset")
 
-	ErrSSHConnectFailed   = errors.New("SSH connection failed")
-	ErrSSHAuthFailed      = errors.New("SSH authentication failed")
-	ErrSSHSessionFailed   = errors.New("SSH session creation failed")
-	ErrSSHCommandFailed   = errors.New("SSH command execution failed")
-	ErrSSHHostKeyMismatch = errors.New("SSH host key mismatch")
-	ErrSSHFileTransfer    = errors.New("SSH file transfer failed")
+	ErrSSHConnectFailed      = errors.New("SSH connection failed")
+	ErrSSHAuthFailed         = errors.New("SSH authentication failed")
+	ErrSSHSessionFailed      = errors.New("SSH session creation failed")
+	ErrSSHCommandFailed      = errors.New("SSH command execution failed")
+	ErrSSHHostKeyMismatch    = errors.New("SSH host key mismatch")
+	ErrSSHFileTransfer       = errors.New("SSH file transfer failed")
+	ErrSSHClientNotAvailable = errors.New("SSH client not available")
 
 	ErrConfigReadFailed   = errors.New("config read failed")
 	ErrConfigParseFailed  = errors.New("config parse failed")
@@ -53,6 +54,31 @@ var (
 	ErrDNSRecordExists   = errors.New("DNS record already exists")
 	ErrDNSRecordNotFound = errors.New("DNS record not found")
 	ErrDNSDomainNotFound = errors.New("DNS domain not found")
+
+	ErrISPNotFound         = errors.New("ISP not found")
+	ErrISPNoDNSService     = errors.New("ISP does not provide DNS service")
+	ErrServerNotRegistered = errors.New("server not registered")
+	ErrRegistryNotFound    = errors.New("registry not found")
+	ErrRegistryLoginFailed = errors.New("registry login failed")
+	ErrUnsupportedProvider = errors.New("unsupported provider type")
+	ErrMissingCredential   = errors.New("missing credential")
+
+	ErrFileReadFailed        = errors.New("file read failed")
+	ErrFileWriteFailed       = errors.New("file write failed")
+	ErrFileNotFound          = errors.New("file not found")
+	ErrTempFileFailed        = errors.New("temp file operation failed")
+	ErrDirectoryCreateFailed = errors.New("directory creation failed")
+	ErrDirectoryRemoveFailed = errors.New("directory removal failed")
+
+	ErrNetworkCreateFailed  = errors.New("network creation failed")
+	ErrNetworkInspectFailed = errors.New("network inspection failed")
+	ErrNetworkListFailed    = errors.New("network list failed")
+	ErrNetworkCheckFailed   = errors.New("network check failed")
+
+	ErrComposeGenerateFailed = errors.New("compose generation failed")
+	ErrComposeSyncFailed     = errors.New("compose sync failed")
+	ErrDockerComposeFailed   = errors.New("docker compose failed")
+	ErrServiceInvalid        = errors.New("service invalid")
 )
 
 func RequiredField(field string) error {

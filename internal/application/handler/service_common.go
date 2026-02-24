@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/litelake/yamlops/internal/constants"
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/network"
@@ -18,7 +19,7 @@ type NetworkGetter interface {
 func GetRequiredNetworks(change *valueobject.Change, deps DepsProvider, serverName string) ([]entity.ServerNetwork, error) {
 	server, ok := deps.Server(serverName)
 	if !ok {
-		return nil, fmt.Errorf("server %s not found", serverName)
+		return nil, fmt.Errorf("%w: %s", domainerr.ErrServerNotRegistered, serverName)
 	}
 
 	var serviceNetworks []string
@@ -61,7 +62,7 @@ func EnsureNetworks(client SSHClient, networks []entity.ServerNetwork) error {
 	netMgr := network.NewManager(client)
 	for _, netSpec := range networks {
 		if err := netMgr.Ensure(&netSpec); err != nil {
-			return fmt.Errorf("failed to ensure network %s: %w", netSpec.Name, err)
+			return fmt.Errorf("ensure network %s: %w", netSpec.Name, err)
 		}
 	}
 	return nil
@@ -76,7 +77,7 @@ func DeleteServiceRemote(change *valueobject.Change, client SSHClient, remoteDir
 	rmCmd := fmt.Sprintf("sudo rm -rf %s", remoteDir)
 	stdout2, stderr2, err := client.Run(rmCmd)
 	if err != nil {
-		result.Error = fmt.Errorf("failed to remove directory: %w, stderr: %s", err, stderr2)
+		result.Error = fmt.Errorf("%w: %w, stderr: %s", domainerr.ErrDirectoryRemoveFailed, err, stderr2)
 		result.Output = stdout + "\n" + stderr + "\n" + stdout2 + "\n" + stderr2
 		return result, nil
 	}
@@ -113,18 +114,18 @@ func DeployComposeFile(client SSHClient, cfg *DeployComposeConfig, result *Resul
 
 	content, err := os.ReadFile(cfg.ComposeFile)
 	if err != nil {
-		result.Error = fmt.Errorf("failed to read compose file: %w", err)
+		result.Error = fmt.Errorf("%w: compose file %s: %w", domainerr.ErrFileReadFailed, cfg.ComposeFile, err)
 		return false
 	}
 	if err := SyncContent(client, string(content), cfg.RemoteDir+"/docker-compose.yml"); err != nil {
-		result.Error = fmt.Errorf("failed to sync compose file: %w", err)
+		result.Error = fmt.Errorf("%w: compose file %s to %s/docker-compose.yml: %w", domainerr.ErrComposeSyncFailed, cfg.ComposeFile, cfg.RemoteDir, err)
 		return false
 	}
 
 	pullCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml pull", cfg.RemoteDir)
 	_, pullStderr, pullErr := client.Run(pullCmd)
 	if pullErr != nil {
-		result.Warnings = append(result.Warnings, fmt.Sprintf("镜像拉取失败: %s", pullStderr))
+		result.Warnings = append(result.Warnings, fmt.Sprintf("image pull failed: %s", pullStderr))
 	}
 
 	var cmd string
@@ -137,7 +138,7 @@ func DeployComposeFile(client SSHClient, cfg *DeployComposeConfig, result *Resul
 
 	stdout, stderr, err := client.Run(cmd)
 	if err != nil {
-		result.Error = fmt.Errorf("failed to run docker compose: %w, stderr: %s", err, stderr)
+		result.Error = fmt.Errorf("%w: in %s: %w, stderr: %s", domainerr.ErrDockerComposeFailed, cfg.RemoteDir, err, stderr)
 		result.Output = stdout + "\n" + stderr
 		return false
 	}
@@ -205,12 +206,12 @@ func ExecuteServiceDeploy(change *valueobject.Change, ctx *ServiceDeployContext,
 	}
 
 	if err := EnsureNetworks(ctx.Client, requiredNetworks); err != nil {
-		result.Error = err
+		result.Error = fmt.Errorf("ensuring networks on server %s: %w", ctx.ServerName, err)
 		return result, nil
 	}
 
 	if err := EnsureRemoteDir(ctx.Client, ctx.RemoteDir); err != nil {
-		result.Error = fmt.Errorf("failed to create remote directory: %w", err)
+		result.Error = fmt.Errorf("%w: %s: %w", domainerr.ErrDirectoryCreateFailed, ctx.RemoteDir, err)
 		return result, nil
 	}
 

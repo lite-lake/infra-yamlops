@@ -155,10 +155,7 @@ func runAppApply(ctx *Context, filters AppFilters, autoApprove bool) {
 	}
 
 	if !autoApprove {
-		fmt.Print("Do you want to apply these changes? (y/N): ")
-		var response string
-		fmt.Scanln(&response)
-		if strings.ToLower(response) != "y" {
+		if !Confirm("Do you want to apply these changes?", false) {
 			fmt.Println("Cancelled.")
 			return
 		}

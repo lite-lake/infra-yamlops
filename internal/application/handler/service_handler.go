@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
@@ -51,19 +52,19 @@ func (h *ServiceHandler) createRegistryLoginHook(change *valueobject.Change, dep
 
 		registryMgr, err := deps.RegistryManager(serverName)
 		if err != nil {
-			result.Error = fmt.Errorf("failed to get registry manager: %w", err)
+			result.Error = fmt.Errorf("get registry manager: %w", err)
 			return err
 		}
 
 		loginResult, err := registryMgr.EnsureLoggedIn(registryName)
 		if err != nil {
-			result.Error = fmt.Errorf("failed to login registry %s: %w", registryName, err)
+			result.Error = fmt.Errorf("login registry %s: %w", registryName, err)
 			return err
 		}
 
 		if !loginResult.Success {
-			result.Error = fmt.Errorf("registry login failed: %s", loginResult.Message)
-			return fmt.Errorf("registry login failed")
+			result.Error = fmt.Errorf("%w: %s", domainerr.ErrRegistryLoginFailed, loginResult.Message)
+			return fmt.Errorf("%w: %s", domainerr.ErrRegistryLoginFailed, loginResult.Message)
 		}
 
 		return nil

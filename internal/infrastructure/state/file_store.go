@@ -22,12 +22,12 @@ func NewFileStore(path string) *FileStore {
 func (s *FileStore) Load() (*repository.DeploymentState, error) {
 	data, err := os.ReadFile(s.path)
 	if err != nil {
-		return nil, domain.WrapOp("read state file", domain.ErrStateReadFailed)
+		return nil, fmt.Errorf("reading state file %s: %w", s.path, domain.WrapOp("read state file", domain.ErrStateReadFailed))
 	}
 
 	var cfg entity.Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, domain.WrapOp("parse state file", domain.ErrStateSerializeFail)
+		return nil, fmt.Errorf("parsing state file %s: %w", s.path, domain.WrapOp("parse state file", domain.ErrStateSerializeFail))
 	}
 
 	state := repository.NewDeploymentState()
@@ -90,17 +90,17 @@ func (s *FileStore) Save(state *repository.DeploymentState) error {
 
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
-		return domain.WrapOp("marshal state", domain.ErrStateSerializeFail)
+		return fmt.Errorf("marshaling state for %s: %w", s.path, domain.WrapOp("marshal state", domain.ErrStateSerializeFail))
 	}
 
 	tmpPath := filepath.Join(filepath.Dir(s.path), "."+filepath.Base(s.path)+".tmp")
 	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
-		return domain.WrapOp("write temp state file", domain.ErrStateWriteFailed)
+		return fmt.Errorf("writing temp state file %s: %w", tmpPath, domain.WrapOp("write temp state file", domain.ErrStateWriteFailed))
 	}
 
 	if err := os.Rename(tmpPath, s.path); err != nil {
 		os.Remove(tmpPath)
-		return domain.WrapOp("rename state file", domain.ErrStateWriteFailed)
+		return fmt.Errorf("renaming state file from %s to %s: %w", tmpPath, s.path, domain.WrapOp("rename state file", domain.ErrStateWriteFailed))
 	}
 
 	return nil

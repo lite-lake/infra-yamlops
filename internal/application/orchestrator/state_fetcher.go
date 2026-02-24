@@ -9,6 +9,7 @@ import (
 	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/repository"
+	"github.com/litelake/yamlops/internal/infrastructure/logger"
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
 
@@ -37,11 +38,13 @@ func (f *StateFetcher) Fetch(ctx context.Context, cfg *entity.Config) *repositor
 
 		password, err := srv.SSH.Password.Resolve(secrets)
 		if err != nil {
+			logger.Warn("failed to resolve SSH password", "server", srv.Name, "error", err)
 			continue
 		}
 
 		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
 		if err != nil {
+			logger.Warn("failed to create SSH client", "server", srv.Name, "error", err)
 			continue
 		}
 
@@ -55,7 +58,11 @@ func (f *StateFetcher) Fetch(ctx context.Context, cfg *entity.Config) *repositor
 
 func (f *StateFetcher) fetchServerServicesState(client *ssh.Client, serverName string, cfg *entity.Config, state *repository.DeploymentState) {
 	stdout, _, err := client.Run("sudo docker compose ls -a --format json 2>/dev/null || sudo docker compose ls -a --format json")
-	if err != nil || stdout == "" {
+	if err != nil {
+		logger.Warn("failed to list docker compose projects", "server", serverName, "error", err)
+		return
+	}
+	if stdout == "" {
 		return
 	}
 
@@ -64,13 +71,18 @@ func (f *StateFetcher) fetchServerServicesState(client *ssh.Client, serverName s
 	}
 	var projects []composeProject
 	if err := json.Unmarshal([]byte(stdout), &projects); err != nil {
+		logger.Debug("failed to parse docker compose output as array, trying line-by-line", "server", serverName, "error", err)
 		for _, line := range strings.Split(stdout, "\n") {
 			line = strings.TrimSpace(line)
 			if line == "" {
 				continue
 			}
 			var proj composeProject
-			if err := json.Unmarshal([]byte(line), &proj); err == nil && proj.Name != "" {
+			if err := json.Unmarshal([]byte(line), &proj); err != nil {
+				logger.Warn("failed to parse docker compose project line", "server", serverName, "line", line, "error", err)
+				continue
+			}
+			if proj.Name != "" {
 				projects = append(projects, proj)
 			}
 		}
@@ -90,17 +102,26 @@ func (f *StateFetcher) fetchServerServicesState(client *ssh.Client, serverName s
 
 		exists := deployedServices[key]
 		if !exists {
-			checkStdout, _, _ := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
+			checkStdout, _, err := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
+			if err != nil {
+				logger.Debug("failed to check remote directory", "server", serverName, "service", svc.Name, "dir", remoteDir, "error", err)
+			}
 			exists = strings.TrimSpace(checkStdout) == "exists"
 		}
 
 		if exists {
 			composePath := fmt.Sprintf("%s/docker-compose.yml", remoteDir)
-			remoteContent, _, _ := client.Run(fmt.Sprintf("sudo cat %s 2>/dev/null || echo ''", composePath))
+			remoteContent, _, err := client.Run(fmt.Sprintf("sudo cat %s 2>/dev/null || echo ''", composePath))
+			if err != nil {
+				logger.Debug("failed to read remote compose file", "server", serverName, "service", svc.Name, "path", composePath, "error", err)
+			}
 			remoteHash := hashString(strings.TrimSpace(remoteContent))
 
 			localComposePath := fmt.Sprintf("%s/deployments/%s/%s.compose.yaml", f.configDir, serverName, svc.Name)
-			localContent, _ := readFileContent(localComposePath)
+			localContent, err := readFileContent(localComposePath)
+			if err != nil {
+				logger.Debug("failed to read local compose file", "server", serverName, "service", svc.Name, "path", localComposePath, "error", err)
+			}
 			localHash := hashString(strings.TrimSpace(localContent))
 
 			if remoteHash != "" && localHash != "" && remoteHash == localHash {
@@ -130,17 +151,26 @@ func (f *StateFetcher) fetchServerServicesState(client *ssh.Client, serverName s
 
 		exists := deployedServices[key]
 		if !exists {
-			checkStdout, _, _ := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
+			checkStdout, _, err := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
+			if err != nil {
+				logger.Debug("failed to check remote directory", "server", serverName, "service", infra.Name, "dir", remoteDir, "error", err)
+			}
 			exists = strings.TrimSpace(checkStdout) == "exists"
 		}
 
 		if exists {
 			composePath := fmt.Sprintf("%s/docker-compose.yml", remoteDir)
-			remoteContent, _, _ := client.Run(fmt.Sprintf("sudo cat %s 2>/dev/null || echo ''", composePath))
+			remoteContent, _, err := client.Run(fmt.Sprintf("sudo cat %s 2>/dev/null || echo ''", composePath))
+			if err != nil {
+				logger.Debug("failed to read remote compose file", "server", serverName, "service", infra.Name, "path", composePath, "error", err)
+			}
 			remoteHash := hashString(strings.TrimSpace(remoteContent))
 
 			localComposePath := fmt.Sprintf("%s/deployments/%s/%s.compose.yaml", f.configDir, serverName, infra.Name)
-			localContent, _ := readFileContent(localComposePath)
+			localContent, err := readFileContent(localComposePath)
+			if err != nil {
+				logger.Debug("failed to read local compose file", "server", serverName, "service", infra.Name, "path", localComposePath, "error", err)
+			}
 			localHash := hashString(strings.TrimSpace(localContent))
 
 			if remoteHash != "" && localHash != "" && remoteHash == localHash {

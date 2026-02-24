@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -58,10 +57,7 @@ func runApply(ctx *Context, scope string, filters Filters) {
 	}
 
 	displayPlan(executionPlan)
-	fmt.Print("\nDo you want to apply these changes? (y/N): ")
-	var response string
-	fmt.Scanln(&response)
-	if strings.ToLower(response) != "y" {
+	if !Confirm("\nDo you want to apply these changes?", false) {
 		fmt.Println("Cancelled.")
 		return
 	}
