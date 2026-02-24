@@ -222,6 +222,10 @@ func (s *InfraService) GetServer() string {
 	return s.Server
 }
 
+func (s *InfraService) GetNetworks() []string {
+	return s.Networks
+}
+
 type SSLVolumeConfig struct {
 	Source string `yaml:"source"`
 	Sync   bool   `yaml:"sync"`

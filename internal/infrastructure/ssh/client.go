@@ -2,13 +2,18 @@ package ssh
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/litelake/yamlops/internal/constants"
+	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/litelake/yamlops/internal/domain/retry"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )
@@ -27,7 +32,7 @@ func NewClient(host string, port int, user, password string) (*Client, error) {
 
 	hostKeyCallback, err := createHostKeyCallback(knownHosts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create host key callback: %w", err)
+		return nil, domainerr.WrapOp("create host key callback", domainerr.ErrSSHConnectFailed)
 	}
 
 	config := &ssh.ClientConfig{
@@ -41,10 +46,70 @@ func NewClient(host string, port int, user, password string) (*Client, error) {
 	addr := fmt.Sprintf("%s:%d", host, port)
 	client, err := ssh.Dial("tcp", addr, config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial: %w", err)
+		return nil, domainerr.WrapOp("dial", domainerr.ErrSSHConnectFailed)
 	}
 
 	return &Client{client: client, user: user}, nil
+}
+
+func IsRetryableSSHError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	if netErr, ok := err.(net.Error); ok {
+		return netErr.Timeout() || netErr.Temporary()
+	}
+
+	errStr := err.Error()
+	retryablePatterns := []string{
+		"connection reset",
+		"connection refused",
+		"connection timed out",
+		"timeout",
+		"temporary failure",
+		"network is unreachable",
+		"no route to host",
+		"i/o timeout",
+		"broken pipe",
+		"connection closed",
+	}
+	for _, pattern := range retryablePatterns {
+		if strings.Contains(strings.ToLower(errStr), pattern) {
+			return true
+		}
+	}
+
+	return false
+}
+
+type SSHRetryConfig struct {
+	MaxAttempts  int
+	InitialDelay time.Duration
+	MaxDelay     time.Duration
+}
+
+func DefaultSSHRetryConfig() *SSHRetryConfig {
+	return &SSHRetryConfig{
+		MaxAttempts:  3,
+		InitialDelay: 1 * time.Second,
+		MaxDelay:     30 * time.Second,
+	}
+}
+
+func NewClientWithRetry(ctx context.Context, host string, port int, user, password string, cfg *SSHRetryConfig) (*Client, error) {
+	if cfg == nil {
+		cfg = DefaultSSHRetryConfig()
+	}
+
+	var client *Client
+	err := retry.Do(ctx, func() error {
+		var err error
+		client, err = NewClient(host, port, user, password)
+		return err
+	}, retry.WithMaxAttempts(cfg.MaxAttempts), retry.WithInitialDelay(cfg.InitialDelay), retry.WithMaxDelay(cfg.MaxDelay), retry.WithIsRetryable(IsRetryableSSHError))
+
+	return client, err
 }
 
 func createHostKeyCallback(knownHostsPath string) (ssh.HostKeyCallback, error) {
@@ -74,17 +139,17 @@ func createHostKeyCallback(knownHostsPath string) (ssh.HostKeyCallback, error) {
 		}
 
 		if len(keyErr.Want) > 0 {
-			return fmt.Errorf("host key mismatch for %s: possible MITM attack", hostname)
+			return domainerr.WrapEntity("host key", hostname, domainerr.ErrSSHHostKeyMismatch)
 		}
 
 		line := knownhosts.Line([]string{hostname}, key)
 		f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, 0600)
 		if err != nil {
-			return fmt.Errorf("failed to open known_hosts: %w", err)
+			return domainerr.WrapOp("open known_hosts", domainerr.ErrSSHConnectFailed)
 		}
 		defer f.Close()
 		if _, err := fmt.Fprintln(f, line); err != nil {
-			return fmt.Errorf("failed to write to known_hosts: %w", err)
+			return domainerr.WrapOp("write known_hosts", domainerr.ErrSSHConnectFailed)
 		}
 		return nil
 	}, nil
@@ -100,7 +165,7 @@ func (c *Client) Close() error {
 func (c *Client) Run(cmd string) (stdout, stderr string, err error) {
 	session, err := c.client.NewSession()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to create session: %w", err)
+		return "", "", domainerr.WrapOp("create session", domainerr.ErrSSHSessionFailed)
 	}
 	defer session.Close()
 
@@ -115,7 +180,7 @@ func (c *Client) Run(cmd string) (stdout, stderr string, err error) {
 func (c *Client) RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error) {
 	session, err := c.client.NewSession()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to create session: %w", err)
+		return "", "", domainerr.WrapOp("create session", domainerr.ErrSSHSessionFailed)
 	}
 	defer session.Close()
 
@@ -125,17 +190,17 @@ func (c *Client) RunWithStdin(stdin string, cmd string) (stdout, stderr string, 
 
 	stdinPipe, err := session.StdinPipe()
 	if err != nil {
-		return "", "", fmt.Errorf("failed to get stdin pipe: %w", err)
+		return "", "", domainerr.WrapOp("get stdin pipe", domainerr.ErrSSHSessionFailed)
 	}
 
 	if err := session.Start(cmd); err != nil {
-		return "", "", fmt.Errorf("failed to start command: %w", err)
+		return "", "", domainerr.WrapOp("start command", domainerr.ErrSSHCommandFailed)
 	}
 
 	_, err = io.WriteString(stdinPipe, stdin)
 	if err != nil {
 		stdinPipe.Close()
-		return "", "", fmt.Errorf("failed to write to stdin: %w", err)
+		return "", "", domainerr.WrapOp("write to stdin", domainerr.ErrSSHCommandFailed)
 	}
 	stdinPipe.Close()
 
@@ -152,19 +217,19 @@ func (c *Client) UploadFile(localPath, remotePath string) error {
 
 	localFile, err := os.Open(localPath)
 	if err != nil {
-		return fmt.Errorf("failed to open local file: %w", err)
+		return domainerr.WrapOp("open local file", domainerr.ErrSSHFileTransfer)
 	}
 	defer localFile.Close()
 
 	remoteFile, err := sftpClient.Create(remotePath)
 	if err != nil {
-		return fmt.Errorf("failed to create remote file: %w", err)
+		return domainerr.WrapOp("create remote file", domainerr.ErrSSHFileTransfer)
 	}
 	defer remoteFile.Close()
 
 	_, err = io.Copy(remoteFile, localFile)
 	if err != nil {
-		return fmt.Errorf("failed to copy file: %w", err)
+		return domainerr.WrapOp("copy file", domainerr.ErrSSHFileTransfer)
 	}
 
 	return nil
@@ -183,7 +248,7 @@ func (c *Client) MkdirAll(path string) error {
 func (c *Client) MkdirAllSudo(path string) error {
 	_, stderr, err := c.Run(fmt.Sprintf("sudo mkdir -p %s", ShellEscape(path)))
 	if err != nil {
-		return fmt.Errorf("sudo mkdir failed: %w, stderr: %s", err, stderr)
+		return domainerr.WrapOp("sudo mkdir", fmt.Errorf("%w: stderr: %s", domainerr.ErrSSHCommandFailed, stderr))
 	}
 	return nil
 }
@@ -192,7 +257,7 @@ func (c *Client) MkdirAllSudoWithPerm(path, perm string) error {
 	cmd := fmt.Sprintf("sudo mkdir -p %s && sudo chown %s:%s %s && sudo chmod %s %s", ShellEscape(path), ShellEscape(c.user), ShellEscape(c.user), ShellEscape(path), ShellEscape(perm), ShellEscape(path))
 	_, stderr, err := c.Run(cmd)
 	if err != nil {
-		return fmt.Errorf("sudo mkdir failed: %w, stderr: %s", err, stderr)
+		return domainerr.WrapOp("sudo mkdir", fmt.Errorf("%w: stderr: %s", domainerr.ErrSSHCommandFailed, stderr))
 	}
 	return nil
 }
@@ -210,26 +275,26 @@ func (c *Client) UploadFileSudoWithPerm(localPath, remotePath, perm string) erro
 
 	localFile, err := os.Open(localPath)
 	if err != nil {
-		return fmt.Errorf("failed to open local file: %w", err)
+		return domainerr.WrapOp("open local file", domainerr.ErrSSHFileTransfer)
 	}
 	defer localFile.Close()
 
 	tmpPath := fmt.Sprintf(constants.RemoteTempFileFmt, os.Getpid())
 	tmpFile, err := sftpClient.Create(tmpPath)
 	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
+		return domainerr.WrapOp("create temp file", domainerr.ErrSSHFileTransfer)
 	}
 	defer tmpFile.Close()
 
 	_, err = io.Copy(tmpFile, localFile)
 	if err != nil {
-		return fmt.Errorf("failed to copy file: %w", err)
+		return domainerr.WrapOp("copy file", domainerr.ErrSSHFileTransfer)
 	}
 
 	cmd := fmt.Sprintf("sudo mv %s %s && sudo chown %s:%s %s && sudo chmod %s %s", ShellEscape(tmpPath), ShellEscape(remotePath), ShellEscape(c.user), ShellEscape(c.user), ShellEscape(remotePath), ShellEscape(perm), ShellEscape(remotePath))
 	_, stderr, err := c.Run(cmd)
 	if err != nil {
-		return fmt.Errorf("sudo mv failed: %w, stderr: %s", err, stderr)
+		return domainerr.WrapOp("sudo mv", fmt.Errorf("%w: stderr: %s", domainerr.ErrSSHCommandFailed, stderr))
 	}
 	return nil
 }
@@ -254,23 +319,23 @@ func (c *Client) FileExists(path string) (bool, error) {
 func (c *Client) StreamRun(cmd string, stdoutChan, stderrChan chan string) error {
 	session, err := c.client.NewSession()
 	if err != nil {
-		return fmt.Errorf("failed to create session: %w", err)
+		return domainerr.WrapOp("create session", domainerr.ErrSSHSessionFailed)
 	}
 	defer session.Close()
 
 	stdoutPipe, err := session.StdoutPipe()
 	if err != nil {
-		return fmt.Errorf("failed to get stdout pipe: %w", err)
+		return domainerr.WrapOp("get stdout pipe", domainerr.ErrSSHSessionFailed)
 	}
 
 	stderrPipe, err := session.StderrPipe()
 	if err != nil {
-		return fmt.Errorf("failed to get stderr pipe: %w", err)
+		return domainerr.WrapOp("get stderr pipe", domainerr.ErrSSHSessionFailed)
 	}
 
 	err = session.Start(cmd)
 	if err != nil {
-		return fmt.Errorf("failed to start command: %w", err)
+		return domainerr.WrapOp("start command", domainerr.ErrSSHCommandFailed)
 	}
 
 	go streamReader(stdoutPipe, stdoutChan)

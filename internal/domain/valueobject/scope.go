@@ -11,6 +11,62 @@ type Scope struct {
 	DNSOnly       bool
 }
 
+func NewScope() *Scope {
+	return &Scope{}
+}
+
+func NewScopeWithValues(zone, server, service, domain string) *Scope {
+	return &Scope{
+		Zone:    zone,
+		Server:  server,
+		Service: service,
+		Domain:  domain,
+	}
+}
+
+func (s *Scope) Equals(other *Scope) bool {
+	if other == nil {
+		return false
+	}
+	if s.Zone != other.Zone || s.Server != other.Server || s.Service != other.Service || s.Domain != other.Domain {
+		return false
+	}
+	if s.ForceDeploy != other.ForceDeploy || s.DNSOnly != other.DNSOnly {
+		return false
+	}
+	if len(s.Services) != len(other.Services) || len(s.InfraServices) != len(other.InfraServices) {
+		return false
+	}
+	for i, svc := range s.Services {
+		if svc != other.Services[i] {
+			return false
+		}
+	}
+	for i, svc := range s.InfraServices {
+		if svc != other.InfraServices[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Scope) Clone() *Scope {
+	services := make([]string, len(s.Services))
+	copy(services, s.Services)
+	infraServices := make([]string, len(s.InfraServices))
+	copy(infraServices, s.InfraServices)
+	return &Scope{
+		Domain:        s.Domain,
+		Zone:          s.Zone,
+		Server:        s.Server,
+		Service:       s.Service,
+		Services:      services,
+		InfraServices: infraServices,
+		ForceDeploy:   s.ForceDeploy,
+		DNSOnly:       s.DNSOnly,
+	}
+}
+
 func (s *Scope) Matches(zone, server, service, domain string) bool {
 	if s.Zone != "" && s.Zone != zone {
 		return false

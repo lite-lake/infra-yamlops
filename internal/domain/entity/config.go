@@ -69,6 +69,14 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+func toMapPtr[T any](items []T, getName func(T) string) map[string]*T {
+	m := make(map[string]*T)
+	for i := range items {
+		m[getName(items[i])] = &items[i]
+	}
+	return m
+}
+
 func (c *Config) GetSecretsMap() map[string]string {
 	m := make(map[string]string)
 	for _, s := range c.Secrets {
@@ -78,59 +86,31 @@ func (c *Config) GetSecretsMap() map[string]string {
 }
 
 func (c *Config) GetISPMap() map[string]*ISP {
-	m := make(map[string]*ISP)
-	for i := range c.ISPs {
-		m[c.ISPs[i].Name] = &c.ISPs[i]
-	}
-	return m
+	return toMapPtr(c.ISPs, func(isp ISP) string { return isp.Name })
 }
 
 func (c *Config) GetZoneMap() map[string]*Zone {
-	m := make(map[string]*Zone)
-	for i := range c.Zones {
-		m[c.Zones[i].Name] = &c.Zones[i]
-	}
-	return m
+	return toMapPtr(c.Zones, func(z Zone) string { return z.Name })
 }
 
 func (c *Config) GetInfraServiceMap() map[string]*InfraService {
-	m := make(map[string]*InfraService)
-	for i := range c.InfraServices {
-		m[c.InfraServices[i].Name] = &c.InfraServices[i]
-	}
-	return m
+	return toMapPtr(c.InfraServices, func(s InfraService) string { return s.Name })
 }
 
 func (c *Config) GetServerMap() map[string]*Server {
-	m := make(map[string]*Server)
-	for i := range c.Servers {
-		m[c.Servers[i].Name] = &c.Servers[i]
-	}
-	return m
+	return toMapPtr(c.Servers, func(s Server) string { return s.Name })
 }
 
 func (c *Config) GetServiceMap() map[string]*BizService {
-	m := make(map[string]*BizService)
-	for i := range c.Services {
-		m[c.Services[i].Name] = &c.Services[i]
-	}
-	return m
+	return toMapPtr(c.Services, func(s BizService) string { return s.Name })
 }
 
 func (c *Config) GetRegistryMap() map[string]*Registry {
-	m := make(map[string]*Registry)
-	for i := range c.Registries {
-		m[c.Registries[i].Name] = &c.Registries[i]
-	}
-	return m
+	return toMapPtr(c.Registries, func(r Registry) string { return r.Name })
 }
 
 func (c *Config) GetDomainMap() map[string]*Domain {
-	m := make(map[string]*Domain)
-	for i := range c.Domains {
-		m[c.Domains[i].Name] = &c.Domains[i]
-	}
-	return m
+	return toMapPtr(c.Domains, func(d Domain) string { return d.Name })
 }
 
 func (c *Config) GetAllDNSRecords() []DNSRecord {
@@ -142,11 +122,7 @@ func (c *Config) GetAllDNSRecords() []DNSRecord {
 }
 
 func (c *Config) GetCertificateMap() map[string]*Certificate {
-	m := make(map[string]*Certificate)
-	for i := range c.Certificates {
-		m[c.Certificates[i].Name] = &c.Certificates[i]
-	}
-	return m
+	return toMapPtr(c.Certificates, func(cert Certificate) string { return cert.Name })
 }
 
 func ParsePort(s string) (int, error) {

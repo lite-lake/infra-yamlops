@@ -7,10 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
-	"github.com/litelake/yamlops/internal/infrastructure/network"
 )
 
 type InfraServiceHandler struct{}
@@ -43,10 +41,10 @@ func (h *InfraServiceHandler) Apply(ctx context.Context, change *valueobject.Cha
 		return result, nil
 	}
 
-	remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, deps.Env(), change.Name))
+	remoteDir := GetRemoteDir(deps, change.Name)
 
 	if change.Type == valueobject.ChangeTypeDelete {
-		return h.deleteInfraService(change, client, remoteDir)
+		return DeleteServiceRemote(change, client, remoteDir)
 	}
 
 	return h.deployInfraService(change, client, remoteDir, deps, serverName)
@@ -61,23 +59,18 @@ func (h *InfraServiceHandler) deployInfraService(change *valueobject.Change, cli
 		return result, nil
 	}
 
-	requiredNetworks, err := h.getRequiredNetworks(change, deps, serverName)
+	requiredNetworks, err := GetRequiredNetworks(change, deps, serverName)
 	if err != nil {
 		result.Error = err
 		return result, nil
 	}
 
-	if len(requiredNetworks) > 0 {
-		netMgr := network.NewManager(client)
-		for _, netSpec := range requiredNetworks {
-			if err := netMgr.Ensure(&netSpec); err != nil {
-				result.Error = fmt.Errorf("failed to ensure network %s: %w", netSpec.Name, err)
-				return result, nil
-			}
-		}
+	if err := EnsureNetworks(client, requiredNetworks); err != nil {
+		result.Error = err
+		return result, nil
 	}
 
-	if err := client.MkdirAllSudoWithPerm(remoteDir, "755"); err != nil {
+	if err := EnsureRemoteDir(client, remoteDir); err != nil {
 		result.Error = fmt.Errorf("failed to create remote directory: %w", err)
 		return result, nil
 	}
@@ -96,70 +89,20 @@ func (h *InfraServiceHandler) deployInfraService(change *valueobject.Change, cli
 		}
 	}
 
-	composeFile := h.getComposeFilePath(change, deps)
-	if composeFile != "" {
-		if _, err := os.Stat(composeFile); err == nil {
-			content, err := os.ReadFile(composeFile)
-			if err != nil {
-				result.Error = fmt.Errorf("failed to read compose file: %w", err)
-				return result, nil
-			}
-			if err := SyncContent(client, string(content), remoteDir+"/docker-compose.yml"); err != nil {
-				result.Error = fmt.Errorf("failed to sync compose file: %w", err)
-				return result, nil
-			}
-
-			pullCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml pull", remoteDir)
-			_, pullStderr, pullErr := client.Run(pullCmd)
-			if pullErr != nil {
-				result.Warnings = append(result.Warnings, fmt.Sprintf("镜像拉取失败: %s", pullStderr))
-			}
-
-			containerName := fmt.Sprintf(constants.ServicePrefixFormat, deps.Env(), change.Name)
-			cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d && sudo docker restart %s", remoteDir, containerName)
-			stdout, stderr, err := client.Run(cmd)
-			if err != nil {
-				result.Error = fmt.Errorf("failed to run docker compose: %w, stderr: %s", err, stderr)
-				result.Output = stdout + "\n" + stderr
-				return result, nil
-			}
-		}
+	composeFile := GetComposeFilePath(change, deps)
+	if !DeployComposeFile(client, &DeployComposeConfig{
+		RemoteDir:      remoteDir,
+		ComposeFile:    composeFile,
+		Env:            deps.Env(),
+		ServiceName:    change.Name,
+		RestartAfterUp: true,
+	}, result) {
+		return result, nil
 	}
 
 	result.Success = true
 	result.Output = fmt.Sprintf("deployed infra service %s", change.Name)
 	return result, nil
-}
-
-func (h *InfraServiceHandler) getRequiredNetworks(change *valueobject.Change, deps DepsProvider, serverName string) ([]entity.ServerNetwork, error) {
-	server, ok := deps.Server(serverName)
-	if !ok {
-		return nil, fmt.Errorf("server %s not found", serverName)
-	}
-
-	var serviceNetworks []string
-	if change.NewState != nil {
-		if infra, ok := change.NewState.(*entity.InfraService); ok {
-			serviceNetworks = infra.Networks
-		}
-	}
-
-	if len(serviceNetworks) == 0 {
-		if len(server.Networks) > 0 {
-			return server.Networks[:1], nil
-		}
-		return []entity.ServerNetwork{{Name: fmt.Sprintf("yamlops-%s", deps.Env()), Type: entity.NetworkTypeBridge}}, nil
-	}
-
-	var requiredNetworks []entity.ServerNetwork
-	for _, netName := range serviceNetworks {
-		if server.HasNetwork(netName) {
-			requiredNetworks = append(requiredNetworks, *server.GetNetwork(netName))
-		} else {
-			requiredNetworks = append(requiredNetworks, entity.ServerNetwork{Name: netName, Type: entity.NetworkTypeBridge})
-		}
-	}
-	return requiredNetworks, nil
 }
 
 func (h *InfraServiceHandler) deployGatewayType(change *valueobject.Change, client SSHClient, remoteDir string, deps DepsProvider) error {
@@ -213,33 +156,6 @@ func (h *InfraServiceHandler) deploySSLType(change *valueobject.Change, client S
 	}
 
 	return nil
-}
-
-func (h *InfraServiceHandler) deleteInfraService(change *valueobject.Change, client SSHClient, remoteDir string) (*Result, error) {
-	result := &Result{Change: change, Success: false}
-
-	cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml down -v 2>/dev/null || true", remoteDir)
-	stdout, stderr, _ := client.Run(cmd)
-
-	rmCmd := fmt.Sprintf("sudo rm -rf %s", remoteDir)
-	stdout2, stderr2, err := client.Run(rmCmd)
-	if err != nil {
-		result.Error = fmt.Errorf("failed to remove directory: %w, stderr: %s", err, stderr2)
-		result.Output = stdout + "\n" + stderr + "\n" + stdout2 + "\n" + stderr2
-		return result, nil
-	}
-
-	result.Success = true
-	result.Output = fmt.Sprintf("deleted infra service %s", change.Name)
-	return result, nil
-}
-
-func (h *InfraServiceHandler) getComposeFilePath(ch *valueobject.Change, deps DepsProvider) string {
-	serverName := ExtractServerFromChange(ch)
-	if serverName == "" {
-		return ""
-	}
-	return filepath.Join(deps.WorkDir(), "deployments", serverName, ch.Name+".compose.yaml")
 }
 
 func (h *InfraServiceHandler) getGatewayFilePath(ch *valueobject.Change, deps DepsProvider) string {

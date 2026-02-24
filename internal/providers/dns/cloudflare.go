@@ -10,6 +10,7 @@ import (
 	"github.com/cloudflare/cloudflare-go/v2/dns"
 	"github.com/cloudflare/cloudflare-go/v2/option"
 	"github.com/cloudflare/cloudflare-go/v2/zones"
+	domainerr "github.com/litelake/yamlops/internal/domain"
 )
 
 type CloudflareProvider struct {
@@ -28,12 +29,12 @@ func (p *CloudflareProvider) Name() string {
 	return "cloudflare"
 }
 
-func (p *CloudflareProvider) getZoneID(ctx context.Context, domain string) (string, error) {
+func (p *CloudflareProvider) getZoneID(ctx context.Context, domainName string) (string, error) {
 	resp, err := p.client.Zones.List(ctx, zones.ZoneListParams{
-		Name: cloudflare.F(domain),
+		Name: cloudflare.F(domainName),
 	})
 	if err != nil {
-		return "", fmt.Errorf("failed to list zones: %w", err)
+		return "", domainerr.WrapOp("list zones", err)
 	}
 	if len(resp.Result) == 0 {
 		return "", ErrDomainNotFound
@@ -41,9 +42,9 @@ func (p *CloudflareProvider) getZoneID(ctx context.Context, domain string) (stri
 	return resp.Result[0].ID, nil
 }
 
-func (p *CloudflareProvider) ListRecords(domain string) ([]DNSRecord, error) {
+func (p *CloudflareProvider) ListRecords(domainName string) ([]DNSRecord, error) {
 	ctx := context.Background()
-	zoneID, err := p.getZoneID(ctx, domain)
+	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
 		return nil, err
 	}
@@ -67,14 +68,14 @@ func (p *CloudflareProvider) ListRecords(domain string) ([]DNSRecord, error) {
 		})
 	}
 	if err := pager.Err(); err != nil {
-		return nil, fmt.Errorf("failed to list records: %w", err)
+		return nil, domainerr.WrapOp("list records", err)
 	}
 	return records, nil
 }
 
-func (p *CloudflareProvider) CreateRecord(domain string, record *DNSRecord) error {
+func (p *CloudflareProvider) CreateRecord(domainName string, record *DNSRecord) error {
 	ctx := context.Background()
-	zoneID, err := p.getZoneID(ctx, domain)
+	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
 		return err
 	}
@@ -96,14 +97,14 @@ func (p *CloudflareProvider) CreateRecord(domain string, record *DNSRecord) erro
 
 	_, err = p.client.DNS.Records.New(ctx, params)
 	if err != nil {
-		return fmt.Errorf("failed to create record: %w", err)
+		return domainerr.WrapOp("create record", err)
 	}
 	return nil
 }
 
-func (p *CloudflareProvider) DeleteRecord(domain string, recordID string) error {
+func (p *CloudflareProvider) DeleteRecord(domainName string, recordID string) error {
 	ctx := context.Background()
-	zoneID, err := p.getZoneID(ctx, domain)
+	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
 		return err
 	}
@@ -112,14 +113,14 @@ func (p *CloudflareProvider) DeleteRecord(domain string, recordID string) error 
 		ZoneID: cloudflare.F(zoneID),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to delete record: %w", err)
+		return domainerr.WrapOp("delete record", err)
 	}
 	return nil
 }
 
-func (p *CloudflareProvider) UpdateRecord(domain string, recordID string, record *DNSRecord) error {
+func (p *CloudflareProvider) UpdateRecord(domainName string, recordID string, record *DNSRecord) error {
 	ctx := context.Background()
-	zoneID, err := p.getZoneID(ctx, domain)
+	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
 		return err
 	}
@@ -141,7 +142,7 @@ func (p *CloudflareProvider) UpdateRecord(domain string, recordID string, record
 
 	_, err = p.client.DNS.Records.Edit(ctx, recordID, params)
 	if err != nil {
-		return fmt.Errorf("failed to update record: %w", err)
+		return domainerr.WrapOp("update record", err)
 	}
 	return nil
 }
@@ -161,14 +162,14 @@ func (p *CloudflareProvider) ListDomains() ([]string, error) {
 		zoneNames = append(zoneNames, zone.Name)
 	}
 	if err := pager.Err(); err != nil {
-		return nil, fmt.Errorf("failed to list zones: %w", err)
+		return nil, domainerr.WrapOp("list zones", err)
 	}
 	return zoneNames, nil
 }
 
-func (p *CloudflareProvider) GetRecordsByType(domain string, recordType string) ([]DNSRecord, error) {
+func (p *CloudflareProvider) GetRecordsByType(domainName string, recordType string) ([]DNSRecord, error) {
 	ctx := context.Background()
-	zoneID, err := p.getZoneID(ctx, domain)
+	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
 		return nil, err
 	}
@@ -193,31 +194,31 @@ func (p *CloudflareProvider) GetRecordsByType(domain string, recordType string) 
 		})
 	}
 	if err := pager.Err(); err != nil {
-		return nil, fmt.Errorf("failed to list records: %w", err)
+		return nil, domainerr.WrapOp("list records", err)
 	}
 	return records, nil
 }
 
-func (p *CloudflareProvider) BatchCreateRecords(domain string, records []*DNSRecord) error {
+func (p *CloudflareProvider) BatchCreateRecords(domainName string, records []*DNSRecord) error {
 	for _, record := range records {
-		if err := p.CreateRecord(domain, record); err != nil {
-			return fmt.Errorf("failed to create record %s: %w", record.Name, err)
+		if err := p.CreateRecord(domainName, record); err != nil {
+			return domainerr.WrapEntity("record", record.Name, err)
 		}
 	}
 	return nil
 }
 
-func (p *CloudflareProvider) BatchDeleteRecords(domain string, recordIDs []string) error {
+func (p *CloudflareProvider) BatchDeleteRecords(domainName string, recordIDs []string) error {
 	for _, recordID := range recordIDs {
-		if err := p.DeleteRecord(domain, recordID); err != nil {
-			return fmt.Errorf("failed to delete record %s: %w", recordID, err)
+		if err := p.DeleteRecord(domainName, recordID); err != nil {
+			return domainerr.WrapEntity("record", recordID, err)
 		}
 	}
 	return nil
 }
 
-func (p *CloudflareProvider) EnsureRecord(domain string, record *DNSRecord) error {
-	return EnsureRecord(p, domain, record)
+func (p *CloudflareProvider) EnsureRecord(domainName string, record *DNSRecord) error {
+	return EnsureRecordSimple(p, domainName, record)
 }
 
 func ParseTTL(ttlStr string) (int, error) {

@@ -128,6 +128,10 @@ func (s *BizService) GetServer() string {
 	return s.Server
 }
 
+func (s *BizService) GetNetworks() []string {
+	return s.Networks
+}
+
 func (s *BizService) Validate() error {
 	if s.Name == "" {
 		return fmt.Errorf("%w: service name is required", domain.ErrInvalidName)

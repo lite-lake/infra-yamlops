@@ -1,11 +1,11 @@
 package dns
 
-import "errors"
+import "github.com/litelake/yamlops/internal/domain"
 
 var (
-	ErrDomainNotFound  = errors.New("domain not found")
-	ErrRecordNotFound  = errors.New("record not found")
-	ErrInvalidResponse = errors.New("invalid response from provider")
+	ErrDomainNotFound  = domain.ErrDNSDomainNotFound
+	ErrRecordNotFound  = domain.ErrDNSRecordNotFound
+	ErrInvalidResponse = domain.ErrDNSError
 )
 
 type DNSRecord struct {

@@ -212,7 +212,7 @@ func (p *TencentProvider) BatchDeleteRecords(domain string, recordIDs []string) 
 }
 
 func (p *TencentProvider) EnsureRecord(domain string, record *DNSRecord) error {
-	return EnsureRecord(p, domain, record)
+	return EnsureRecordSimple(p, domain, record)
 }
 
 func (p *TencentProvider) CreateDomain(domain string) error {

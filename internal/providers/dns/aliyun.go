@@ -8,6 +8,7 @@ import (
 	alidns "github.com/alibabacloud-go/alidns-20150109/v4/client"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	"github.com/alibabacloud-go/tea/tea"
+	domainerr "github.com/litelake/yamlops/internal/domain"
 )
 
 type AliyunProvider struct {
@@ -22,7 +23,7 @@ func NewAliyunProvider(accessKeyID, accessKeySecret string) (*AliyunProvider, er
 	config.Endpoint = tea.String("dns.aliyuncs.com")
 	client, err := alidns.NewClient(config)
 	if err != nil {
-		return nil, fmt.Errorf("create aliyun dns client: %w", err)
+		return nil, domainerr.WrapOp("create aliyun dns client", err)
 	}
 	return &AliyunProvider{client: client}, nil
 }
@@ -31,13 +32,13 @@ func (p *AliyunProvider) Name() string {
 	return "aliyun"
 }
 
-func (p *AliyunProvider) ListRecords(domain string) ([]DNSRecord, error) {
+func (p *AliyunProvider) ListRecords(domainName string) ([]DNSRecord, error) {
 	req := &alidns.DescribeDomainRecordsRequest{
-		DomainName: tea.String(domain),
+		DomainName: tea.String(domainName),
 	}
 	resp, err := p.client.DescribeDomainRecords(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list records: %w", err)
+		return nil, domainerr.WrapOp("list records", err)
 	}
 
 	var records []DNSRecord
@@ -59,14 +60,14 @@ func (p *AliyunProvider) ListRecords(domain string) ([]DNSRecord, error) {
 	return records, nil
 }
 
-func (p *AliyunProvider) CreateRecord(domain string, record *DNSRecord) error {
+func (p *AliyunProvider) CreateRecord(domainName string, record *DNSRecord) error {
 	ttl := int64(record.TTL)
 	if ttl == 0 {
 		ttl = 600
 	}
 
 	req := &alidns.AddDomainRecordRequest{
-		DomainName: tea.String(domain),
+		DomainName: tea.String(domainName),
 		RR:         tea.String(record.Name),
 		Type:       tea.String(record.Type),
 		Value:      tea.String(record.Value),
@@ -75,24 +76,24 @@ func (p *AliyunProvider) CreateRecord(domain string, record *DNSRecord) error {
 
 	_, err := p.client.AddDomainRecord(req)
 	if err != nil {
-		return fmt.Errorf("failed to create record: %w", err)
+		return domainerr.WrapOp("create record", err)
 	}
 	return nil
 }
 
-func (p *AliyunProvider) DeleteRecord(domain string, recordID string) error {
+func (p *AliyunProvider) DeleteRecord(domainName string, recordID string) error {
 	req := &alidns.DeleteDomainRecordRequest{
 		RecordId: tea.String(recordID),
 	}
 
 	_, err := p.client.DeleteDomainRecord(req)
 	if err != nil {
-		return fmt.Errorf("failed to delete record: %w", err)
+		return domainerr.WrapOp("delete record", err)
 	}
 	return nil
 }
 
-func (p *AliyunProvider) UpdateRecord(domain string, recordID string, record *DNSRecord) error {
+func (p *AliyunProvider) UpdateRecord(domainName string, recordID string, record *DNSRecord) error {
 	ttl := int64(record.TTL)
 	if ttl == 0 {
 		ttl = 600
@@ -108,7 +109,7 @@ func (p *AliyunProvider) UpdateRecord(domain string, recordID string, record *DN
 
 	_, err := p.client.UpdateDomainRecord(req)
 	if err != nil {
-		return fmt.Errorf("failed to update record: %w", err)
+		return domainerr.WrapOp("update record", err)
 	}
 	return nil
 }
@@ -117,7 +118,7 @@ func (p *AliyunProvider) ListDomains() ([]string, error) {
 	req := &alidns.DescribeDomainsRequest{}
 	resp, err := p.client.DescribeDomains(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list domains: %w", err)
+		return nil, domainerr.WrapOp("list domains", err)
 	}
 
 	var domains []string
@@ -129,14 +130,14 @@ func (p *AliyunProvider) ListDomains() ([]string, error) {
 	return domains, nil
 }
 
-func (p *AliyunProvider) GetRecordsByType(domain string, recordType string) ([]DNSRecord, error) {
+func (p *AliyunProvider) GetRecordsByType(domainName string, recordType string) ([]DNSRecord, error) {
 	req := &alidns.DescribeDomainRecordsRequest{
-		DomainName: tea.String(domain),
+		DomainName: tea.String(domainName),
 		Type:       tea.String(recordType),
 	}
 	resp, err := p.client.DescribeDomainRecords(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list records: %w", err)
+		return nil, domainerr.WrapOp("list records", err)
 	}
 
 	var records []DNSRecord
@@ -158,14 +159,14 @@ func (p *AliyunProvider) GetRecordsByType(domain string, recordType string) ([]D
 	return records, nil
 }
 
-func (p *AliyunProvider) GetRecordsByName(domain string, name string) ([]DNSRecord, error) {
+func (p *AliyunProvider) GetRecordsByName(domainName string, name string) ([]DNSRecord, error) {
 	req := &alidns.DescribeDomainRecordsRequest{
-		DomainName: tea.String(domain),
+		DomainName: tea.String(domainName),
 		RRKeyWord:  tea.String(name),
 	}
 	resp, err := p.client.DescribeDomainRecords(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list records: %w", err)
+		return nil, domainerr.WrapOp("list records", err)
 	}
 
 	var records []DNSRecord
@@ -187,26 +188,26 @@ func (p *AliyunProvider) GetRecordsByName(domain string, name string) ([]DNSReco
 	return records, nil
 }
 
-func (p *AliyunProvider) BatchCreateRecords(domain string, records []*DNSRecord) error {
+func (p *AliyunProvider) BatchCreateRecords(domainName string, records []*DNSRecord) error {
 	for _, record := range records {
-		if err := p.CreateRecord(domain, record); err != nil {
-			return fmt.Errorf("failed to create record %s: %w", record.Name, err)
+		if err := p.CreateRecord(domainName, record); err != nil {
+			return domainerr.WrapEntity("record", record.Name, err)
 		}
 	}
 	return nil
 }
 
-func (p *AliyunProvider) BatchDeleteRecords(domain string, recordIDs []string) error {
+func (p *AliyunProvider) BatchDeleteRecords(domainName string, recordIDs []string) error {
 	for _, recordID := range recordIDs {
-		if err := p.DeleteRecord(domain, recordID); err != nil {
-			return fmt.Errorf("failed to delete record %s: %w", recordID, err)
+		if err := p.DeleteRecord(domainName, recordID); err != nil {
+			return domainerr.WrapEntity("record", recordID, err)
 		}
 	}
 	return nil
 }
 
-func (p *AliyunProvider) EnsureRecord(domain string, record *DNSRecord) error {
-	return EnsureRecord(p, domain, record)
+func (p *AliyunProvider) EnsureRecord(domainName string, record *DNSRecord) error {
+	return EnsureRecordSimple(p, domainName, record)
 }
 
 func ParseAliyunTTL(ttlStr string) (int64, error) {

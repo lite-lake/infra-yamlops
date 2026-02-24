@@ -14,6 +14,7 @@ import (
 	"net"
 	"time"
 
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"golang.org/x/crypto/acme"
 )
 
@@ -27,12 +28,13 @@ type ACMEClient struct {
 	dnsProvider  DNSProvider
 	directoryURL string
 	accountKey   crypto.Signer
+	eab          *acme.ExternalAccountBinding
 }
 
 func NewACMEClient(directoryURL string, dnsProvider DNSProvider) (*ACMEClient, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate account key: %w", err)
+		return nil, domainerr.WrapOp("generate account key", err)
 	}
 
 	return &ACMEClient{
@@ -49,12 +51,12 @@ func NewACMEClient(directoryURL string, dnsProvider DNSProvider) (*ACMEClient, e
 func NewACMEClientWithEAB(directoryURL, kid, hmacKey string, dnsProvider DNSProvider) (*ACMEClient, error) {
 	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate account key: %w", err)
+		return nil, domainerr.WrapOp("generate account key", err)
 	}
 
-	_, err = base64.RawURLEncoding.DecodeString(hmacKey)
+	keyBytes, err := base64.RawURLEncoding.DecodeString(hmacKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode hmac key: %w", err)
+		return nil, domainerr.WrapOp("decode hmac key", err)
 	}
 
 	return &ACMEClient{
@@ -65,13 +67,17 @@ func NewACMEClientWithEAB(directoryURL, kid, hmacKey string, dnsProvider DNSProv
 		dnsProvider:  dnsProvider,
 		directoryURL: directoryURL,
 		accountKey:   key,
+		eab: &acme.ExternalAccountBinding{
+			KID: kid,
+			Key: keyBytes,
+		},
 	}, nil
 }
 
 func (c *ACMEClient) RegisterAccount(ctx context.Context, termsAgreed bool) error {
 	account := &acme.Account{
 		Contact:                []string{},
-		ExternalAccountBinding: nil,
+		ExternalAccountBinding: c.eab,
 	}
 
 	_, err := c.client.Register(ctx, account, func(tosURL string) bool {
@@ -81,7 +87,7 @@ func (c *ACMEClient) RegisterAccount(ctx context.Context, termsAgreed bool) erro
 		if ae, ok := err.(*acme.Error); ok && ae.StatusCode == 409 {
 			return nil
 		}
-		return fmt.Errorf("failed to register account: %w", err)
+		return domainerr.WrapOp("register account", err)
 	}
 	return nil
 }
@@ -89,13 +95,13 @@ func (c *ACMEClient) RegisterAccount(ctx context.Context, termsAgreed bool) erro
 func (c *ACMEClient) ObtainCertificate(ctx context.Context, domains []string) (*Certificate, error) {
 	order, err := c.client.AuthorizeOrder(ctx, acme.DomainIDs(domains...))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create order: %w", err)
+		return nil, domainerr.WrapOp("create order", domainerr.ErrCertObtainFailed)
 	}
 
 	for _, authzURL := range order.AuthzURLs {
 		authz, err := c.client.GetAuthorization(ctx, authzURL)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get authorization: %w", err)
+			return nil, domainerr.WrapOp("get authorization", err)
 		}
 
 		if authz.Status == acme.StatusValid {
@@ -111,63 +117,63 @@ func (c *ACMEClient) ObtainCertificate(ctx context.Context, domains []string) (*
 		}
 
 		if challenge == nil {
-			return nil, fmt.Errorf("no dns-01 challenge found for domain %s", authz.Identifier.Value)
+			return nil, domainerr.WrapEntity("dns-01 challenge", authz.Identifier.Value, domainerr.ErrCertInvalid)
 		}
 
 		keyAuth, err := c.keyAuth(challenge.Token)
 		if err != nil {
-			return nil, fmt.Errorf("failed to compute key authorization: %w", err)
+			return nil, domainerr.WrapOp("compute key authorization", err)
 		}
 
 		if err := c.dnsProvider.Present(authz.Identifier.Value, challenge.Token, keyAuth); err != nil {
-			return nil, fmt.Errorf("failed to present dns challenge: %w", err)
+			return nil, domainerr.WrapOp("present dns challenge", err)
 		}
 
 		defer c.dnsProvider.CleanUp(authz.Identifier.Value, challenge.Token, keyAuth)
 
 		challenge, err = c.client.Accept(ctx, challenge)
 		if err != nil {
-			return nil, fmt.Errorf("failed to accept challenge: %w", err)
+			return nil, domainerr.WrapOp("accept challenge", err)
 		}
 
 		if err := c.waitForChallenge(ctx, challenge.URI); err != nil {
-			return nil, fmt.Errorf("challenge failed: %w", err)
+			return nil, domainerr.WrapOp("challenge", err)
 		}
 
 		if err := c.waitForAuthorization(ctx, authzURL); err != nil {
-			return nil, fmt.Errorf("authorization failed: %w", err)
+			return nil, domainerr.WrapOp("authorization", err)
 		}
 	}
 
 	order, err = c.waitOrder(ctx, order.URI)
 	if err != nil {
-		return nil, fmt.Errorf("order failed: %w", err)
+		return nil, domainerr.WrapOp("order", domainerr.ErrCertObtainFailed)
 	}
 
 	certKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate certificate key: %w", err)
+		return nil, domainerr.WrapOp("generate certificate key", err)
 	}
 
 	csr, err := c.createCSR(domains, certKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create CSR: %w", err)
+		return nil, domainerr.WrapOp("create CSR", err)
 	}
 
 	der, _, err := c.client.CreateCert(ctx, csr, 0, true)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create certificate: %w", err)
+		return nil, domainerr.WrapOp("create certificate", domainerr.ErrCertObtainFailed)
 	}
 
 	certPEM := encodePEM(der, "CERTIFICATE")
 	keyPEM, err := encodePrivateKey(certKey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to encode private key: %w", err)
+		return nil, domainerr.WrapOp("encode private key", err)
 	}
 
 	cert, err := parseCertificate(der[0])
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse certificate: %w", err)
+		return nil, domainerr.WrapOp("parse certificate", domainerr.ErrCertInvalid)
 	}
 
 	return &Certificate{
@@ -319,4 +325,64 @@ func encodePrivateKey(key crypto.Signer) ([]byte, error) {
 
 func parseCertificate(der []byte) (*x509.Certificate, error) {
 	return x509.ParseCertificate(der)
+}
+
+type ACMEProvider struct {
+	client       *ACMEClient
+	name         string
+	directoryURL string
+}
+
+func NewACMEProvider(name, directoryURL string, dnsProvider DNSProvider, eabKid, eabHmacKey string) (*ACMEProvider, error) {
+	var client *ACMEClient
+	var err error
+
+	if eabKid != "" && eabHmacKey != "" {
+		client, err = NewACMEClientWithEAB(directoryURL, eabKid, eabHmacKey, dnsProvider)
+	} else {
+		client, err = NewACMEClient(directoryURL, dnsProvider)
+	}
+	if err != nil {
+		return nil, domainerr.WrapOp("create acme client", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := client.RegisterAccount(ctx, true); err != nil {
+		return nil, domainerr.WrapOp("register account", err)
+	}
+
+	return &ACMEProvider{
+		client:       client,
+		name:         name,
+		directoryURL: directoryURL,
+	}, nil
+}
+
+func (p *ACMEProvider) Name() string {
+	return p.name
+}
+
+func (p *ACMEProvider) ObtainCertificate(domains []string) (*Certificate, error) {
+	if len(domains) == 0 {
+		return nil, domainerr.WrapOp("obtain certificate", domainerr.ErrRequired)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	return p.client.ObtainCertificate(ctx, domains)
+}
+
+func (p *ACMEProvider) RenewCertificate(cert *Certificate) (*Certificate, error) {
+	if cert == nil {
+		return nil, domainerr.WrapOp("renew certificate", domainerr.ErrCertInvalid)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	domains := []string{cert.Domain}
+	return p.client.RenewCertificate(ctx, cert, domains)
 }

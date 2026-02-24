@@ -383,8 +383,6 @@ func TestInfraServiceHandler_DeploySSLType_WithFile(t *testing.T) {
 }
 
 func TestInfraServiceHandler_GetComposeFilePath(t *testing.T) {
-	h := &InfraServiceHandler{}
-
 	deps := newMockDeps()
 	deps.workDir = "/tmp"
 	deps.servers["server1"] = &ServerInfo{}
@@ -396,7 +394,7 @@ func TestInfraServiceHandler_GetComposeFilePath(t *testing.T) {
 		},
 	}
 
-	result := h.getComposeFilePath(change, deps)
+	result := GetComposeFilePath(change, deps)
 	expected := filepath.Join("/tmp", "deployments", "server1", "gateway1.compose.yaml")
 	if result != expected {
 		t.Errorf("expected %s, got %s", expected, result)

@@ -247,8 +247,6 @@ func TestServiceHandler_DeleteService_RemoveError(t *testing.T) {
 }
 
 func TestServiceHandler_GetComposeFilePath(t *testing.T) {
-	h := &ServiceHandler{}
-
 	tests := []struct {
 		name     string
 		change   *valueobject.Change
@@ -292,7 +290,7 @@ func TestServiceHandler_GetComposeFilePath(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			deps := newMockDeps()
 			deps.workDir = tt.workDir
-			result := h.getComposeFilePath(tt.change, deps)
+			result := GetComposeFilePath(tt.change, deps)
 			if result != tt.expected {
 				t.Errorf("expected %s, got %s", tt.expected, result)
 			}

@@ -11,6 +11,25 @@ type SecretRef struct {
 	Secret string `yaml:"secret,omitempty"`
 }
 
+func NewSecretRef(plain, secret string) *SecretRef {
+	return &SecretRef{Plain: plain, Secret: secret}
+}
+
+func NewSecretRefPlain(plain string) *SecretRef {
+	return &SecretRef{Plain: plain}
+}
+
+func NewSecretRefSecret(secret string) *SecretRef {
+	return &SecretRef{Secret: secret}
+}
+
+func (s *SecretRef) Equals(other *SecretRef) bool {
+	if other == nil {
+		return false
+	}
+	return s.Plain == other.Plain && s.Secret == other.Secret
+}
+
 func (s *SecretRef) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var plain string
 	if err := unmarshal(&plain); err == nil {

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/repository"
 	"gopkg.in/yaml.v3"
@@ -20,12 +21,12 @@ func NewFileStore(path string) *FileStore {
 func (s *FileStore) Load() (*repository.DeploymentState, error) {
 	data, err := os.ReadFile(s.path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read state file: %w", err)
+		return nil, domain.WrapOp("read state file", domain.ErrStateReadFailed)
 	}
 
 	var cfg entity.Config
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse state file: %w", err)
+		return nil, domain.WrapOp("parse state file", domain.ErrStateSerializeFail)
 	}
 
 	state := repository.NewDeploymentState()
@@ -95,11 +96,11 @@ func (s *FileStore) Save(state *repository.DeploymentState) error {
 
 	data, err := yaml.Marshal(cfg)
 	if err != nil {
-		return fmt.Errorf("failed to marshal state: %w", err)
+		return domain.WrapOp("marshal state", domain.ErrStateSerializeFail)
 	}
 
 	if err := os.WriteFile(s.path, data, 0644); err != nil {
-		return fmt.Errorf("failed to write state file: %w", err)
+		return domain.WrapOp("write state file", domain.ErrStateWriteFailed)
 	}
 
 	return nil
