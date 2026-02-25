@@ -9,7 +9,6 @@
 - **声明式配置**：通过 YAML 描述期望状态
 - **密钥管理**：支持明文和密钥引用两种方式
 - **DNS 管理**：支持 Cloudflare、阿里云、腾讯云
-- **SSL 证书**：Let's Encrypt、ZeroSSL 自动化管理
 - **Docker Compose**：自动生成和部署
 - **交互式 TUI**：基于 BubbleTea 的终端界面
 
@@ -93,7 +92,6 @@ go build -o yamlops ./cmd/yamlops
     │   ├── services_infra.yaml  # 基础设施服务 (gateway/ssl)
     │   ├── registries.yaml  # Docker Registry
     │   ├── dns.yaml         # 域名和 DNS 记录
-    │   ├── certificates.yaml # SSL 证书
     │   └── volumes/         # 配置文件
     │       ├── infra-gate/
     │       └── api-server/
@@ -186,8 +184,6 @@ yamlops
 ./yamlops list servers -e prod
 ./yamlops list services -e prod
 ./yamlops list domains -e prod
-./yamlops list certificates -e prod
-
 # 查看详情
 ./yamlops show server srv-east-01 -e prod
 ./yamlops show service api-server -e prod
@@ -472,19 +468,6 @@ domains:
 
 **记录类型**: `A` | `AAAA` | `CNAME` | `MX` | `TXT` | `NS` | `SRV`
 
-### certificates.yaml - SSL 证书
-
-```yaml
-certificates:
-  - name: example-com
-    domains:
-      - example.com
-      - "*.example.com"
-    provider: letsencrypt          # letsencrypt | zerossl
-    dns_provider: cloudflare
-    renew_before: 720h
-```
-
 ## 工作流程
 
 ### 1. 新增服务
@@ -599,13 +582,6 @@ networks:
 | Cloudflare | ✅ | ✅ |
 | 阿里云 DNS | ✅ | ✅ |
 | 腾讯云 DNSPod | ✅ | ✅ |
-
-### SSL 证书
-
-| CA | 方式 | 有效期 |
-|----|------|--------|
-| Let's Encrypt | ACME v2 | 90 天 |
-| ZeroSSL | ACME v2 + EAB | 90 天 |
 
 ## 故障排查
 

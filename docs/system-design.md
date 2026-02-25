@@ -7,7 +7,7 @@
 - [3. 领域模型](#3-领域模型)
 - [4. 应用层设计](#4-应用层设计)
 - [5. 基础设施层](#5-基础设施层)
-- [6. Plan 层设计](#6-plan-层设计)
+- [6. 规划器设计](#6-规划器设计)
 - [7. CLI 命令系统](#7-cli-命令系统)
 - [8. 配置文件规范](#8-配置文件规范)
 - [9. 关键规则](#9-关键规则)
@@ -62,28 +62,26 @@ YAMLOps 是一个基于 Go 语言开发的基础设施即代码（IaC）管理�
 ├─────────────────────────────────────────────────────────────────────┤
 │                      Application Layer                               │
 │                    (application/)                                    │
-│    Handler 策略模式 + Executor 编排器，协调用例执行                     │
-├─────────────────────────────────────────────────────────────────────┤
-│                       Plan Layer                                     │
-│                         (plan/)                                      │
-│    规划器 + 部署生成器，生成执行计划和部署文件                          │
+│    Handler 策略模式 + Executor 编排器 + Planner 规划器                 │
+│    + Orchestrator 工作流 + Deployment 生成器                          │
 ├─────────────────────────────────────────────────────────────────────┤
 │                        Domain Layer                                  │
 │                         (domain/)                                    │
-│    实体 + 值对象 + 仓储接口 + 领域服务，核心业务逻辑                     │
+│    实体 + 值对象 + 仓储接口 + 领域服务 + 重试机制，无外部依赖            │
 ├─────────────────────────────────────────────────────────────────────┤
 │                    Infrastructure Layer                              │
 │                     (infrastructure/)                                │
-│    配置加载 + DNS/SSL Provider + SSH + Compose/Gate 生成              │
+│    配置加载 + DNS Factory + 状态存储 + SSH + 生成器 + 网络 + 密钥       │
+│    + 镜像仓库 + 日志                                                  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 2.2 依赖规则
 
 ```
-Interface → Application → Plan → Domain ← Infrastructure
-                                    ↑
-                                    └── 依赖倒置：Infrastructure 实现 Domain 接口
+Interface → Application → Domain ← Infrastructure
+                              ↑
+                              └── 依赖倒置：Infrastructure 实现 Domain 接口
 ```
 
 ### 2.3 目录结构
@@ -96,27 +94,30 @@ internal/
 │   ├── valueobject/                # 值对象
 │   ├── repository/                 # 仓储接口
 │   ├── service/                    # 领域服务（DifferService, Validator）
+│   ├── retry/                      # 重试机制（Config, Option, Do, DoWithResult）
 │   └── errors.go                   # 领域错误（统一定义）
 ├── application/                    # 应用层
 │   ├── handler/                    # 变更处理器（策略模式）
-│   │   ├── types.go                # 依赖接口定义
+│   │   ├── types.go                # 依赖接口定义（ISP: DNSDeps, ServiceDeps, CommonDeps）
 │   │   ├── dns_handler.go          # DNS 记录处理器
 │   │   ├── service_handler.go      # 业务服务处理器
+│   │   ├── service_common.go       # 服务公共逻辑
 │   │   ├── infra_service_handler.go # 基础设施服务处理器
 │   │   ├── server_handler.go       # 服务器处理器
 │   │   ├── noop_handler.go         # 空操作处理器（isp/zone/domain/certificate）
 │   │   ├── registry.go             # 处理器注册表
 │   │   └── utils.go                # 工具函数
 │   ├── usecase/                    # 用例执行器
-│   │   ├── executor.go             # 执行器（支持依赖注入）
+│   │   ├── executor.go             # 执行器（支持依赖注入 DIP）
 │   │   └── ssh_pool.go             # SSH 连接池
 │   ├── deployment/                 # 部署文件生成器
 │   │   ├── generator.go            # 生成器主入口
 │   │   ├── compose_service.go      # 业务服务 Compose 生成
 │   │   ├── compose_infra.go        # 基础设施服务 Compose 生成
 │   │   ├── gateway.go              # Gateway 配置生成
-│   │   ├── ssl.go                  # SSL 配置生成
 │   │   └── utils.go                # 工具函数
+│   ├── plan/                       # 规划协调层
+│   │   └── planner.go              # Planner 主入口（Option 模式）
 │   └── orchestrator/               # 工作流编排器
 │       ├── workflow.go             # 工作流主入口
 │       ├── state_fetcher.go        # 状态获取器
@@ -126,8 +127,29 @@ internal/
 │   │   └── config_loader.go        # 配置加载器
 │   ├── state/                      # 状态存储实现
 │   │   └── file_store.go           # 文件状态存储
-│   └── dns/                        # DNS 工厂
-│       └── factory.go              # DNS Provider 工厂
+│   ├── dns/                        # DNS 工厂
+│   │   └── factory.go              # DNS Provider 工厂
+│   ├── ssh/                        # SSH 客户端
+│   │   ├── client.go               # SSH 客户端
+│   │   ├── sftp.go                 # SFTP 文件传输
+│   │   └── shell_escape.go         # Shell 转义
+│   ├── generator/                  # 生成器
+│   │   ├── compose/                # Docker Compose 生成器
+│   │   │   ├── generator.go
+│   │   │   └── types.go
+│   │   └── gate/                   # infra-gate 配置生成器
+│   │       ├── generator.go
+│   │       └── types.go
+│   ├── network/                    # Docker 网络管理
+│   │   └── manager.go
+│   ├── registry/                   # 镜像仓库管理
+│   │   └── manager.go
+│   ├── secrets/                    # 密钥解析器
+│   │   └── resolver.go             # SecretResolver 实现
+│   └── logger/                     # 日志基础设施
+│       ├── logger.go               # 日志主入口
+│       ├── context.go              # 上下文日志
+│       └── metrics.go              # 指标记录
 ├── interfaces/                     # 接口层
 │   └── cli/                        # CLI 命令
 │       ├── root.go                 # 根命令
@@ -139,6 +161,7 @@ internal/
 │       ├── list.go                 # List 命令
 │       ├── show.go                 # Show 命令
 │       ├── clean.go                # Clean 命令
+│       ├── confirm.go              # 确认对话框
 │       ├── env.go                  # Env 命令
 │       ├── dns.go                  # DNS 命令
 │       ├── dns_pull.go             # DNS Pull 命令
@@ -148,6 +171,7 @@ internal/
 │       ├── tui.go                  # TUI 主入口
 │       ├── tui_model.go            # TUI 数据模型
 │       ├── tui_view.go             # TUI 视图渲染
+│       ├── tui_render.go           # TUI 渲染逻辑
 │       ├── tui_actions.go          # TUI 操作处理
 │       ├── tui_keys.go             # TUI 按键处理
 │       ├── tui_styles.go           # TUI 样式定义
@@ -156,41 +180,24 @@ internal/
 │       ├── tui_viewport.go         # TUI 视口滚动
 │       ├── tui_server.go           # TUI 服务器操作
 │       ├── tui_dns.go              # TUI DNS 操作
+│       ├── tui_service_common.go   # TUI 服务公共逻辑
 │       ├── tui_cleanup.go          # TUI 清理操作
-│       └── tui_stop.go             # TUI 停止操作
+│       ├── tui_stop.go             # TUI 停止操作
+│       └── tui_restart.go          # TUI 重启操作
 ├── constants/                      # 常量定义
 │   └── constants.go                # 路径、格式等常量
-├── plan/                           # 规划协调层
-│   └── planner.go                  # Planner 主入口
-├── secrets/                        # 密钥解析器
-│   └── resolver.go                 # SecretResolver 实现
-├── providers/                      # 外部服务提供者
-│   ├── dns/                        # DNS 提供者
-│   │   ├── provider.go             # DNS Provider 接口
-│   │   ├── factory.go              # DNS 提供商工厂
-│   │   ├── common.go               # DNS 公共逻辑
-│   │   ├── cloudflare.go           # Cloudflare 实现
-│   │   ├── aliyun.go               # 阿里云实现
-│   │   └── tencent.go              # 腾讯云实现
-│   └── ssl/                        # SSL 提供者
-│       ├── provider.go             # SSL Provider 接口
-│       ├── acme.go                 # ACME 基础实现
-│       ├── letsencrypt.go          # Let's Encrypt 实现
-│       └── zerossl.go              # ZeroSSL 实现
-├── ssh/                            # SSH 客户端
-│   ├── client.go                   # SSH 客户端
-│   └── sftp.go                     # SFTP 文件传输
-├── compose/                        # Docker Compose 工具
-│   ├── generator.go                # Compose 生成器
+├── environment/                    # 服务器环境管理
+│   ├── checker.go                  # 环境检查器
+│   ├── syncer.go                   # 环境同步器
+│   ├── templates.go                # 配置模板
 │   └── types.go                    # 类型定义
-├── gate/                           # infra-gate 工具
-│   ├── generator.go                # Gate 配置生成器
-│   └── types.go                    # 类型定义
-└── environment/                    # 服务器环境管理
-    ├── checker.go                  # 环境检查器
-    ├── syncer.go                   # 环境同步器
-    ├── templates.go                # 配置模板
-    └── types.go                    # 类型定义
+└── providers/                      # 外部服务提供者
+    └── dns/                        # DNS 提供者
+        ├── provider.go             # DNS Provider 接口
+        ├── common.go               # DNS 公共逻辑
+        ├── cloudflare.go           # Cloudflare 实现
+        ├── aliyun.go               # 阿里云实现
+        └── tencent.go              # 腾讯云实现
 userdata/{env}/                     # 用户配置文件
 deployments/                        # 生成的部署文件（git-ignored）
 ```
@@ -793,7 +800,9 @@ hosts:
 
 ---
 
-## 6. Plan 层设计
+## 6. 规划器设计
+
+> 规划器（Planner）位于 `internal/application/plan/`，是应用层的一部分。
 
 ### 6.1 Planner 结构
 
@@ -1132,20 +1141,21 @@ type DeploymentState struct {
 
 | 模式 | 应用位置 |
 |------|----------|
-| 策略模式 | Handler 注册表 |
-| 工厂模式 | DNS/SSL Provider 创建 |
+| 策略模式 | Handler 注册表，不同 Handler 实现 |
+| 工厂模式 | DNS Provider 创建（infrastructure/dns/factory.go） |
 | 适配器模式 | DNS Provider 适配 |
-| 对象池模式 | SSH 连接池 |
-| 依赖注入 | Handler Deps 结构 |
-| 接口隔离 (ISP) | DNSDeps / ServiceDeps / CommonDeps |
-| 依赖倒置 (DIP) | Executor 接收接口而非具体实现 |
-| 泛型编程 | planSimpleEntity 函数 |
+| 对象池模式 | SSH 连接池（usecase/ssh_pool.go） |
+| 依赖注入 (DIP) | Executor 通过 ExecutorConfig 接收依赖 |
+| 接口隔离 (ISP) | DNSDeps / ServiceDeps / CommonDeps 组合为 DepsProvider |
+| 注册表模式 | Handler Registry（handler/registry.go） |
+| Option 模式 | Planner 配置、Retry 重试机制 |
+| 泛型编程 | planSimpleEntity 函数（domain/service/differ_generic.go） |
 
 ### D. 架构改进
 
 #### D.1 Handler 依赖接口隔离 (ISP)
 
-Handler 依赖拆分为专注的接口，避免臃肿的单一接口：
+Handler 依赖拆分为专注的接口，定义在 `internal/application/handler/types.go`：
 
 ```go
 type DNSDeps interface {
@@ -1161,6 +1171,10 @@ type ServiceDeps interface {
     Env() string
 }
 
+type CommonDeps interface {
+    ResolveSecret(ref *valueobject.SecretRef) (string, error)
+}
+
 type DepsProvider interface {
     DNSDeps
     ServiceDeps
@@ -1170,7 +1184,7 @@ type DepsProvider interface {
 
 #### D.2 Executor 依赖注入 (DIP)
 
-Executor 通过配置结构接收依赖，支持测试和扩展：
+Executor 通过配置结构接收依赖，位于 `internal/application/usecase/executor.go`：
 
 ```go
 type ExecutorConfig struct {
@@ -1223,9 +1237,50 @@ func (g *Generator) Generate(config *entity.Config) error
 - Docker Compose 文件（业务服务 + 基础设施服务）
 - Gateway 配置文件
 
-#### D.5 Secrets 解析器
+#### D.5 Planner 规划器
 
-`internal/secrets/` 负责密钥引用解析：
+`internal/application/plan/planner.go` 使用 Option 模式：
+
+```go
+type Planner struct {
+    config        *entity.Config
+    differService *service.DifferService
+    deployGen     *deployment.Generator
+    stateStore    *state.FileStore
+    outputDir     string
+    env           string
+}
+
+type Option func(*Planner)
+
+func WithDifferService(ds *service.DifferService) Option
+func WithStateStore(ss *state.FileStore) Option
+```
+
+#### D.6 Retry 重试机制
+
+`internal/domain/retry/retry.go` 提供 Option 模式的重试机制：
+
+```go
+type Config struct {
+    MaxAttempts int
+    InitialDelay time.Duration
+    MaxDelay    time.Duration
+    Multiplier  float64
+}
+
+type Option func(*Config)
+
+func WithMaxAttempts(n int) Option
+func WithInitialDelay(d time.Duration) Option
+
+func Do(ctx context.Context, fn func() error, opts ...Option) error
+func DoWithResult[T any](ctx context.Context, fn func() (T, error), opts ...Option) (T, error)
+```
+
+#### D.7 Secrets 解析器
+
+`internal/infrastructure/secrets/resolver.go` 负责密钥引用解析：
 
 ```go
 type SecretResolver struct {
@@ -1237,7 +1292,7 @@ func (r *SecretResolver) Resolve(ref valueobject.SecretRef) (string, error)
 func (r *SecretResolver) ResolveAll(cfg *entity.Config) error
 ```
 
-#### D.6 Environment 管理模块
+#### D.8 Environment 管理模块
 
 `internal/environment/` 负责服务器环境检查和同步：
 
@@ -1248,7 +1303,7 @@ func (r *SecretResolver) ResolveAll(cfg *entity.Config) error
 | templates.go | 配置模板（Docker daemon.json 等） |
 | types.go | 类型定义（CheckResult、CheckStatus） |
 
-#### D.7 TUI 模块拆分
+#### D.9 TUI 模块拆分
 
 TUI 按功能拆分为独立文件，提高可维护性：
 
@@ -1257,12 +1312,15 @@ TUI 按功能拆分为独立文件，提高可维护性：
 | tui.go | 主入口、Update 循环 |
 | tui_model.go | 数据模型定义 |
 | tui_view.go | 主视图渲染 |
+| tui_render.go | 渲染逻辑 |
 | tui_server.go | 服务器操作（检查、同步） |
 | tui_dns.go | DNS 操作（拉取、管理） |
+| tui_service_common.go | 服务公共逻辑 |
 | tui_cleanup.go | 服务清理（孤立资源） |
 | tui_stop.go | 服务停止 |
+| tui_restart.go | 服务重启 |
 
-#### D.8 常量集中管理
+#### D.10 常量集中管理
 
 应用级常量统一在 `internal/constants/constants.go` 定义：
 
@@ -1276,7 +1334,7 @@ const (
 )
 ```
 
-#### D.9 统一 Domain 错误
+#### D.11 统一 Domain 错误
 
 所有领域错误集中在 `internal/domain/errors.go` 定义，便于统一管理和复用：
 
@@ -1291,3 +1349,13 @@ func RequiredField(field string) error {
     return fmt.Errorf("%w: %s", ErrRequired, field)
 }
 ```
+
+#### D.12 Logger 日志模块
+
+`internal/infrastructure/logger/` 提供日志基础设施：
+
+| 文件 | 职责 |
+|------|------|
+| logger.go | 日志主入口、全局 Logger |
+| context.go | 上下文日志、字段管理 |
+| metrics.go | 指标记录 |

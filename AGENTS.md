@@ -23,6 +23,7 @@ go mod tidy && go mod download          # Download dependencies
 go test ./...                                    # Run all tests
 go test ./internal/domain/entity/...             # Run package tests
 go test ./internal/domain/entity -run TestServer -v  # Single test, verbose
+go test ./internal/domain/entity -run TestServer_Validate -v  # Specific test
 go test -v -cover ./...                          # With coverage
 go test -race ./...                              # With race detection
 ```
@@ -41,40 +42,26 @@ staticcheck ./...             # Run staticcheck (if installed)
 cmd/yamlops/                    # CLI entry point
 internal/
 ├── domain/                     # Domain layer (no external deps)
-│   ├── entity/                 # Entity definitions
+│   ├── entity/                 # Entity definitions (server, zone, isp, secret, registry, domain, dns_record, biz_service, infra_service)
 │   ├── valueobject/            # Value objects (SecretRef, Change, Scope, Plan)
-│   ├── repository/             # Repository interfaces
-│   ├── service/                # Domain services (Validator)
+│   ├── repository/             # Repository interfaces (ConfigLoader, StateRepository)
+│   ├── service/                # Domain services (Validator, DifferService)
+│   ├── retry/                  # Retry mechanism with Option pattern
 │   └── errors.go               # Domain errors
-├── application/                # Application layer
+├── application/
 │   ├── handler/                # Change handlers (Strategy Pattern)
 │   ├── usecase/                # Executor, SSHPool
-│   ├── deployment/             # Deployment generators (SSL, utils)
-│   └── orchestrator/           # Workflow orchestration, state fetcher
+│   └── deployment/             # Deployment generators (compose, gateway)
 ├── infrastructure/
 │   ├── persistence/            # Config loader
-│   ├── dns/                    # DNS provider factory
-│   └── state/                  # File-based state storage
+│   ├── ssh/                    # SSH client, SFTP, shell_escape
+│   ├── state/                  # File-based state storage
+│   ├── secrets/                # SecretResolver
+│   └── logger/                 # Logging infrastructure
 ├── interfaces/cli/             # Cobra commands, BubbleTea TUI
-│   ├── workflow.go             # CLI workflow orchestration
-│   ├── tui_server.go           # TUI server operations
-│   ├── tui_dns.go              # TUI DNS operations
-│   ├── tui_cleanup.go          # TUI cleanup operations
-│   └── tui_stop.go             # TUI stop operations
 ├── constants/                  # Shared constants
-│   └── constants.go            # Application-wide constants
-├── environment/                # Environment setup (checker, syncer, templates)
-├── plan/                       # Planner, Compose/Gate generators
-├── providers/dns/              # Cloudflare, Aliyun, Tencent DNS
-│   ├── provider.go             # Provider interface
-│   ├── common.go               # Shared DNS logic
-│   ├── cloudflare.go           # Cloudflare implementation
-│   ├── aliyun.go               # Aliyun implementation
-│   └── tencent.go              # Tencent implementation
-├── ssh/                        # SSH client, SFTP
-├── compose/                    # Docker Compose generator
-├── gate/                       # infra-gate config generator
-└── secrets/                    # SecretResolver
+├── environment/                # Environment setup with embedded templates
+└── providers/dns/              # Cloudflare, Aliyun, Tencent DNS providers
 userdata/{env}/                 # User configs (prod/staging/dev/demo)
 deployments/                    # Generated files (git-ignored)
 ```
@@ -87,12 +74,14 @@ Group imports: standard library, third-party, internal packages. Separate with b
 
 ```go
 import (
+    "context"
     "errors"
     "fmt"
 
     "github.com/spf13/cobra"
     "gopkg.in/yaml.v3"
 
+    "github.com/litelake/yamlops/internal/domain"
     "github.com/litelake/yamlops/internal/domain/entity"
 )
 ```
@@ -124,9 +113,6 @@ func RequiredField(field string) error {
 func (s *Server) Validate() error {
     if s.Name == "" {
         return fmt.Errorf("%w: server name is required", domain.ErrInvalidName)
-    }
-    if s.Zone == "" {
-        return domain.RequiredField("zone")
     }
     return nil
 }
@@ -168,6 +154,24 @@ func NewLoader(env, baseDir string) *Loader {
 }
 ```
 
+### Option Pattern
+
+Use for configurable constructors:
+
+```go
+type Option func(*Config)
+
+func WithMaxAttempts(n int) Option {
+    return func(c *Config) { c.MaxAttempts = n }
+}
+
+func DefaultConfig() *Config {
+    return &Config{MaxAttempts: 3}
+}
+
+// Usage: cfg := DefaultConfig(); for _, opt := range opts { opt(cfg) }
+```
+
 ### YAML Custom Deserialization
 
 Support both shorthand and full forms:
@@ -179,15 +183,8 @@ func (s *SecretRef) UnmarshalYAML(unmarshal func(interface{}) error) error {
         s.Plain = plain
         return nil
     }
-
     type alias SecretRef
-    var ref alias
-    if err := unmarshal(&ref); err != nil {
-        return err
-    }
-    s.Plain = ref.Plain
-    s.Secret = ref.Secret
-    return nil
+    return unmarshal((*alias)(s))
 }
 ```
 
@@ -204,7 +201,7 @@ func TestServer_Validate(t *testing.T) {
     }{
         {"missing name", Server{}, domain.ErrInvalidName},
         {"missing zone", Server{Name: "server-1"}, domain.ErrRequired},
-        {"valid", Server{Name: "server-1", Zone: "zone-1", ...}, nil},
+        {"valid", Server{Name: "s1", Zone: "z1", SSH: ServerSSH{...}}, nil},
     }
     for _, tt := range tests {
         t.Run(tt.name, func(t *testing.T) {
@@ -223,20 +220,43 @@ func TestServer_Validate(t *testing.T) {
 
 ## Key Patterns
 
-### Secret References
+### Handler Registry
 
-```yaml
-password: "plain-text"        # Plain text
-password: {secret: db_pass}   # Reference to secrets.yaml
+```go
+type Handler interface {
+    EntityType() string
+    Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error)
+}
+
+type Registry struct {
+    handlers map[string]Handler
+}
+
+func (r *Registry) Register(h Handler) { r.handlers[h.EntityType()] = h }
+func (r *Registry) Get(entityType string) (Handler, bool) { ... }
 ```
 
-### Service Naming
+### Dependency Injection
 
-Deployed services: `yo-{env}-{service-name}` (e.g., `yo-prod-api-server`)
+Handler dependencies use interface segregation:
 
-### Docker Networks
+```go
+type DepsProvider interface {
+    DNSDeps
+    ServiceDeps
+    CommonDeps
+}
+```
 
-Each environment: `yamlops-{env}` (e.g., `yamlops-prod`)
+### Fluent Builder Pattern
+
+```go
+func (c *Change) WithOldState(state interface{}) *Change {
+    c.OldState = state
+    return c
+}
+// Usage: NewChange(ChangeTypeCreate, "server", "s1").WithOldState(old).WithActions("create")
+```
 
 ## Architecture Layers
 
@@ -247,108 +267,11 @@ Each environment: `yamlops-{env}` (e.g., `yamlops-prod`)
 | Domain | domain/ | No external deps |
 | Infrastructure | infrastructure/ | → domain (implements interfaces) |
 
-## Architecture Improvements
-
-### Handler Deps Interface Segregation (ISP)
-
-Handler dependencies are split into focused interfaces:
-
-```go
-type DNSDeps interface {
-    DNSProvider(ispName string) (DNSProvider, error)
-    Domain(name string) (*entity.Domain, bool)
-    ISP(name string) (*entity.ISP, bool)
-}
-
-type ServiceDeps interface {
-    SSHClient(server string) (SSHClient, error)
-    ServerInfo(name string) (*ServerInfo, bool)
-    WorkDir() string
-    Env() string
-}
-
-type CommonDeps interface {
-    ResolveSecret(ref *valueobject.SecretRef) (string, error)
-}
-
-type DepsProvider interface {
-    DNSDeps
-    ServiceDeps
-    CommonDeps
-}
-```
-
-### Executor Dependency Injection (DIP)
-
-Executor receives dependencies via constructor injection:
-
-```go
-func NewExecutor(cfg *ExecutorConfig) *Executor {
-    if cfg.Registry == nil {
-        cfg.Registry = handler.NewRegistry()
-    }
-    if cfg.SSHPool == nil {
-        cfg.SSHPool = NewSSHPool()
-    }
-    if cfg.DNSFactory == nil {
-        cfg.DNSFactory = infra.NewFactory()
-    }
-    return &Executor{
-        plan:       cfg.Plan,
-        registry:   cfg.Registry,
-        sshPool:    cfg.SSHPool,
-        dnsFactory: cfg.DNSFactory,
-        ...
-    }
-}
-```
-
-### Unified Domain Errors
-
-All domain errors defined in `internal/domain/errors.go`:
-
-```go
-var (
-    ErrInvalidName     = errors.New("invalid name")
-    ErrInvalidIP       = errors.New("invalid IP address")
-    ErrInvalidPort     = errors.New("invalid port")
-    ErrRequired        = errors.New("required field missing")
-    ErrMissingSecret   = errors.New("missing secret reference")
-    ErrPortConflict    = errors.New("port conflict")
-)
-
-func RequiredField(field string) error {
-    return fmt.Errorf("%w: %s", ErrRequired, field)
-}
-```
-
-### Handler Registry Pattern
-
-Registry manages handlers by entity type:
-
-```go
-type Registry struct {
-    handlers map[string]Handler
-}
-
-func (r *Registry) Register(h Handler) {
-    r.handlers[h.EntityType()] = h
-}
-
-func (r *Registry) Get(entityType string) (Handler, bool) {
-    h, ok := r.handlers[entityType]
-    return h, ok
-}
-```
-
-## Configuration Files
-
-User configs in `userdata/{env}/`: secrets.yaml, isps.yaml, zones.yaml, servers.yaml, services_biz.yaml, services_infra.yaml, registries.yaml, dns.yaml, certificates.yaml
-
 ## Important Notes
 
 - Never commit secrets to the repository
 - `deployments/` directory is git-ignored
 - Domain layer must have no external dependencies
-- Handler pattern: each entity type has a corresponding Handler implementing `Apply(ctx, change, deps)`
-- Use generics for common patterns (e.g., `planSimpleEntity[T]`)
+- Handler pattern: each entity type has a Handler implementing `Apply(ctx, change, deps)`
+- Use generics for common patterns (e.g., `DoWithResult[T]`, `planSimpleEntity[T]`)
+- Service naming: `yo-{env}-{service-name}` (e.g., `yo-prod-api-server`)
