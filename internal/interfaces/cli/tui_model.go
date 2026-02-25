@@ -442,6 +442,7 @@ type Model struct {
 	Restart   *RestartState
 	Action    *ActionState
 	Loading   *LoadingState
+	ShowHelp  bool
 }
 
 func NewModel(env string, configDir string) Model {
@@ -476,7 +477,8 @@ func NewModel(env string, configDir string) Model {
 		Action: &ActionState{
 			PlanScope: &valueobject.Scope{},
 		},
-		Loading: &LoadingState{},
+		Loading:  &LoadingState{},
+		ShowHelp: false,
 	}
 	return m
 }

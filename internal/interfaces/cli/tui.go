@@ -312,6 +312,10 @@ func (m Model) handleApplyCompleteAsyncMsg(msg applyCompleteAsyncMsg) (tea.Model
 }
 
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if m.ShowHelp {
+		m.ShowHelp = false
+		return m, nil
+	}
 	if m.Loading.Active {
 		if msg.String() == "ctrl+c" || msg.String() == "q" {
 			return m, tea.Quit
@@ -372,6 +376,9 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		return m, nil
+	case "?":
+		m.ShowHelp = true
 		return m, nil
 	}
 	return m, nil

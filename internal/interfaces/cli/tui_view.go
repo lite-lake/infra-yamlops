@@ -8,6 +8,9 @@ import (
 )
 
 func (m Model) View() string {
+	if m.ShowHelp {
+		return m.renderHelpView()
+	}
 	if m.Loading.Active {
 		return m.renderLoadingView()
 	}
@@ -76,7 +79,7 @@ func (m Model) renderLoadingView() string {
 	loadingText := fmt.Sprintf("  %s %s", spinner, m.Loading.Message)
 	content.WriteString(LoadingOverlayStyle.Render(loadingText))
 	content.WriteString("\n\n")
-	content.WriteString(HelpStyle.Render("  Ctrl+C to cancel"))
+	content.WriteString(HelpStyle.Render("  Ctrl+C to cancel  ? help"))
 	return BaseStyle.Render(content.String())
 }
 
@@ -340,5 +343,64 @@ func (m Model) renderHelp() string {
 	if m.ViewState == ViewStateApplyComplete {
 		return "\n" + HelpComplete()
 	}
-	return "\n" + HelpEscQuit()
+	return "\n" + HelpEscQuit() + "  " + HelpStyle.Render("? help")
+}
+
+func (m Model) renderHelpView() string {
+	var content strings.Builder
+	content.WriteString(TitleStyle.Render("Keyboard Shortcuts"))
+	content.WriteString("\n\n")
+
+	helpItems := []struct {
+		Section string
+		Items   []HelpItem
+	}{
+		{
+			Section: "General",
+			Items: []HelpItem{
+				{"Ctrl+C / q", "Quit"},
+				{"Esc / x", "Back / Cancel"},
+				{"?", "Show help"},
+			},
+		},
+		{
+			Section: "Navigation",
+			Items: []HelpItem{
+				{"↑ / k", "Move up"},
+				{"↓ / j", "Move down"},
+				{"Enter", "Confirm / Expand"},
+				{"Tab", "Switch mode"},
+			},
+		},
+		{
+			Section: "Selection",
+			Items: []HelpItem{
+				{"Space", "Toggle selection"},
+				{"a", "Select current group"},
+				{"n", "Deselect current group"},
+				{"A", "Select all"},
+				{"N", "Deselect all"},
+			},
+		},
+		{
+			Section: "Actions",
+			Items: []HelpItem{
+				{"p", "Generate plan"},
+				{"r", "Refresh / Check server environment"},
+				{"s", "Sync server environment"},
+			},
+		},
+	}
+
+	for _, section := range helpItems {
+		content.WriteString(TitleStyle.Render(section.Section))
+		content.WriteString("\n")
+		for _, item := range section.Items {
+			content.WriteString(fmt.Sprintf("  %-20s %s\n", item.Key, item.Desc))
+		}
+		content.WriteString("\n")
+	}
+
+	content.WriteString(HelpStyle.Render("Press any key to close"))
+	return LoadingOverlayStyle.Render(content.String())
 }

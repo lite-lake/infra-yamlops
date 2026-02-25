@@ -1,12 +1,58 @@
+# OS specific files
 .DS_Store
+Thumbs.db
+Desktop.ini
 
+# Binaries for programs and plugins
 /yamlops.exe
 /yamlops
+/bin/
+/dist/
+/build/
 
+# Editor directories and files
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
+*.sublime-project
+*.sublime-workspace
+.project
+.settings/
+.classpath
 
+# Go related
+*.test
+*.out
+coverage.txt
+coverage.html
+coverage/
+vendor/
+go.work
+go.work.sum
+go.sum.backup
+
+# Sensitive files
+*.env
+*.env.local
+*.env.*.local
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials
+*.credentials
+*.secret
+
+# Logs and temporary files
+*.log
+*.tmp
+tmp/
+temp/
+*.cache/
+
+# Deployments (generated files)
 deployments/
