@@ -140,11 +140,11 @@ func (s *Server) HasNetwork(name string) bool {
 	return false
 }
 
-func (s *Server) GetNetwork(name string) *ServerNetwork {
-	for i := range s.Networks {
-		if s.Networks[i].Name == name {
-			return &s.Networks[i]
+func (s *Server) GetNetwork(name string) (ServerNetwork, bool) {
+	for _, n := range s.Networks {
+		if n.Name == name {
+			return n, true
 		}
 	}
-	return nil
+	return ServerNetwork{}, false
 }

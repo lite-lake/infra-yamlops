@@ -746,7 +746,10 @@ func (m *Model) saveDomainDiffsToConfig(diffs []DomainDiff) {
 		}
 	}
 
-	saveYAMLConfig(dnsPath, "domains", newDomains)
+	if err := saveYAMLConfig(dnsPath, "domains", newDomains); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to save config: %v\n", err)
+		return
+	}
 	m.Config = nil
 	m.loadConfig()
 	m.buildTrees()
@@ -799,19 +802,25 @@ func (m *Model) saveRecordDiffsToConfig(diffs []RecordDiff) {
 		newDomains = append(newDomains, newDomain)
 	}
 
-	saveYAMLConfig(dnsPath, "domains", newDomains)
+	if err := saveYAMLConfig(dnsPath, "domains", newDomains); err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to save config: %v\n", err)
+		return
+	}
 	m.Config = nil
 	m.loadConfig()
 	m.buildTrees()
 }
 
-func saveYAMLConfig(path, key string, data interface{}) {
+func saveYAMLConfig(path, key string, data interface{}) error {
 	yamlData := map[string]interface{}{key: data}
 	content, err := yaml.Marshal(yamlData)
 	if err != nil {
-		return
+		return fmt.Errorf("marshal yaml: %w", err)
 	}
-	_ = os.WriteFile(path, content, 0644)
+	if err := os.WriteFile(path, content, 0644); err != nil {
+		return fmt.Errorf("write file %s: %w", path, err)
+	}
+	return nil
 }
 
 func createDNSProviderFromConfig(isp *entity.ISP, secrets map[string]string) (dns.Provider, error) {

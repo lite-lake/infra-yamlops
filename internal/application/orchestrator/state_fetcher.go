@@ -48,9 +48,10 @@ func (f *StateFetcher) Fetch(ctx context.Context, cfg *entity.Config) *repositor
 			continue
 		}
 
-		f.fetchServerServicesState(client, srv.Name, cfg, state)
-
-		client.Close()
+		func() {
+			defer client.Close()
+			f.fetchServerServicesState(client, srv.Name, cfg, state)
+		}()
 	}
 
 	return state

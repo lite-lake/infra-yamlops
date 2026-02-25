@@ -11,6 +11,7 @@ import (
 	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/network"
+	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
 
 type NetworkGetter interface {
@@ -47,8 +48,8 @@ func GetRequiredNetworks(change *valueobject.Change, deps DepsProvider, serverNa
 
 	var requiredNetworks []entity.ServerNetwork
 	for _, netName := range serviceNetworks {
-		if server.HasNetwork(netName) {
-			requiredNetworks = append(requiredNetworks, *server.GetNetwork(netName))
+		if net, ok := server.GetNetwork(netName); ok {
+			requiredNetworks = append(requiredNetworks, net)
 		} else {
 			requiredNetworks = append(requiredNetworks, entity.ServerNetwork{Name: netName, Type: entity.NetworkTypeBridge})
 		}
@@ -72,10 +73,11 @@ func EnsureNetworks(client interfaces.SSHRunner, networks []entity.ServerNetwork
 func DeleteServiceRemote(change *valueobject.Change, client interfaces.SSHRunner, remoteDir string) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
-	cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml down -v 2>/dev/null || true", remoteDir)
+	escapedDir := ssh.ShellEscape(remoteDir)
+	cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml down -v 2>/dev/null || true", escapedDir)
 	stdout, stderr, _ := client.Run(cmd)
 
-	rmCmd := fmt.Sprintf("sudo rm -rf %s", remoteDir)
+	rmCmd := fmt.Sprintf("sudo rm -rf %s", escapedDir)
 	stdout2, stderr2, err := client.Run(rmCmd)
 	if err != nil {
 		result.Error = fmt.Errorf("%w: %w, stderr: %s", domainerr.ErrDirectoryRemoveFailed, err, stderr2)
