@@ -247,10 +247,10 @@ type Result struct {
 
 type DNSProvider interface {
 	Name() string
-	ListRecords(domain string) ([]dns.DNSRecord, error)
-	CreateRecord(domain string, record *dns.DNSRecord) error
-	DeleteRecord(domain string, recordID string) error
-	UpdateRecord(domain string, recordID string, record *dns.DNSRecord) error
+	ListRecords(ctx context.Context, domain string) ([]dns.DNSRecord, error)
+	CreateRecord(ctx context.Context, domain string, record *dns.DNSRecord) error
+	DeleteRecord(ctx context.Context, domain string, recordID string) error
+	UpdateRecord(ctx context.Context, domain string, recordID string, record *dns.DNSRecord) error
 }
 
 var (
@@ -266,20 +266,20 @@ func (a *dnsAdapter) Name() string {
 	return a.provider.Name()
 }
 
-func (a *dnsAdapter) ListRecords(domain string) ([]dns.DNSRecord, error) {
-	return a.provider.ListRecords(domain)
+func (a *dnsAdapter) ListRecords(ctx context.Context, domain string) ([]dns.DNSRecord, error) {
+	return a.provider.ListRecords(ctx, domain)
 }
 
-func (a *dnsAdapter) CreateRecord(domain string, record *dns.DNSRecord) error {
-	return a.provider.CreateRecord(domain, record)
+func (a *dnsAdapter) CreateRecord(ctx context.Context, domain string, record *dns.DNSRecord) error {
+	return a.provider.CreateRecord(ctx, domain, record)
 }
 
-func (a *dnsAdapter) DeleteRecord(domain string, recordID string) error {
-	return a.provider.DeleteRecord(domain, recordID)
+func (a *dnsAdapter) DeleteRecord(ctx context.Context, domain string, recordID string) error {
+	return a.provider.DeleteRecord(ctx, domain, recordID)
 }
 
-func (a *dnsAdapter) UpdateRecord(domain string, recordID string, record *dns.DNSRecord) error {
-	return a.provider.UpdateRecord(domain, recordID, record)
+func (a *dnsAdapter) UpdateRecord(ctx context.Context, domain string, recordID string, record *dns.DNSRecord) error {
+	return a.provider.UpdateRecord(ctx, domain, recordID, record)
 }
 
 func WrapDNSProvider(p dns.Provider) DNSProvider {

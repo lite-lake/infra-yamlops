@@ -40,10 +40,9 @@ func (p *CloudflareProvider) getZoneID(ctx context.Context, domainName string) (
 	return resp.Result[0].ID, nil
 }
 
-func (p *CloudflareProvider) ListRecords(domainName string) ([]DNSRecord, error) {
+func (p *CloudflareProvider) ListRecords(ctx context.Context, domainName string) ([]DNSRecord, error) {
 	logger.Debug("listing DNS records", "provider", "cloudflare", "domain", domainName)
 
-	ctx := context.Background()
 	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
 		logger.Error("failed to get zone ID", "domain", domainName, "error", err)
@@ -77,10 +76,9 @@ func (p *CloudflareProvider) ListRecords(domainName string) ([]DNSRecord, error)
 	return records, nil
 }
 
-func (p *CloudflareProvider) CreateRecord(domainName string, record *DNSRecord) error {
+func (p *CloudflareProvider) CreateRecord(ctx context.Context, domainName string, record *DNSRecord) error {
 	logger.Debug("creating DNS record", "provider", "cloudflare", "domain", domainName, "name", record.Name, "type", record.Type)
 
-	ctx := context.Background()
 	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
 		return err
@@ -179,10 +177,9 @@ func parseSRVValue(value string) (priority, weight, port float64, target string)
 	return ParseSRVValue(value)
 }
 
-func (p *CloudflareProvider) DeleteRecord(domainName string, recordID string) error {
+func (p *CloudflareProvider) DeleteRecord(ctx context.Context, domainName string, recordID string) error {
 	logger.Debug("deleting DNS record", "provider", "cloudflare", "domain", domainName, "record_id", recordID)
 
-	ctx := context.Background()
 	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
 		return err
@@ -200,10 +197,9 @@ func (p *CloudflareProvider) DeleteRecord(domainName string, recordID string) er
 	return nil
 }
 
-func (p *CloudflareProvider) UpdateRecord(domainName string, recordID string, record *DNSRecord) error {
+func (p *CloudflareProvider) UpdateRecord(ctx context.Context, domainName string, recordID string, record *DNSRecord) error {
 	logger.Debug("updating DNS record", "provider", "cloudflare", "domain", domainName, "record_id", recordID, "name", record.Name)
 
-	ctx := context.Background()
 	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
 		return err
@@ -230,8 +226,7 @@ func (p *CloudflareProvider) UpdateRecord(domainName string, recordID string, re
 	return nil
 }
 
-func (p *CloudflareProvider) ListDomains() ([]string, error) {
-	ctx := context.Background()
+func (p *CloudflareProvider) ListDomains(ctx context.Context) ([]string, error) {
 	var zoneNames []string
 	params := zones.ZoneListParams{}
 	if p.accountID != "" {
@@ -250,8 +245,7 @@ func (p *CloudflareProvider) ListDomains() ([]string, error) {
 	return zoneNames, nil
 }
 
-func (p *CloudflareProvider) GetRecordsByType(domainName string, recordType string) ([]DNSRecord, error) {
-	ctx := context.Background()
+func (p *CloudflareProvider) GetRecordsByType(ctx context.Context, domainName string, recordType string) ([]DNSRecord, error) {
 	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
 		return nil, err
@@ -282,24 +276,24 @@ func (p *CloudflareProvider) GetRecordsByType(domainName string, recordType stri
 	return records, nil
 }
 
-func (p *CloudflareProvider) BatchCreateRecords(domainName string, records []*DNSRecord) error {
+func (p *CloudflareProvider) BatchCreateRecords(ctx context.Context, domainName string, records []*DNSRecord) error {
 	for _, record := range records {
-		if err := p.CreateRecord(domainName, record); err != nil {
+		if err := p.CreateRecord(ctx, domainName, record); err != nil {
 			return domainerr.WrapEntity("record", record.Name, err)
 		}
 	}
 	return nil
 }
 
-func (p *CloudflareProvider) BatchDeleteRecords(domainName string, recordIDs []string) error {
+func (p *CloudflareProvider) BatchDeleteRecords(ctx context.Context, domainName string, recordIDs []string) error {
 	for _, recordID := range recordIDs {
-		if err := p.DeleteRecord(domainName, recordID); err != nil {
+		if err := p.DeleteRecord(ctx, domainName, recordID); err != nil {
 			return domainerr.WrapEntity("record", recordID, err)
 		}
 	}
 	return nil
 }
 
-func (p *CloudflareProvider) EnsureRecord(domainName string, record *DNSRecord) error {
-	return EnsureRecordSimple(p, domainName, record)
+func (p *CloudflareProvider) EnsureRecord(ctx context.Context, domainName string, record *DNSRecord) error {
+	return EnsureRecord(ctx, p, domainName, record, nil)
 }

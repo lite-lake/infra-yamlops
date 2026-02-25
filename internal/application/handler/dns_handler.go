@@ -44,11 +44,11 @@ func (h *DNSHandler) Apply(ctx context.Context, change *valueobject.Change, deps
 
 	switch change.Type() {
 	case valueobject.ChangeTypeDelete:
-		return h.deleteRecord(change, record, provider)
+		return h.deleteRecord(ctx, change, record, provider)
 	case valueobject.ChangeTypeUpdate:
-		return h.updateRecord(change, record, provider)
+		return h.updateRecord(ctx, change, record, provider)
 	default:
-		return h.createRecord(change, record, provider)
+		return h.createRecord(ctx, change, record, provider)
 	}
 }
 
@@ -66,7 +66,7 @@ func (h *DNSHandler) extractDNSRecordFromChange(ch *valueobject.Change) (*entity
 	return nil, fmt.Errorf("cannot extract DNS record from change")
 }
 
-func (h *DNSHandler) createRecord(change *valueobject.Change, record *entity.DNSRecord, provider DNSProvider) (*Result, error) {
+func (h *DNSHandler) createRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider DNSProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
 	dnsRecord := &dns.DNSRecord{
@@ -76,7 +76,7 @@ func (h *DNSHandler) createRecord(change *valueobject.Change, record *entity.DNS
 		TTL:   record.TTL,
 	}
 
-	if err := provider.CreateRecord(record.Domain, dnsRecord); err != nil {
+	if err := provider.CreateRecord(ctx, record.Domain, dnsRecord); err != nil {
 		result.Error = fmt.Errorf("%w: create record: %w", domainerr.ErrDNSError, err)
 		return result, nil
 	}
@@ -86,10 +86,10 @@ func (h *DNSHandler) createRecord(change *valueobject.Change, record *entity.DNS
 	return result, nil
 }
 
-func (h *DNSHandler) updateRecord(change *valueobject.Change, record *entity.DNSRecord, provider DNSProvider) (*Result, error) {
+func (h *DNSHandler) updateRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider DNSProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
-	existingRecords, err := provider.ListRecords(record.Domain)
+	existingRecords, err := provider.ListRecords(ctx, record.Domain)
 	if err != nil {
 		result.Error = fmt.Errorf("%w: list existing records: %w", domainerr.ErrDNSError, err)
 		return result, nil
@@ -104,7 +104,7 @@ func (h *DNSHandler) updateRecord(change *valueobject.Change, record *entity.DNS
 
 	for _, r := range existingRecords {
 		if r.Name == record.Name && strings.EqualFold(r.Type, string(record.Type)) {
-			if err := provider.UpdateRecord(record.Domain, r.ID, dnsRecord); err != nil {
+			if err := provider.UpdateRecord(ctx, record.Domain, r.ID, dnsRecord); err != nil {
 				result.Error = fmt.Errorf("%w: update record: %w", domainerr.ErrDNSError, err)
 				return result, nil
 			}
@@ -114,7 +114,7 @@ func (h *DNSHandler) updateRecord(change *valueobject.Change, record *entity.DNS
 		}
 	}
 
-	if err := provider.CreateRecord(record.Domain, dnsRecord); err != nil {
+	if err := provider.CreateRecord(ctx, record.Domain, dnsRecord); err != nil {
 		result.Error = fmt.Errorf("%w: create record: %w", domainerr.ErrDNSError, err)
 		return result, nil
 	}
@@ -124,10 +124,10 @@ func (h *DNSHandler) updateRecord(change *valueobject.Change, record *entity.DNS
 	return result, nil
 }
 
-func (h *DNSHandler) deleteRecord(change *valueobject.Change, record *entity.DNSRecord, provider DNSProvider) (*Result, error) {
+func (h *DNSHandler) deleteRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider DNSProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
-	existingRecords, err := provider.ListRecords(record.Domain)
+	existingRecords, err := provider.ListRecords(ctx, record.Domain)
 	if err != nil {
 		result.Error = fmt.Errorf("%w: list existing records: %w", domainerr.ErrDNSError, err)
 		return result, nil
@@ -135,7 +135,7 @@ func (h *DNSHandler) deleteRecord(change *valueobject.Change, record *entity.DNS
 
 	for _, r := range existingRecords {
 		if r.Name == record.Name && strings.EqualFold(r.Type, string(record.Type)) {
-			if err := provider.DeleteRecord(record.Domain, r.ID); err != nil {
+			if err := provider.DeleteRecord(ctx, record.Domain, r.ID); err != nil {
 				result.Error = fmt.Errorf("%w: delete record: %w", domainerr.ErrDNSError, err)
 				return result, nil
 			}

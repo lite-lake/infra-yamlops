@@ -128,7 +128,7 @@ func EnsureRecord(ctx context.Context, provider Provider, domain string, desired
 	var records []DNSRecord
 	err := retry.Do(ctx, func() error {
 		var err error
-		records, err = provider.ListRecords(domain)
+		records, err = provider.ListRecords(ctx, domain)
 		return err
 	}, retry.WithMaxAttempts(retryCfg.MaxAttempts), retry.WithInitialDelay(constants.DefaultDNSRetryInitialDelay), retry.WithIsRetryable(IsRetryableDNSError))
 	if err != nil {
@@ -141,12 +141,12 @@ func EnsureRecord(ctx context.Context, provider Provider, domain string, desired
 				return nil
 			}
 			return retry.Do(ctx, func() error {
-				return provider.UpdateRecord(domain, existing.ID, desired)
+				return provider.UpdateRecord(ctx, domain, existing.ID, desired)
 			}, retry.WithMaxAttempts(retryCfg.MaxAttempts), retry.WithIsRetryable(IsRetryableDNSError))
 		}
 	}
 	return retry.Do(ctx, func() error {
-		return provider.CreateRecord(domain, desired)
+		return provider.CreateRecord(ctx, domain, desired)
 	}, retry.WithMaxAttempts(retryCfg.MaxAttempts), retry.WithIsRetryable(IsRetryableDNSError))
 }
 

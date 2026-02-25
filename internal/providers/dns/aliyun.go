@@ -1,6 +1,8 @@
 package dns
 
 import (
+	"context"
+
 	alidns "github.com/alibabacloud-go/alidns-20150109/v4/client"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	"github.com/alibabacloud-go/tea/tea"
@@ -29,7 +31,7 @@ func (p *AliyunProvider) Name() string {
 	return "aliyun"
 }
 
-func (p *AliyunProvider) ListRecords(domainName string) ([]DNSRecord, error) {
+func (p *AliyunProvider) ListRecords(ctx context.Context, domainName string) ([]DNSRecord, error) {
 	req := &alidns.DescribeDomainRecordsRequest{
 		DomainName: tea.String(domainName),
 	}
@@ -57,7 +59,7 @@ func (p *AliyunProvider) ListRecords(domainName string) ([]DNSRecord, error) {
 	return records, nil
 }
 
-func (p *AliyunProvider) CreateRecord(domainName string, record *DNSRecord) error {
+func (p *AliyunProvider) CreateRecord(ctx context.Context, domainName string, record *DNSRecord) error {
 	ttl := int64(record.TTL)
 	if ttl == 0 {
 		ttl = constants.DefaultDNSRecordTTL
@@ -78,7 +80,7 @@ func (p *AliyunProvider) CreateRecord(domainName string, record *DNSRecord) erro
 	return nil
 }
 
-func (p *AliyunProvider) DeleteRecord(domainName string, recordID string) error {
+func (p *AliyunProvider) DeleteRecord(ctx context.Context, domainName string, recordID string) error {
 	req := &alidns.DeleteDomainRecordRequest{
 		RecordId: tea.String(recordID),
 	}
@@ -90,7 +92,7 @@ func (p *AliyunProvider) DeleteRecord(domainName string, recordID string) error 
 	return nil
 }
 
-func (p *AliyunProvider) UpdateRecord(domainName string, recordID string, record *DNSRecord) error {
+func (p *AliyunProvider) UpdateRecord(ctx context.Context, domainName string, recordID string, record *DNSRecord) error {
 	ttl := int64(record.TTL)
 	if ttl == 0 {
 		ttl = constants.DefaultDNSRecordTTL
@@ -111,7 +113,7 @@ func (p *AliyunProvider) UpdateRecord(domainName string, recordID string, record
 	return nil
 }
 
-func (p *AliyunProvider) ListDomains() ([]string, error) {
+func (p *AliyunProvider) ListDomains(ctx context.Context) ([]string, error) {
 	req := &alidns.DescribeDomainsRequest{}
 	resp, err := p.client.DescribeDomains(req)
 	if err != nil {
@@ -185,26 +187,26 @@ func (p *AliyunProvider) GetRecordsByName(domainName string, name string) ([]DNS
 	return records, nil
 }
 
-func (p *AliyunProvider) BatchCreateRecords(domainName string, records []*DNSRecord) error {
+func (p *AliyunProvider) BatchCreateRecords(ctx context.Context, domainName string, records []*DNSRecord) error {
 	for _, record := range records {
-		if err := p.CreateRecord(domainName, record); err != nil {
+		if err := p.CreateRecord(ctx, domainName, record); err != nil {
 			return domainerr.WrapEntity("record", record.Name, err)
 		}
 	}
 	return nil
 }
 
-func (p *AliyunProvider) BatchDeleteRecords(domainName string, recordIDs []string) error {
+func (p *AliyunProvider) BatchDeleteRecords(ctx context.Context, domainName string, recordIDs []string) error {
 	for _, recordID := range recordIDs {
-		if err := p.DeleteRecord(domainName, recordID); err != nil {
+		if err := p.DeleteRecord(ctx, domainName, recordID); err != nil {
 			return domainerr.WrapEntity("record", recordID, err)
 		}
 	}
 	return nil
 }
 
-func (p *AliyunProvider) EnsureRecord(domainName string, record *DNSRecord) error {
-	return EnsureRecordSimple(p, domainName, record)
+func (p *AliyunProvider) EnsureRecord(ctx context.Context, domainName string, record *DNSRecord) error {
+	return EnsureRecord(ctx, p, domainName, record, nil)
 }
 
 func ParseAliyunTTL(ttlStr string) (int64, error) {

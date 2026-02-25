@@ -1,6 +1,10 @@
 package dns
 
-import "github.com/litelake/yamlops/internal/domain"
+import (
+	"context"
+
+	"github.com/litelake/yamlops/internal/domain"
+)
 
 var (
 	ErrDomainNotFound  = domain.ErrDNSDomainNotFound
@@ -18,9 +22,9 @@ type DNSRecord struct {
 
 type Provider interface {
 	Name() string
-	ListDomains() ([]string, error)
-	ListRecords(domain string) ([]DNSRecord, error)
-	CreateRecord(domain string, record *DNSRecord) error
-	DeleteRecord(domain string, recordID string) error
-	UpdateRecord(domain string, recordID string, record *DNSRecord) error
+	ListDomains(ctx context.Context) ([]string, error)
+	ListRecords(ctx context.Context, domain string) ([]DNSRecord, error)
+	CreateRecord(ctx context.Context, domain string, record *DNSRecord) error
+	DeleteRecord(ctx context.Context, domain string, recordID string) error
+	UpdateRecord(ctx context.Context, domain string, recordID string, record *DNSRecord) error
 }

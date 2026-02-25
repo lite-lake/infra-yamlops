@@ -81,32 +81,14 @@ func (m Model) renderServiceCleanup() string {
 }
 
 func (m Model) renderServiceCleanupConfirm() string {
-	var sb strings.Builder
-	title := TitleStyle.Render("  Confirm Cleanup")
-	sb.WriteString(title + "\n\n")
-
 	selectedCount := 0
 	for _, selected := range m.Cleanup.CleanupSelected {
 		if selected {
 			selectedCount++
 		}
 	}
-
-	sb.WriteString(fmt.Sprintf("  You are about to remove %d orphan resource(s).\n", selectedCount))
-	sb.WriteString("  This action cannot be undone.\n\n")
-
-	options := []string{"Yes, proceed", "Cancel"}
-	for i, opt := range options {
-		if i == m.Action.ConfirmSelected {
-			sb.WriteString(MenuSelectedStyle.Render("> "+opt) + "\n")
-		} else {
-			sb.WriteString(MenuItemStyle.Render("  "+opt) + "\n")
-		}
-	}
-
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Enter select  Esc back  q quit"))
-
-	return BaseStyle.Render(sb.String())
+	description := fmt.Sprintf("  You are about to remove %d orphan resource(s).\n  This action cannot be undone.", selectedCount)
+	return m.renderConfirmDialog("Confirm Cleanup", description)
 }
 
 func (m Model) renderServiceCleanupComplete() string {

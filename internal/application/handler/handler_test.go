@@ -34,14 +34,14 @@ func newMockDNSProvider(name string) *mockDNSProvider {
 
 func (m *mockDNSProvider) Name() string { return m.name }
 
-func (m *mockDNSProvider) ListRecords(domain string) ([]dns.DNSRecord, error) {
+func (m *mockDNSProvider) ListRecords(ctx context.Context, domain string) ([]dns.DNSRecord, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
 	return m.records, nil
 }
 
-func (m *mockDNSProvider) CreateRecord(domain string, record *dns.DNSRecord) error {
+func (m *mockDNSProvider) CreateRecord(ctx context.Context, domain string, record *dns.DNSRecord) error {
 	if m.err != nil {
 		return m.err
 	}
@@ -49,7 +49,7 @@ func (m *mockDNSProvider) CreateRecord(domain string, record *dns.DNSRecord) err
 	return nil
 }
 
-func (m *mockDNSProvider) DeleteRecord(domain string, recordID string) error {
+func (m *mockDNSProvider) DeleteRecord(ctx context.Context, domain string, recordID string) error {
 	if m.err != nil {
 		return m.err
 	}
@@ -57,7 +57,7 @@ func (m *mockDNSProvider) DeleteRecord(domain string, recordID string) error {
 	return nil
 }
 
-func (m *mockDNSProvider) UpdateRecord(domain string, recordID string, record *dns.DNSRecord) error {
+func (m *mockDNSProvider) UpdateRecord(ctx context.Context, domain string, recordID string, record *dns.DNSRecord) error {
 	if m.err != nil {
 		return m.err
 	}

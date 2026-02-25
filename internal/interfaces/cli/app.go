@@ -6,9 +6,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-	"gopkg.in/yaml.v3"
 
 	"github.com/litelake/yamlops/internal/application/usecase"
 	"github.com/litelake/yamlops/internal/domain/entity"
@@ -304,50 +301,35 @@ func listBizServices(filters AppFilters, cfg *entity.Config) {
 }
 
 func runAppShow(ctx *Context, resource, name string) {
-	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
-	cfg, err := wf.LoadConfig(nil)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
-	}
-
 	resource = strings.ToLower(resource)
-	var found interface{}
 
-	switch resource {
-	case "zone":
-		if m := cfg.GetZoneMap(); m[name] != nil {
-			found = m[name]
+	finder := func(cfg *entity.Config, name string) (interface{}, FindResult) {
+		switch resource {
+		case "zone":
+			if m := cfg.GetZoneMap(); m[name] != nil {
+				return m[name], FindResultFound
+			}
+			return nil, FindResultNotFound
+		case "server":
+			if m := cfg.GetServerMap(); m[name] != nil {
+				return m[name], FindResultFound
+			}
+			return nil, FindResultNotFound
+		case "infra", "infra_service":
+			if m := cfg.GetInfraServiceMap(); m[name] != nil {
+				return m[name], FindResultFound
+			}
+			return nil, FindResultNotFound
+		case "biz", "business", "service":
+			if m := cfg.GetServiceMap(); m[name] != nil {
+				return m[name], FindResultFound
+			}
+			return nil, FindResultNotFound
+		default:
+			return nil, FindResultUnknownType
 		}
-	case "server":
-		if m := cfg.GetServerMap(); m[name] != nil {
-			found = m[name]
-		}
-	case "infra", "infra_service":
-		if m := cfg.GetInfraServiceMap(); m[name] != nil {
-			found = m[name]
-		}
-	case "biz", "business", "service":
-		if m := cfg.GetServiceMap(); m[name] != nil {
-			found = m[name]
-		}
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown resource type: %s\n", resource)
-		fmt.Fprintf(os.Stderr, "Valid types: zone, server, infra, biz\n")
-		os.Exit(1)
 	}
 
-	if found == nil {
-		fmt.Fprintf(os.Stderr, "%s '%s' not found\n", resource, name)
-		os.Exit(1)
-	}
-
-	data, err := yaml.Marshal(found)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error marshaling resource: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("%s: %s\n", cases.Title(language.English).String(resource), name)
-	fmt.Println(string(data))
+	validTypes := []string{"zone", "server", "infra", "biz"}
+	showEntity(ctx, resource, name, finder, WithValidTypes(validTypes))
 }

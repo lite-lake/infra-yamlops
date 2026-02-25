@@ -324,7 +324,7 @@ func (m *Model) fetchDNSRemoteState() *plan.DeploymentState {
 		if err != nil {
 			continue
 		}
-		remoteRecords, err := provider.ListRecords(domainName)
+		remoteRecords, err := provider.ListRecords(context.Background(), domainName)
 		if err != nil {
 			continue
 		}

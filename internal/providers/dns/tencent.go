@@ -1,10 +1,11 @@
 package dns
 
 import (
-	"fmt"
+	"context"
 	"strconv"
 
 	"github.com/litelake/yamlops/internal/constants"
+	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	dnspod "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/dnspod/v20210323"
@@ -20,7 +21,7 @@ func NewTencentProvider(secretID, secretKey string) (*TencentProvider, error) {
 	cpf.HttpProfile.Endpoint = "dnspod.tencentcloudapi.com"
 	client, err := dnspod.NewClient(credential, "", cpf)
 	if err != nil {
-		return nil, fmt.Errorf("create tencent dns client: %w", err)
+		return nil, domainerr.WrapOp("create tencent dns client", err)
 	}
 	return &TencentProvider{client: client}, nil
 }
@@ -29,13 +30,13 @@ func (p *TencentProvider) Name() string {
 	return "tencent"
 }
 
-func (p *TencentProvider) ListRecords(domain string) ([]DNSRecord, error) {
+func (p *TencentProvider) ListRecords(ctx context.Context, domain string) ([]DNSRecord, error) {
 	req := dnspod.NewDescribeRecordListRequest()
 	req.Domain = common.StringPtr(domain)
 
 	resp, err := p.client.DescribeRecordList(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list records: %w", err)
+		return nil, domainerr.WrapOp("list records", err)
 	}
 
 	var records []DNSRecord
@@ -57,7 +58,7 @@ func (p *TencentProvider) ListRecords(domain string) ([]DNSRecord, error) {
 	return records, nil
 }
 
-func (p *TencentProvider) CreateRecord(domain string, record *DNSRecord) error {
+func (p *TencentProvider) CreateRecord(ctx context.Context, domain string, record *DNSRecord) error {
 	ttl := uint64(record.TTL)
 	if ttl == 0 {
 		ttl = constants.DefaultDNSRecordTTL
@@ -72,15 +73,15 @@ func (p *TencentProvider) CreateRecord(domain string, record *DNSRecord) error {
 
 	_, err := p.client.CreateRecord(req)
 	if err != nil {
-		return fmt.Errorf("failed to create record: %w", err)
+		return domainerr.WrapOp("create record", err)
 	}
 	return nil
 }
 
-func (p *TencentProvider) DeleteRecord(domain string, recordID string) error {
+func (p *TencentProvider) DeleteRecord(ctx context.Context, domain string, recordID string) error {
 	recordIDInt, err := strconv.ParseUint(recordID, 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid record ID: %w", err)
+		return domainerr.WrapOp("parse record ID", err)
 	}
 
 	req := dnspod.NewDeleteRecordRequest()
@@ -89,15 +90,15 @@ func (p *TencentProvider) DeleteRecord(domain string, recordID string) error {
 
 	_, err = p.client.DeleteRecord(req)
 	if err != nil {
-		return fmt.Errorf("failed to delete record: %w", err)
+		return domainerr.WrapOp("delete record", err)
 	}
 	return nil
 }
 
-func (p *TencentProvider) UpdateRecord(domain string, recordID string, record *DNSRecord) error {
+func (p *TencentProvider) UpdateRecord(ctx context.Context, domain string, recordID string, record *DNSRecord) error {
 	recordIDInt, err := strconv.ParseUint(recordID, 10, 64)
 	if err != nil {
-		return fmt.Errorf("invalid record ID: %w", err)
+		return domainerr.WrapOp("parse record ID", err)
 	}
 
 	ttl := uint64(record.TTL)
@@ -115,16 +116,16 @@ func (p *TencentProvider) UpdateRecord(domain string, recordID string, record *D
 
 	_, err = p.client.ModifyRecord(req)
 	if err != nil {
-		return fmt.Errorf("failed to update record: %w", err)
+		return domainerr.WrapOp("update record", err)
 	}
 	return nil
 }
 
-func (p *TencentProvider) ListDomains() ([]string, error) {
+func (p *TencentProvider) ListDomains(ctx context.Context) ([]string, error) {
 	req := dnspod.NewDescribeDomainListRequest()
 	resp, err := p.client.DescribeDomainList(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list domains: %w", err)
+		return nil, domainerr.WrapOp("list domains", err)
 	}
 
 	var domains []string
@@ -143,7 +144,7 @@ func (p *TencentProvider) GetRecordsByType(domain string, recordType string) ([]
 
 	resp, err := p.client.DescribeRecordList(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list records: %w", err)
+		return nil, domainerr.WrapOp("list records", err)
 	}
 
 	var records []DNSRecord
@@ -172,7 +173,7 @@ func (p *TencentProvider) GetRecordsBySubDomain(domain string, subDomain string)
 
 	resp, err := p.client.DescribeRecordList(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list records: %w", err)
+		return nil, domainerr.WrapOp("list records", err)
 	}
 
 	var records []DNSRecord
@@ -194,26 +195,26 @@ func (p *TencentProvider) GetRecordsBySubDomain(domain string, subDomain string)
 	return records, nil
 }
 
-func (p *TencentProvider) BatchCreateRecords(domain string, records []*DNSRecord) error {
+func (p *TencentProvider) BatchCreateRecords(ctx context.Context, domain string, records []*DNSRecord) error {
 	for _, record := range records {
-		if err := p.CreateRecord(domain, record); err != nil {
-			return fmt.Errorf("failed to create record %s: %w", record.Name, err)
+		if err := p.CreateRecord(ctx, domain, record); err != nil {
+			return domainerr.WrapEntity("record", record.Name, err)
 		}
 	}
 	return nil
 }
 
-func (p *TencentProvider) BatchDeleteRecords(domain string, recordIDs []string) error {
+func (p *TencentProvider) BatchDeleteRecords(ctx context.Context, domain string, recordIDs []string) error {
 	for _, recordID := range recordIDs {
-		if err := p.DeleteRecord(domain, recordID); err != nil {
-			return fmt.Errorf("failed to delete record %s: %w", recordID, err)
+		if err := p.DeleteRecord(ctx, domain, recordID); err != nil {
+			return domainerr.WrapEntity("record", recordID, err)
 		}
 	}
 	return nil
 }
 
-func (p *TencentProvider) EnsureRecord(domain string, record *DNSRecord) error {
-	return EnsureRecordSimple(p, domain, record)
+func (p *TencentProvider) EnsureRecord(ctx context.Context, domain string, record *DNSRecord) error {
+	return EnsureRecord(ctx, p, domain, record, nil)
 }
 
 func (p *TencentProvider) CreateDomain(domain string) error {
@@ -222,7 +223,7 @@ func (p *TencentProvider) CreateDomain(domain string) error {
 
 	_, err := p.client.CreateDomain(req)
 	if err != nil {
-		return fmt.Errorf("failed to create domain: %w", err)
+		return domainerr.WrapOp("create domain", err)
 	}
 	return nil
 }
@@ -233,7 +234,7 @@ func (p *TencentProvider) DeleteDomain(domain string) error {
 
 	_, err := p.client.DeleteDomain(req)
 	if err != nil {
-		return fmt.Errorf("failed to delete domain: %w", err)
+		return domainerr.WrapOp("delete domain", err)
 	}
 	return nil
 }
@@ -251,7 +252,7 @@ func (p *TencentProvider) SetDomainStatus(domain string, status string) error {
 
 	_, err := p.client.ModifyDomainStatus(req)
 	if err != nil {
-		return fmt.Errorf("failed to set domain status: %w", err)
+		return domainerr.WrapOp("set domain status", err)
 	}
 	return nil
 }

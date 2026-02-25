@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -38,161 +39,24 @@ func (m *Model) stopLoading() {
 }
 
 func (m Model) handleUp() Model {
-	switch m.ViewState {
-	case ViewStateMainMenu:
-		if m.UI.MainMenuIndex > 0 {
-			m.UI.MainMenuIndex--
-		}
-	case ViewStateServiceManagement:
-		if m.Server.ServiceMenuIndex > 0 {
-			m.Server.ServiceMenuIndex--
-		}
-	case ViewStateServerSetup:
-		if m.ServerEnv.CursorIndex > 0 {
-			m.ServerEnv.CursorIndex--
-		}
-	case ViewStateServerCheck:
-		if m.ServerEnv.ResultsScrollY > 0 {
-			m.ServerEnv.ResultsScrollY--
-		}
-	case ViewStateDNSManagement:
-		if m.DNS.DNSMenuIndex > 0 {
-			m.DNS.DNSMenuIndex--
-		}
-	case ViewStateDNSPullDomains:
-		if m.DNS.DNSISPIndex > 0 {
-			m.DNS.DNSISPIndex--
-		}
-	case ViewStateDNSPullRecords:
-		if m.DNS.DNSDomainIndex > 0 {
-			m.DNS.DNSDomainIndex--
-		}
-	case ViewStateDNSPullDiff:
-		if m.DNS.DNSPullCursor > 0 {
-			m.DNS.DNSPullCursor--
-		}
-	case ViewStateTree:
-		if m.Tree.CursorIndex > 0 {
-			m.Tree.CursorIndex--
-		}
-	case ViewStateApplyConfirm:
-		if m.Action.ConfirmSelected > 0 {
-			m.Action.ConfirmSelected--
-		}
-	case ViewStateServiceCleanup:
-		if m.Cleanup.CleanupCursor > 0 {
-			m.Cleanup.CleanupCursor--
-		}
-	case ViewStateServiceCleanupConfirm:
-		if m.Action.ConfirmSelected > 0 {
-			m.Action.ConfirmSelected--
-		}
-	case ViewStateServiceStop:
-		if m.Tree.CursorIndex > 0 {
-			m.Tree.CursorIndex--
-		}
-	case ViewStateServiceStopConfirm:
-		if m.Action.ConfirmSelected > 0 {
-			m.Action.ConfirmSelected--
-		}
-	case ViewStateServiceRestart:
-		if m.Tree.CursorIndex > 0 {
-			m.Tree.CursorIndex--
-		}
-	case ViewStateServiceRestartConfirm:
-		if m.Action.ConfirmSelected > 0 {
-			m.Action.ConfirmSelected--
-		}
+	ctrl := GetCursorController(m.ViewState, &m)
+	if ctrl == nil {
+		return m
+	}
+	if ctrl.GetCursor() > 0 {
+		ctrl.SetCursor(ctrl.GetCursor() - 1)
 	}
 	return m
 }
 
 func (m Model) handleDown() Model {
-	switch m.ViewState {
-	case ViewStateMainMenu:
-		if m.UI.MainMenuIndex < 2 {
-			m.UI.MainMenuIndex++
-		}
-	case ViewStateServiceManagement:
-		if m.Server.ServiceMenuIndex < 5 {
-			m.Server.ServiceMenuIndex++
-		}
-	case ViewStateServerSetup:
-		totalNodes := m.countServerEnvNodes()
-		if m.ServerEnv.CursorIndex < totalNodes-1 {
-			m.ServerEnv.CursorIndex++
-		}
-	case ViewStateServerCheck:
-		totalLines := m.countServerEnvResultLines()
-		availableHeight := m.UI.Height - 8
-		if availableHeight < 5 {
-			availableHeight = 5
-		}
-		maxScroll := totalLines - availableHeight
-		if maxScroll < 0 {
-			maxScroll = 0
-		}
-		if m.ServerEnv.ResultsScrollY < maxScroll {
-			m.ServerEnv.ResultsScrollY++
-		}
-	case ViewStateDNSManagement:
-		if m.DNS.DNSMenuIndex < 3 {
-			m.DNS.DNSMenuIndex++
-		}
-	case ViewStateDNSPullDomains:
-		isps := m.getDNSISPs()
-		if m.DNS.DNSISPIndex < len(isps)-1 {
-			m.DNS.DNSISPIndex++
-		}
-	case ViewStateDNSPullRecords:
-		domains := m.getDNSDomains()
-		if m.DNS.DNSDomainIndex < len(domains)-1 {
-			m.DNS.DNSDomainIndex++
-		}
-	case ViewStateDNSPullDiff:
-		maxIdx := len(m.DNS.DNSPullDiffs) - 1
-		if len(m.DNS.DNSRecordDiffs) > 0 {
-			maxIdx = len(m.DNS.DNSRecordDiffs) - 1
-		}
-		if m.DNS.DNSPullCursor < maxIdx {
-			m.DNS.DNSPullCursor++
-		}
-	case ViewStateTree:
-		totalNodes := m.countVisibleNodes()
-		if m.Tree.CursorIndex < totalNodes-1 {
-			m.Tree.CursorIndex++
-		}
-	case ViewStateApplyConfirm:
-		if m.Action.ConfirmSelected < 1 {
-			m.Action.ConfirmSelected++
-		}
-	case ViewStateServiceCleanup:
-		totalItems := m.countCleanupItems()
-		if m.Cleanup.CleanupCursor < totalItems-1 {
-			m.Cleanup.CleanupCursor++
-		}
-	case ViewStateServiceCleanupConfirm:
-		if m.Action.ConfirmSelected < 1 {
-			m.Action.ConfirmSelected++
-		}
-	case ViewStateServiceStop:
-		totalNodes := m.countVisibleNodes()
-		if m.Tree.CursorIndex < totalNodes-1 {
-			m.Tree.CursorIndex++
-		}
-	case ViewStateServiceStopConfirm:
-		if m.Action.ConfirmSelected < 1 {
-			m.Action.ConfirmSelected++
-		}
-	case ViewStateServiceRestart:
-		totalNodes := m.countVisibleNodes()
-		if m.Tree.CursorIndex < totalNodes-1 {
-			m.Tree.CursorIndex++
-		}
-	case ViewStateServiceRestartConfirm:
-		if m.Action.ConfirmSelected < 1 {
-			m.Action.ConfirmSelected++
-		}
+	ctrl := GetCursorController(m.ViewState, &m)
+	if ctrl == nil {
+		return m
+	}
+	maxVal := ctrl.MaxValue()
+	if ctrl.GetCursor() < maxVal {
+		ctrl.SetCursor(ctrl.GetCursor() + 1)
 	}
 	return m
 }
@@ -558,7 +422,7 @@ func (m *Model) fetchDomainDiffs(ispName string) {
 		return
 	}
 
-	remoteDomains, err := provider.ListDomains()
+	remoteDomains, err := provider.ListDomains(context.Background())
 	if err != nil {
 		m.UI.ErrorMessage = fmt.Sprintf("Error listing domains: %v", err)
 		return
@@ -610,7 +474,7 @@ func (m *Model) fetchDomainDiffsAsync(ispName string) tea.Cmd {
 			return dnsDomainsFetchedMsg{err: err}
 		}
 
-		remoteDomains, err := provider.ListDomains()
+		remoteDomains, err := provider.ListDomains(context.Background())
 		if err != nil {
 			return dnsDomainsFetchedMsg{err: err}
 		}
@@ -675,7 +539,7 @@ func (m *Model) fetchRecordDiffs(domainName string) {
 		return
 	}
 
-	remoteRecords, err := provider.ListRecords(domainName)
+	remoteRecords, err := provider.ListRecords(context.Background(), domainName)
 	if err != nil {
 		m.UI.ErrorMessage = fmt.Sprintf("Error listing records: %v", err)
 		return
@@ -757,7 +621,7 @@ func (m *Model) fetchRecordDiffsAsync(domainName string) tea.Cmd {
 			return dnsRecordsFetchedMsg{err: err}
 		}
 
-		remoteRecords, err := provider.ListRecords(domainName)
+		remoteRecords, err := provider.ListRecords(context.Background(), domainName)
 		if err != nil {
 			return dnsRecordsFetchedMsg{err: err}
 		}

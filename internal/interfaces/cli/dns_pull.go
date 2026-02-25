@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -114,7 +115,7 @@ func runDNSPullDomains(ctx *Context, ispName string, autoApprove bool) {
 		os.Exit(1)
 	}
 
-	remoteDomains, err := provider.ListDomains()
+	remoteDomains, err := provider.ListDomains(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error listing domains from %s: %v\n", ispName, err)
 		os.Exit(1)
@@ -216,7 +217,7 @@ func runDNSPullRecords(ctx *Context, domainName string, autoApprove bool) {
 		os.Exit(1)
 	}
 
-	remoteRecords, err := provider.ListRecords(domainName)
+	remoteRecords, err := provider.ListRecords(context.Background(), domainName)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error listing records from %s: %v\n", domain.DNSISP, err)
 		os.Exit(1)

@@ -6,9 +6,6 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	"golang.org/x/text/cases"
-	"golang.org/x/text/language"
-	"gopkg.in/yaml.v3"
 
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
@@ -107,55 +104,38 @@ func runConfigList(ctx *Context, cfgType string) {
 }
 
 func runConfigShow(ctx *Context, cfgType, name string) {
-	loader := persistence.NewConfigLoader(ctx.ConfigDir)
-	cfg, err := loader.Load(nil, ctx.Env)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-		os.Exit(1)
-	}
+	cfgType = strings.ToLower(cfgType)
 
-	var found interface{}
-
-	switch cfgType {
-	case "secret":
-		for _, s := range cfg.Secrets {
-			if s.Name == name {
-				found = s
-				break
+	finder := func(cfg *entity.Config, name string) (interface{}, FindResult) {
+		switch cfgType {
+		case "secret":
+			for _, s := range cfg.Secrets {
+				if s.Name == name {
+					return s, FindResultFound
+				}
 			}
+			return nil, FindResultNotFound
+		case "isp":
+			if m := cfg.GetISPMap(); m[name] != nil {
+				return m[name], FindResultFound
+			}
+			return nil, FindResultNotFound
+		case "registry":
+			if m := cfg.GetRegistryMap(); m[name] != nil {
+				return m[name], FindResultFound
+			}
+			return nil, FindResultNotFound
+		default:
+			return nil, FindResultUnknownType
 		}
-	case "isp":
-		if m := cfg.GetISPMap(); m[name] != nil {
-			found = m[name]
-		}
-	case "registry":
-		if m := cfg.GetRegistryMap(); m[name] != nil {
-			found = m[name]
-		}
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown config type: %s\n", cfgType)
-		fmt.Fprintf(os.Stderr, "Valid types: secret, isp, registry\n")
-		os.Exit(1)
 	}
 
-	if found == nil {
-		fmt.Fprintf(os.Stderr, "%s '%s' not found\n", cfgType, name)
-		os.Exit(1)
-	}
-
+	validTypes := []string{"secret", "isp", "registry"}
+	opts := []ShowOption{WithValidTypes(validTypes)}
 	if cfgType == "secret" {
-		fmt.Println("WARNING: This will display sensitive values!")
-		fmt.Println()
+		opts = append(opts, WithWarning("WARNING: This will display sensitive values!"))
 	}
-
-	data, err := yaml.Marshal(found)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error marshaling config: %v\n", err)
-		os.Exit(1)
-	}
-
-	fmt.Printf("%s: %s\n", cases.Title(language.English).String(cfgType), name)
-	fmt.Println(string(data))
+	showEntity(ctx, cfgType, name, finder, opts...)
 }
 
 func isVaultSecret(value string) bool {
