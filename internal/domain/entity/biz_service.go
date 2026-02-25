@@ -48,6 +48,9 @@ type ServiceVolume struct {
 	Source string `yaml:"source"`
 	Target string `yaml:"target"`
 	Sync   bool   `yaml:"sync,omitempty"`
+	Uid    int    `yaml:"uid,omitempty"`
+	Gid    int    `yaml:"gid,omitempty"`
+	Chmod  string `yaml:"chmod,omitempty"`
 }
 
 func (v *ServiceVolume) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -70,6 +73,9 @@ func (v *ServiceVolume) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	v.Source = full.Source
 	v.Target = full.Target
 	v.Sync = full.Sync
+	v.Uid = full.Uid
+	v.Gid = full.Gid
+	v.Chmod = full.Chmod
 	return nil
 }
 
@@ -79,6 +85,16 @@ func (v *ServiceVolume) Validate() error {
 	}
 	if v.Target == "" {
 		return domain.RequiredField("volume target")
+	}
+	if v.Chmod != "" {
+		for _, c := range v.Chmod {
+			if c < '0' || c > '7' {
+				return fmt.Errorf("%w: chmod must be octal format (e.g., 755, 644)", domain.ErrInvalidFormat)
+			}
+		}
+		if len(v.Chmod) < 3 || len(v.Chmod) > 4 {
+			return fmt.Errorf("%w: chmod must be 3 or 4 digits", domain.ErrInvalidFormat)
+		}
 	}
 	return nil
 }
@@ -129,6 +145,7 @@ type BizService struct {
 	Name        string                           `yaml:"name"`
 	Image       string                           `yaml:"image"`
 	Registry    string                           `yaml:"registry,omitempty"`
+	User        string                           `yaml:"user,omitempty"`
 	Ports       []ServicePort                    `yaml:"ports,omitempty"`
 	Env         map[string]valueobject.SecretRef `yaml:"env,omitempty"`
 	Secrets     []string                         `yaml:"secrets,omitempty"`
@@ -148,6 +165,7 @@ func (s *BizService) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		Networks    []string                         `yaml:"networks,omitempty"`
 		Image       string                           `yaml:"image"`
 		Registry    string                           `yaml:"registry,omitempty"`
+		User        string                           `yaml:"user,omitempty"`
 		Ports       []ServicePort                    `yaml:"ports,omitempty"`
 		Env         map[string]valueobject.SecretRef `yaml:"env,omitempty"`
 		Secrets     []string                         `yaml:"secrets,omitempty"`
@@ -166,6 +184,7 @@ func (s *BizService) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	s.ServiceBase.Networks = raw.Networks
 	s.Image = raw.Image
 	s.Registry = raw.Registry
+	s.User = raw.User
 	s.Ports = raw.Ports
 	s.Env = raw.Env
 	s.Secrets = raw.Secrets
@@ -185,6 +204,7 @@ func (s *BizService) MarshalYAML() (interface{}, error) {
 		Networks    []string                         `yaml:"networks,omitempty"`
 		Image       string                           `yaml:"image"`
 		Registry    string                           `yaml:"registry,omitempty"`
+		User        string                           `yaml:"user,omitempty"`
 		Ports       []ServicePort                    `yaml:"ports,omitempty"`
 		Env         map[string]valueobject.SecretRef `yaml:"env,omitempty"`
 		Secrets     []string                         `yaml:"secrets,omitempty"`
@@ -199,6 +219,7 @@ func (s *BizService) MarshalYAML() (interface{}, error) {
 		Networks:    s.ServiceBase.Networks,
 		Image:       s.Image,
 		Registry:    s.Registry,
+		User:        s.User,
 		Ports:       s.Ports,
 		Env:         s.Env,
 		Secrets:     s.Secrets,

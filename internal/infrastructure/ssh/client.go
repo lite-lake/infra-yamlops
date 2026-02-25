@@ -311,7 +311,9 @@ func (c *Client) MkdirAllSudo(path string) error {
 }
 
 func (c *Client) MkdirAllSudoWithPerm(path, perm string) error {
-	cmd := fmt.Sprintf("sudo mkdir -p %s && sudo chown %s:%s %s && sudo chmod %s %s", ShellEscape(path), ShellEscape(c.user), ShellEscape(c.user), ShellEscape(path), ShellEscape(perm), ShellEscape(path))
+	// Use 777 for volumes to allow Docker containers with any user to access
+	// Recursive chmod ensures existing subdirectories are also accessible
+	cmd := fmt.Sprintf("sudo mkdir -p %s && sudo chmod -R 777 %s", ShellEscape(path), ShellEscape(path))
 	_, stderr, err := c.Run(cmd)
 	if err != nil {
 		return domainerr.WrapOp("sudo mkdir", fmt.Errorf("%w: stderr: %s", domainerr.ErrSSHCommandFailed, stderr))

@@ -33,6 +33,7 @@ func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 	service := Service{
 		Image:         svc.Image,
 		ContainerName: serviceName,
+		User:          svc.User,
 		Ports:         svc.Ports,
 		Environment:   svc.Environment,
 		EnvFiles:      svc.EnvFiles,
