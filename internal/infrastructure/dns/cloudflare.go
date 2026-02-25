@@ -151,7 +151,7 @@ func (p *CloudflareProvider) buildRecordParam(record *DNSRecord, ttl int) dns.Re
 			TTL:     cloudflare.F(dns.TTL(ttl)),
 		}
 	case "SRV":
-		priority, weight, port, target := parseSRVValue(record.Value)
+		priority, weight, port, target := ParseSRVValue(record.Value)
 		return dns.SRVRecordParam{
 			Name: cloudflare.F(record.Name),
 			Type: cloudflare.F(dns.SRVRecordTypeSRV),
@@ -171,10 +171,6 @@ func (p *CloudflareProvider) buildRecordParam(record *DNSRecord, ttl int) dns.Re
 			TTL:     cloudflare.F(dns.TTL(ttl)),
 		}
 	}
-}
-
-func parseSRVValue(value string) (priority, weight, port float64, target string) {
-	return ParseSRVValue(value)
 }
 
 func (p *CloudflareProvider) DeleteRecord(ctx context.Context, domainName string, recordID string) error {
@@ -277,23 +273,13 @@ func (p *CloudflareProvider) GetRecordsByTypes(ctx context.Context, domainName s
 }
 
 func (p *CloudflareProvider) BatchCreateRecords(ctx context.Context, domainName string, records []*DNSRecord) error {
-	for _, record := range records {
-		if err := p.CreateRecord(ctx, domainName, record); err != nil {
-			return domainerr.WrapEntity("record", record.Name, err)
-		}
-	}
-	return nil
+	return BatchCreateRecordsHelper(ctx, p, domainName, records)
 }
 
 func (p *CloudflareProvider) BatchDeleteRecords(ctx context.Context, domainName string, recordIDs []string) error {
-	for _, recordID := range recordIDs {
-		if err := p.DeleteRecord(ctx, domainName, recordID); err != nil {
-			return domainerr.WrapEntity("record", recordID, err)
-		}
-	}
-	return nil
+	return BatchDeleteRecordsHelper(ctx, p, domainName, recordIDs)
 }
 
 func (p *CloudflareProvider) EnsureRecord(ctx context.Context, domainName string, record *DNSRecord) error {
-	return EnsureRecord(ctx, p, domainName, record, nil)
+	return EnsureRecordHelper(ctx, p, domainName, record)
 }

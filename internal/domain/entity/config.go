@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain"
 )
 
@@ -120,7 +121,7 @@ func ParsePort(s string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("%w: %s", domain.ErrInvalidPort, s)
 	}
-	if port <= 0 || port > domain.MaxPortNumber {
+	if port <= 0 || port > constants.MaxPortNumber {
 		return 0, fmt.Errorf("%w: %d", domain.ErrInvalidPort, port)
 	}
 	return port, nil

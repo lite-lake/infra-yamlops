@@ -188,31 +188,13 @@ func (p *AliyunProvider) GetRecordsByName(domainName string, name string) ([]DNS
 }
 
 func (p *AliyunProvider) BatchCreateRecords(ctx context.Context, domainName string, records []*DNSRecord) error {
-	for _, record := range records {
-		if err := p.CreateRecord(ctx, domainName, record); err != nil {
-			return domainerr.WrapEntity("record", record.Name, err)
-		}
-	}
-	return nil
+	return BatchCreateRecordsHelper(ctx, p, domainName, records)
 }
 
 func (p *AliyunProvider) BatchDeleteRecords(ctx context.Context, domainName string, recordIDs []string) error {
-	for _, recordID := range recordIDs {
-		if err := p.DeleteRecord(ctx, domainName, recordID); err != nil {
-			return domainerr.WrapEntity("record", recordID, err)
-		}
-	}
-	return nil
+	return BatchDeleteRecordsHelper(ctx, p, domainName, recordIDs)
 }
 
 func (p *AliyunProvider) EnsureRecord(ctx context.Context, domainName string, record *DNSRecord) error {
-	return EnsureRecord(ctx, p, domainName, record, nil)
-}
-
-func ParseAliyunTTL(ttlStr string) (int64, error) {
-	ttl, err := ParseTTL(ttlStr)
-	if err != nil {
-		return int64(DefaultTTL()), err
-	}
-	return int64(ttl), nil
+	return EnsureRecordHelper(ctx, p, domainName, record)
 }

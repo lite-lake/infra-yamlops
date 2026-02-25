@@ -196,25 +196,15 @@ func (p *TencentProvider) GetRecordsBySubDomain(domain string, subDomain string)
 }
 
 func (p *TencentProvider) BatchCreateRecords(ctx context.Context, domain string, records []*DNSRecord) error {
-	for _, record := range records {
-		if err := p.CreateRecord(ctx, domain, record); err != nil {
-			return domainerr.WrapEntity("record", record.Name, err)
-		}
-	}
-	return nil
+	return BatchCreateRecordsHelper(ctx, p, domain, records)
 }
 
 func (p *TencentProvider) BatchDeleteRecords(ctx context.Context, domain string, recordIDs []string) error {
-	for _, recordID := range recordIDs {
-		if err := p.DeleteRecord(ctx, domain, recordID); err != nil {
-			return domainerr.WrapEntity("record", recordID, err)
-		}
-	}
-	return nil
+	return BatchDeleteRecordsHelper(ctx, p, domain, recordIDs)
 }
 
 func (p *TencentProvider) EnsureRecord(ctx context.Context, domain string, record *DNSRecord) error {
-	return EnsureRecord(ctx, p, domain, record, nil)
+	return EnsureRecordHelper(ctx, p, domain, record)
 }
 
 func (p *TencentProvider) CreateDomain(domain string) error {
@@ -255,12 +245,4 @@ func (p *TencentProvider) SetDomainStatus(domain string, status string) error {
 		return domainerr.WrapOp("set domain status", err)
 	}
 	return nil
-}
-
-func ParseTencentTTL(ttlStr string) (uint64, error) {
-	ttl, err := ParseTTL(ttlStr)
-	if err != nil {
-		return uint64(DefaultTTL()), err
-	}
-	return uint64(ttl), nil
 }

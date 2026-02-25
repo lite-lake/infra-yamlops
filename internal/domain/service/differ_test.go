@@ -371,9 +371,9 @@ func TestServiceEquals(t *testing.T) {
 	}{
 		{
 			name: "equal services",
-			a: &entity.BizService{Name: "svc1", Server: "srv1", Image: "app:v1",
+			a: &entity.BizService{Name: "svc1", ServiceBase: entity.ServiceBase{Server: "srv1"}, Image: "app:v1",
 				Ports: []entity.ServicePort{{Host: 8080}}, Env: map[string]valueobject.SecretRef{"KEY": *valueobject.NewSecretRefPlain("val")}},
-			b: &entity.BizService{Name: "svc1", Server: "srv1", Image: "app:v1",
+			b: &entity.BizService{Name: "svc1", ServiceBase: entity.ServiceBase{Server: "srv1"}, Image: "app:v1",
 				Ports: []entity.ServicePort{{Host: 8080}}, Env: map[string]valueobject.SecretRef{"KEY": *valueobject.NewSecretRefPlain("val")}},
 			expected: true,
 		},
@@ -483,7 +483,7 @@ func TestDifferService_PlanServices(t *testing.T) {
 	scope := valueobject.NewScope()
 
 	cfgMap := map[string]*entity.BizService{
-		"svc1": {Name: "svc1", Server: "srv1"},
+		"svc1": {Name: "svc1", ServiceBase: entity.ServiceBase{Server: "srv1"}},
 	}
 	serverMap := map[string]*entity.Server{
 		"srv1": {Name: "srv1", Zone: "zone1"},

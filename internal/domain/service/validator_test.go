@@ -141,8 +141,10 @@ func TestValidator_ServiceReferences(t *testing.T) {
 			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
 			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			Services: []entity.BizService{{
-				Name:    "service1",
-				Server:  "server1",
+				Name: "service1",
+				ServiceBase: entity.ServiceBase{
+					Server: "server1",
+				},
 				Image:   "nginx",
 				Secrets: []string{"db_pass"},
 			}},
@@ -157,9 +159,11 @@ func TestValidator_ServiceReferences(t *testing.T) {
 	t.Run("missing server reference", func(t *testing.T) {
 		cfg := &entity.Config{
 			Services: []entity.BizService{{
-				Name:   "service1",
-				Server: "nonexistent",
-				Image:  "nginx",
+				Name: "service1",
+				ServiceBase: entity.ServiceBase{
+					Server: "nonexistent",
+				},
+				Image: "nginx",
 			}},
 		}
 		validator := NewValidator(cfg)
@@ -174,8 +178,10 @@ func TestValidator_ServiceReferences(t *testing.T) {
 			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
 			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			Services: []entity.BizService{{
-				Name:    "service1",
-				Server:  "server1",
+				Name: "service1",
+				ServiceBase: entity.ServiceBase{
+					Server: "server1",
+				},
 				Image:   "nginx",
 				Secrets: []string{"nonexistent"},
 			}},
@@ -228,8 +234,8 @@ func TestValidator_PortConflicts(t *testing.T) {
 				{Name: "server2", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.5", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}},
 			},
 			InfraServices: []entity.InfraService{
-				{Name: "gw1", Type: entity.InfraServiceTypeGateway, Server: "server1", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
-				{Name: "gw2", Type: entity.InfraServiceTypeGateway, Server: "server2", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
+				{Name: "gw1", Type: entity.InfraServiceTypeGateway, ServiceBase: entity.ServiceBase{Server: "server1"}, Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
+				{Name: "gw2", Type: entity.InfraServiceTypeGateway, ServiceBase: entity.ServiceBase{Server: "server2"}, Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
 			},
 		}
 		validator := NewValidator(cfg)
@@ -246,8 +252,8 @@ func TestValidator_PortConflicts(t *testing.T) {
 				{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}},
 			},
 			InfraServices: []entity.InfraService{
-				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, Server: "server1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 80}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},
-				{Name: "ssl2", Type: entity.InfraServiceTypeSSL, Server: "server1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 80}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},
+				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, ServiceBase: entity.ServiceBase{Server: "server1"}, Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 80}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},
+				{Name: "ssl2", Type: entity.InfraServiceTypeSSL, ServiceBase: entity.ServiceBase{Server: "server1"}, Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 80}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},
 			},
 		}
 		validator := NewValidator(cfg)
@@ -262,8 +268,8 @@ func TestValidator_PortConflicts(t *testing.T) {
 			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
 			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			Services: []entity.BizService{
-				{Name: "svc1", Server: "server1", Image: "nginx", Ports: []entity.ServicePort{{Container: 80, Host: 8080}}},
-				{Name: "svc2", Server: "server1", Image: "nginx", Ports: []entity.ServicePort{{Container: 80, Host: 8080}}},
+				{Name: "svc1", ServiceBase: entity.ServiceBase{Server: "server1"}, Image: "nginx", Ports: []entity.ServicePort{{Container: 80, Host: 8080}}},
+				{Name: "svc2", ServiceBase: entity.ServiceBase{Server: "server1"}, Image: "nginx", Ports: []entity.ServicePort{{Container: 80, Host: 8080}}},
 			},
 		}
 		validator := NewValidator(cfg)
@@ -278,10 +284,10 @@ func TestValidator_PortConflicts(t *testing.T) {
 			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
 			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			InfraServices: []entity.InfraService{
-				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, Server: "server1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 8443}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},
+				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, ServiceBase: entity.ServiceBase{Server: "server1"}, Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 8443}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},
 			},
 			Services: []entity.BizService{
-				{Name: "svc1", Server: "server1", Image: "nginx", Ports: []entity.ServicePort{{Container: 80, Host: 8443}}},
+				{Name: "svc1", ServiceBase: entity.ServiceBase{Server: "server1"}, Image: "nginx", Ports: []entity.ServicePort{{Container: 80, Host: 8443}}},
 			},
 		}
 		validator := NewValidator(cfg)
@@ -296,8 +302,8 @@ func TestValidator_PortConflicts(t *testing.T) {
 			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
 			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			InfraServices: []entity.InfraService{
-				{Name: "gw1", Type: entity.InfraServiceTypeGateway, Server: "server1", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
-				{Name: "gw2", Type: entity.InfraServiceTypeGateway, Server: "server1", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 8443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
+				{Name: "gw1", Type: entity.InfraServiceTypeGateway, ServiceBase: entity.ServiceBase{Server: "server1"}, Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
+				{Name: "gw2", Type: entity.InfraServiceTypeGateway, ServiceBase: entity.ServiceBase{Server: "server1"}, Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 8443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
 			},
 		}
 		validator := NewValidator(cfg)
@@ -312,8 +318,8 @@ func TestValidator_PortConflicts(t *testing.T) {
 			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
 			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			InfraServices: []entity.InfraService{
-				{Name: "gw1", Type: entity.InfraServiceTypeGateway, Server: "server1", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
-				{Name: "gw2", Type: entity.InfraServiceTypeGateway, Server: "server1", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 8080, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
+				{Name: "gw1", Type: entity.InfraServiceTypeGateway, ServiceBase: entity.ServiceBase{Server: "server1"}, Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
+				{Name: "gw2", Type: entity.InfraServiceTypeGateway, ServiceBase: entity.ServiceBase{Server: "server1"}, Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 8080, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
 			},
 		}
 		validator := NewValidator(cfg)
@@ -331,17 +337,21 @@ func TestValidator_HostnameConflicts(t *testing.T) {
 			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			Services: []entity.BizService{
 				{
-					Name:   "svc1",
-					Server: "server1",
-					Image:  "nginx",
+					Name: "svc1",
+					ServiceBase: entity.ServiceBase{
+						Server: "server1",
+					},
+					Image: "nginx",
 					Gateways: []entity.ServiceGatewayRoute{
 						{Hostname: "api.example.com", ContainerPort: 80, HTTP: true},
 					},
 				},
 				{
-					Name:   "svc2",
-					Server: "server1",
-					Image:  "nginx",
+					Name: "svc2",
+					ServiceBase: entity.ServiceBase{
+						Server: "server1",
+					},
+					Image: "nginx",
 					Gateways: []entity.ServiceGatewayRoute{
 						{Hostname: "web.example.com", ContainerPort: 80, HTTP: true},
 					},
@@ -361,17 +371,21 @@ func TestValidator_HostnameConflicts(t *testing.T) {
 			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			Services: []entity.BizService{
 				{
-					Name:   "svc1",
-					Server: "server1",
-					Image:  "nginx",
+					Name: "svc1",
+					ServiceBase: entity.ServiceBase{
+						Server: "server1",
+					},
+					Image: "nginx",
 					Gateways: []entity.ServiceGatewayRoute{
 						{Hostname: "api.example.com", ContainerPort: 80, HTTP: true},
 					},
 				},
 				{
-					Name:   "svc2",
-					Server: "server1",
-					Image:  "nginx",
+					Name: "svc2",
+					ServiceBase: entity.ServiceBase{
+						Server: "server1",
+					},
+					Image: "nginx",
 					Gateways: []entity.ServiceGatewayRoute{
 						{Hostname: "api.example.com", ContainerPort: 80, HTTP: true},
 					},

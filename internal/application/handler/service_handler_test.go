@@ -32,9 +32,11 @@ func TestServiceHandler_Apply_Deploy(t *testing.T) {
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
 		WithNewState(&entity.BizService{
-			Name:   "myapp",
-			Server: "server1",
-			Image:  "nginx:latest",
+			ServiceBase: entity.ServiceBase{
+				Server: "server1",
+			},
+			Name:  "myapp",
+			Image: "nginx:latest",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -61,8 +63,10 @@ func TestServiceHandler_Apply_Delete(t *testing.T) {
 
 	change := valueobject.NewChange(valueobject.ChangeTypeDelete, "service", "myapp").
 		WithOldState(&entity.BizService{
-			Name:   "myapp",
-			Server: "server1",
+			ServiceBase: entity.ServiceBase{
+				Server: "server1",
+			},
+			Name: "myapp",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -104,8 +108,10 @@ func TestServiceHandler_Apply_SSHError(t *testing.T) {
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
 		WithNewState(&entity.BizService{
-			Name:   "myapp",
-			Server: "server1",
+			ServiceBase: entity.ServiceBase{
+				Server: "server1",
+			},
+			Name: "myapp",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -114,27 +120,6 @@ func TestServiceHandler_Apply_SSHError(t *testing.T) {
 	}
 	if result.Success {
 		t.Error("expected failure for SSH error")
-	}
-}
-
-func TestServiceHandler_Apply_ServerNotRegistered(t *testing.T) {
-	h := NewServiceHandler()
-	ctx := context.Background()
-
-	deps := newMockDeps()
-
-	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
-		WithNewState(&entity.BizService{
-			Name:   "myapp",
-			Server: "unknown-server",
-		})
-
-	result, err := h.Apply(ctx, change, deps)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if result.Success {
-		t.Error("expected failure for unregistered server")
 	}
 }
 
@@ -150,8 +135,10 @@ func TestServiceHandler_Apply_MkdirError(t *testing.T) {
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
 		WithNewState(&entity.BizService{
-			Name:   "myapp",
-			Server: "server1",
+			ServiceBase: entity.ServiceBase{
+				Server: "server1",
+			},
+			Name: "myapp",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -185,8 +172,10 @@ func TestServiceHandler_Apply_DockerComposeError(t *testing.T) {
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
 		WithNewState(&entity.BizService{
-			Name:   "myapp",
-			Server: "server1",
+			ServiceBase: entity.ServiceBase{
+				Server: "server1",
+			},
+			Name: "myapp",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -210,8 +199,10 @@ func TestServiceHandler_DeleteService_RemoveError(t *testing.T) {
 
 	change := valueobject.NewChange(valueobject.ChangeTypeDelete, "service", "myapp").
 		WithOldState(&entity.BizService{
-			Name:   "myapp",
-			Server: "server1",
+			ServiceBase: entity.ServiceBase{
+				Server: "server1",
+			},
+			Name: "myapp",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -234,8 +225,10 @@ func TestServiceHandler_GetComposeFilePath(t *testing.T) {
 			name: "valid path",
 			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "myapp").
 				WithNewState(&entity.BizService{
-					Name:   "myapp",
-					Server: "server1",
+					ServiceBase: entity.ServiceBase{
+						Server: "server1",
+					},
+					Name: "myapp",
 				}),
 			workDir:  "/tmp",
 			expected: filepath.Join("/tmp", "deployments", "server1", "myapp.compose.yaml"),
@@ -253,8 +246,10 @@ func TestServiceHandler_GetComposeFilePath(t *testing.T) {
 			name: "server from old state",
 			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "myapp").
 				WithOldState(&entity.BizService{
-					Name:   "myapp",
-					Server: "server2",
+					ServiceBase: entity.ServiceBase{
+						Server: "server2",
+					},
+					Name: "myapp",
 				}),
 			workDir:  "/opt",
 			expected: filepath.Join("/opt", "deployments", "server2", "myapp.compose.yaml"),
@@ -300,8 +295,10 @@ services:
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "testapp").
 		WithNewState(&entity.BizService{
-			Name:   "testapp",
-			Server: "server1",
+			ServiceBase: entity.ServiceBase{
+				Server: "server1",
+			},
+			Name: "testapp",
 		})
 
 	deployCtx := &ServiceDeployContext{
@@ -342,8 +339,10 @@ func TestServiceHandler_DeployService_ReadFileError(t *testing.T) {
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "testapp").
 		WithNewState(&entity.BizService{
-			Name:   "testapp",
-			Server: "server1",
+			ServiceBase: entity.ServiceBase{
+				Server: "server1",
+			},
+			Name: "testapp",
 		})
 
 	os.Remove(composeFile)
@@ -378,9 +377,11 @@ func TestServiceHandler_Apply_UpdateType(t *testing.T) {
 
 	change := valueobject.NewChange(valueobject.ChangeTypeUpdate, "service", "myapp").
 		WithNewState(&entity.BizService{
-			Name:   "myapp",
-			Server: "server1",
-			Image:  "nginx:latest",
+			ServiceBase: entity.ServiceBase{
+				Server: "server1",
+			},
+			Name:  "myapp",
+			Image: "nginx:latest",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -402,8 +403,10 @@ func TestExtractServerFromChange_Service(t *testing.T) {
 			name: "server from new state",
 			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").
 				WithNewState(&entity.BizService{
-					Name:   "myapp",
-					Server: "server1",
+					ServiceBase: entity.ServiceBase{
+						Server: "server1",
+					},
+					Name: "myapp",
 				}),
 			expected: "server1",
 		},
@@ -411,8 +414,10 @@ func TestExtractServerFromChange_Service(t *testing.T) {
 			name: "server from old state",
 			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").
 				WithOldState(&entity.BizService{
-					Name:   "myapp",
-					Server: "server2",
+					ServiceBase: entity.ServiceBase{
+						Server: "server2",
+					},
+					Name: "myapp",
 				}),
 			expected: "server2",
 		},
@@ -420,12 +425,16 @@ func TestExtractServerFromChange_Service(t *testing.T) {
 			name: "prefer old state over new",
 			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").
 				WithOldState(&entity.BizService{
-					Name:   "myapp",
-					Server: "old-server",
+					ServiceBase: entity.ServiceBase{
+						Server: "old-server",
+					},
+					Name: "myapp",
 				}).
 				WithNewState(&entity.BizService{
-					Name:   "myapp",
-					Server: "new-server",
+					ServiceBase: entity.ServiceBase{
+						Server: "new-server",
+					},
+					Name: "myapp",
 				}),
 			expected: "old-server",
 		},

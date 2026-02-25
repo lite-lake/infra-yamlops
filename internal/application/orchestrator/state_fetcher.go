@@ -127,8 +127,10 @@ func (f *StateFetcher) fetchServerServicesState(client *ssh.Client, serverName s
 
 			if remoteHash != "" && localHash != "" && remoteHash == localHash {
 				state.Services[svc.Name] = &entity.BizService{
+					ServiceBase: entity.ServiceBase{
+						Server: svc.ServiceBase.Server,
+					},
 					Name:     svc.Name,
-					Server:   svc.Server,
 					Image:    svc.Image,
 					Ports:    svc.Ports,
 					Env:      svc.Env,
@@ -136,8 +138,10 @@ func (f *StateFetcher) fetchServerServicesState(client *ssh.Client, serverName s
 				}
 			} else {
 				state.Services[svc.Name] = &entity.BizService{
-					Name:   svc.Name,
-					Server: svc.Server,
+					ServiceBase: entity.ServiceBase{
+						Server: svc.ServiceBase.Server,
+					},
+					Name: svc.Name,
 				}
 			}
 		}
@@ -176,8 +180,10 @@ func (f *StateFetcher) fetchServerServicesState(client *ssh.Client, serverName s
 
 			if remoteHash != "" && localHash != "" && remoteHash == localHash {
 				state.InfraServices[infra.Name] = &entity.InfraService{
+					ServiceBase: entity.ServiceBase{
+						Server: infra.ServiceBase.Server,
+					},
 					Name:            infra.Name,
-					Server:          infra.Server,
 					Type:            infra.Type,
 					Image:           infra.Image,
 					GatewayLogLevel: infra.GatewayLogLevel,
@@ -189,8 +195,10 @@ func (f *StateFetcher) fetchServerServicesState(client *ssh.Client, serverName s
 				}
 			} else {
 				state.InfraServices[infra.Name] = &entity.InfraService{
-					Name:   infra.Name,
-					Server: infra.Server,
+					ServiceBase: entity.ServiceBase{
+						Server: infra.ServiceBase.Server,
+					},
+					Name: infra.Name,
 				}
 			}
 		}

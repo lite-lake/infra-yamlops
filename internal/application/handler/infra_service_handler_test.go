@@ -114,9 +114,11 @@ func TestInfraServiceHandler_Apply_Deploy(t *testing.T) {
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "infra_service", "gateway1").
 		WithNewState(&entity.InfraService{
-			Name:   "gateway1",
-			Server: "server1",
-			Type:   entity.InfraServiceTypeGateway,
+			ServiceBase: entity.ServiceBase{
+				Server: "server1",
+			},
+			Name: "gateway1",
+			Type: entity.InfraServiceTypeGateway,
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -142,9 +144,11 @@ func TestInfraServiceHandler_Apply_DeploySSL(t *testing.T) {
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "infra_service", "ssl1").
 		WithNewState(&entity.InfraService{
-			Name:   "ssl1",
-			Server: "server1",
-			Type:   entity.InfraServiceTypeSSL,
+			ServiceBase: entity.ServiceBase{
+				Server: "server1",
+			},
+			Name: "ssl1",
+			Type: entity.InfraServiceTypeSSL,
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -254,9 +258,11 @@ services:
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "infra_service", "gateway1").
 		WithNewState(&entity.InfraService{
-			Name:   "gateway1",
-			Server: "server1",
-			Type:   entity.InfraServiceTypeGateway,
+			ServiceBase: entity.ServiceBase{
+				Server: "server1",
+			},
+			Name: "gateway1",
+			Type: entity.InfraServiceTypeGateway,
 		})
 
 	deployCtx := &ServiceDeployContext{
@@ -329,9 +335,11 @@ func TestInfraServiceHandler_DeploySSLType_WithFile(t *testing.T) {
 	deps.workDir = tmpDir
 
 	infra := &entity.InfraService{
-		Name:   "ssl1",
-		Type:   entity.InfraServiceTypeSSL,
-		Server: "server1",
+		ServiceBase: entity.ServiceBase{
+			Server: "server1",
+		},
+		Name: "ssl1",
+		Type: entity.InfraServiceTypeSSL,
 		SSLConfig: &entity.SSLConfig{
 			Config: &entity.SSLVolumeConfig{
 				Source: "volumes://infra-ssl-config-cn",
@@ -440,9 +448,11 @@ func TestInfraServiceHandler_DeploySSLType_NoFile(t *testing.T) {
 	deps.workDir = t.TempDir()
 
 	infra := &entity.InfraService{
-		Name:   "ssl1",
-		Type:   entity.InfraServiceTypeSSL,
-		Server: "server1",
+		ServiceBase: entity.ServiceBase{
+			Server: "server1",
+		},
+		Name: "ssl1",
+		Type: entity.InfraServiceTypeSSL,
 	}
 
 	deployCtx := &ServiceDeployContext{

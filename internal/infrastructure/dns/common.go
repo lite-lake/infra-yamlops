@@ -153,3 +153,28 @@ func EnsureRecord(ctx context.Context, provider Provider, domain string, desired
 func EnsureRecordSimple(provider Provider, domain string, desired *DNSRecord) error {
 	return EnsureRecord(context.Background(), provider, domain, desired, nil)
 }
+
+// BatchCreateRecordsHelper 通用的批量创建记录函数
+func BatchCreateRecordsHelper(ctx context.Context, provider Provider, domainName string, records []*DNSRecord) error {
+	for _, record := range records {
+		if err := provider.CreateRecord(ctx, domainName, record); err != nil {
+			return domainerr.WrapEntity("record", record.Name, err)
+		}
+	}
+	return nil
+}
+
+// BatchDeleteRecordsHelper 通用的批量删除记录函数
+func BatchDeleteRecordsHelper(ctx context.Context, provider Provider, domainName string, recordIDs []string) error {
+	for _, recordID := range recordIDs {
+		if err := provider.DeleteRecord(ctx, domainName, recordID); err != nil {
+			return domainerr.WrapEntity("record", recordID, err)
+		}
+	}
+	return nil
+}
+
+// EnsureRecordHelper 通用的 EnsureRecord 方法实现
+func EnsureRecordHelper(ctx context.Context, provider Provider, domainName string, record *DNSRecord) error {
+	return EnsureRecord(ctx, provider, domainName, record, nil)
+}

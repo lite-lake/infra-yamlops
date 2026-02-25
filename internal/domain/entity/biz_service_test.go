@@ -234,25 +234,34 @@ func TestBizService_Validate(t *testing.T) {
 			wantErr: domain.ErrRequired,
 		},
 		{
-			name:    "missing image",
-			service: BizService{Name: "api", Server: "server-1"},
+			name: "missing image",
+			service: BizService{
+				Name: "api",
+				ServiceBase: ServiceBase{
+					Server: "server-1",
+				},
+			},
 			wantErr: domain.ErrRequired,
 		},
 		{
 			name: "invalid port",
 			service: BizService{
-				Name:   "api",
-				Server: "server-1",
-				Image:  "app:latest",
-				Ports:  []ServicePort{{Container: 0, Host: 80}},
+				Name: "api",
+				ServiceBase: ServiceBase{
+					Server: "server-1",
+				},
+				Image: "app:latest",
+				Ports: []ServicePort{{Container: 0, Host: 80}},
 			},
 			wantErr: domain.ErrInvalidPort,
 		},
 		{
 			name: "invalid healthcheck",
 			service: BizService{
-				Name:        "api",
-				Server:      "server-1",
+				Name: "api",
+				ServiceBase: ServiceBase{
+					Server: "server-1",
+				},
 				Image:       "app:latest",
 				Healthcheck: &ServiceHealthcheck{Path: "invalid"},
 			},
@@ -261,8 +270,10 @@ func TestBizService_Validate(t *testing.T) {
 		{
 			name: "invalid volume",
 			service: BizService{
-				Name:    "api",
-				Server:  "server-1",
+				Name: "api",
+				ServiceBase: ServiceBase{
+					Server: "server-1",
+				},
 				Image:   "app:latest",
 				Volumes: []ServiceVolume{{Source: "", Target: "/data"}},
 			},
@@ -271,8 +282,10 @@ func TestBizService_Validate(t *testing.T) {
 		{
 			name: "invalid gateway",
 			service: BizService{
-				Name:     "api",
-				Server:   "server-1",
+				Name: "api",
+				ServiceBase: ServiceBase{
+					Server: "server-1",
+				},
 				Image:    "app:latest",
 				Gateways: []ServiceGatewayRoute{{Hostname: "", ContainerPort: 8080}},
 			},
@@ -281,9 +294,11 @@ func TestBizService_Validate(t *testing.T) {
 		{
 			name: "invalid env empty secretref",
 			service: BizService{
-				Name:   "api",
-				Server: "server-1",
-				Image:  "app:latest",
+				Name: "api",
+				ServiceBase: ServiceBase{
+					Server: "server-1",
+				},
+				Image: "app:latest",
 				Env: map[string]valueobject.SecretRef{
 					"API_KEY": {},
 				},
@@ -293,19 +308,23 @@ func TestBizService_Validate(t *testing.T) {
 		{
 			name: "valid minimal",
 			service: BizService{
-				Name:   "api",
-				Server: "server-1",
-				Image:  "app:latest",
+				Name: "api",
+				ServiceBase: ServiceBase{
+					Server: "server-1",
+				},
+				Image: "app:latest",
 			},
 			wantErr: nil,
 		},
 		{
 			name: "valid full",
 			service: BizService{
-				Name:   "api",
-				Server: "server-1",
-				Image:  "app:latest",
-				Ports:  []ServicePort{{Container: 8080, Host: 80, Protocol: "tcp"}},
+				Name: "api",
+				ServiceBase: ServiceBase{
+					Server: "server-1",
+				},
+				Image: "app:latest",
+				Ports: []ServicePort{{Container: 8080, Host: 80, Protocol: "tcp"}},
 				Env: map[string]valueobject.SecretRef{
 					"API_KEY": *valueobject.NewSecretRefPlain("secret"),
 				},
@@ -335,7 +354,7 @@ func TestBizService_Validate(t *testing.T) {
 }
 
 func TestBizService_GetServer(t *testing.T) {
-	s := BizService{Server: "my-server"}
+	s := BizService{ServiceBase: ServiceBase{Server: "my-server"}}
 	if got := s.GetServer(); got != "my-server" {
 		t.Errorf("GetServer() = %v, want my-server", got)
 	}

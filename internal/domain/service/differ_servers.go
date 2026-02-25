@@ -287,13 +287,9 @@ func ServiceEquals(a, b *entity.BizService) bool {
 }
 
 func healthcheckEqual(a, b *entity.ServiceHealthcheck) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Path == b.Path && a.Interval == b.Interval && a.Timeout == b.Timeout
+	return ptrEqual(a, b, func(x, y *entity.ServiceHealthcheck) bool {
+		return x.Path == y.Path && x.Interval == y.Interval && x.Timeout == y.Timeout
+	})
 }
 
 func (s *DifferService) PlanInfraServices(plan *valueobject.Plan, cfgMap map[string]*entity.InfraService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
@@ -361,71 +357,61 @@ func InfraServiceEquals(a, b *entity.InfraService) bool {
 }
 
 func gatewayPortsEqual(a, b *entity.GatewayPorts) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.HTTP == b.HTTP && a.HTTPS == b.HTTPS
+	return ptrEqual(a, b, func(x, y *entity.GatewayPorts) bool {
+		return x.HTTP == y.HTTP && x.HTTPS == y.HTTPS
+	})
 }
 
 func gatewayConfigEqual(a, b *entity.GatewayConfig) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Source == b.Source && a.Sync == b.Sync
+	return ptrEqual(a, b, func(x, y *entity.GatewayConfig) bool {
+		return x.Source == y.Source && x.Sync == y.Sync
+	})
 }
 
 func gatewaySSLConfigEqual(a, b *entity.GatewaySSLConfig) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Mode == b.Mode && a.Endpoint == b.Endpoint
+	return ptrEqual(a, b, func(x, y *entity.GatewaySSLConfig) bool {
+		return x.Mode == y.Mode && x.Endpoint == y.Endpoint
+	})
 }
 
 func gatewayWAFConfigEqual(a, b *entity.GatewayWAFConfig) bool {
-	if a == nil && b == nil {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	if a.Enabled != b.Enabled {
-		return false
-	}
-	if len(a.Whitelist) != len(b.Whitelist) {
-		return false
-	}
-	for i, w := range a.Whitelist {
-		if i >= len(b.Whitelist) || w != b.Whitelist[i] {
+	return ptrEqual(a, b, func(x, y *entity.GatewayWAFConfig) bool {
+		if x.Enabled != y.Enabled {
 			return false
 		}
-	}
-	return true
+		if len(x.Whitelist) != len(y.Whitelist) {
+			return false
+		}
+		for i, w := range x.Whitelist {
+			if i >= len(y.Whitelist) || w != y.Whitelist[i] {
+				return false
+			}
+		}
+		return true
+	})
 }
 
 func sslConfigEqual(a, b *entity.SSLConfig) bool {
+	return ptrEqual(a, b, func(x, y *entity.SSLConfig) bool {
+		if x.Ports.API != y.Ports.API {
+			return false
+		}
+		if x.Config == nil && y.Config == nil {
+			return true
+		}
+		if x.Config == nil || y.Config == nil {
+			return false
+		}
+		return x.Config.Source == y.Config.Source && x.Config.Sync == y.Config.Sync
+	})
+}
+
+func ptrEqual[T any](a, b *T, eq func(a, b *T) bool) bool {
 	if a == nil && b == nil {
 		return true
 	}
 	if a == nil || b == nil {
 		return false
 	}
-	if a.Ports.API != b.Ports.API {
-		return false
-	}
-	if a.Config == nil && b.Config == nil {
-		return true
-	}
-	if a.Config == nil || b.Config == nil {
-		return false
-	}
-	return a.Config.Source == b.Config.Source && a.Config.Sync == b.Config.Sync
+	return eq(a, b)
 }
