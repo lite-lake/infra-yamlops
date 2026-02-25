@@ -33,6 +33,7 @@ func (p *GatewayPorts) Validate() error {
 type GatewaySSLConfig struct {
 	Mode     string `yaml:"mode"`
 	Endpoint string `yaml:"endpoint,omitempty"`
+	APIKey   string `yaml:"api_key,omitempty"`
 }
 
 func (s *GatewaySSLConfig) Validate() error {

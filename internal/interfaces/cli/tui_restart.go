@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/litelake/yamlops/internal/constants"
@@ -36,10 +38,10 @@ func (m *Model) executeServiceRestartAsync() tea.Cmd {
 			return serviceRestartCompleteMsg{results: results}
 		}
 
-		serverServices := make(map[string][]string)
+		serverServices := make(map[string][]serviceInfo)
 		for _, svc := range servicesToProcess {
 			if svc.Server != "" {
-				serverServices[svc.Server] = append(serverServices[svc.Server], svc.Name)
+				serverServices[svc.Server] = append(serverServices[svc.Server], svc)
 			}
 		}
 
@@ -53,9 +55,9 @@ func (m *Model) executeServiceRestartAsync() tea.Cmd {
 
 			password, err := srv.SSH.Password.Resolve(secrets)
 			if err != nil {
-				for _, svcName := range services {
+				for _, svcInfo := range services {
 					result.Services = append(result.Services, RestartServiceResult{
-						Name:    svcName,
+						Name:    svcInfo.Name,
 						Success: false,
 						Error:   fmt.Sprintf("Cannot resolve password: %v", err),
 					})
@@ -66,9 +68,9 @@ func (m *Model) executeServiceRestartAsync() tea.Cmd {
 
 			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
 			if err != nil {
-				for _, svcName := range services {
+				for _, svcInfo := range services {
 					result.Services = append(result.Services, RestartServiceResult{
-						Name:    svcName,
+						Name:    svcInfo.Name,
 						Success: false,
 						Error:   fmt.Sprintf("Connection failed: %v", err),
 					})
@@ -77,19 +79,55 @@ func (m *Model) executeServiceRestartAsync() tea.Cmd {
 				continue
 			}
 
-			for _, svcName := range services {
-				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, svcName))
+			for _, svcInfo := range services {
+				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, svcInfo.Name))
+
+				workDir, err := os.Getwd()
+				if err != nil {
+					workDir = "."
+				}
+				composeFile := filepath.Join(workDir, "deployments", srv.Name, svcInfo.Name+".compose.yaml")
+
+				if syncErr := m.syncComposeFile(client, composeFile, remoteDir); syncErr != nil {
+					result.Services = append(result.Services, RestartServiceResult{
+						Name:    svcInfo.Name,
+						Success: false,
+						Error:   fmt.Sprintf("sync compose file failed: %v", syncErr),
+					})
+					continue
+				}
+
+				if syncErr := m.syncEnvFile(client, composeFile, remoteDir); syncErr != nil {
+					result.Services = append(result.Services, RestartServiceResult{
+						Name:    svcInfo.Name,
+						Success: false,
+						Error:   fmt.Sprintf("sync env file failed: %v", syncErr),
+					})
+					continue
+				}
+
+				if svcInfo.Type == NodeTypeInfra {
+					if syncErr := m.syncInfraFiles(client, svcInfo.Name, srv.Name, remoteDir, workDir); syncErr != nil {
+						result.Services = append(result.Services, RestartServiceResult{
+							Name:    svcInfo.Name,
+							Success: false,
+							Error:   fmt.Sprintf("sync infra files failed: %v", syncErr),
+						})
+						continue
+					}
+				}
+
 				cmd := restartServiceCommand(remoteDir)
 				_, stderr, err := client.Run(cmd)
 				if err != nil {
 					result.Services = append(result.Services, RestartServiceResult{
-						Name:    svcName,
+						Name:    svcInfo.Name,
 						Success: false,
 						Error:   stderr,
 					})
 				} else {
 					result.Services = append(result.Services, RestartServiceResult{
-						Name:    svcName,
+						Name:    svcInfo.Name,
 						Success: true,
 					})
 				}
@@ -101,6 +139,88 @@ func (m *Model) executeServiceRestartAsync() tea.Cmd {
 
 		return serviceRestartCompleteMsg{results: results}
 	}
+}
+
+func (m *Model) syncComposeFile(client *ssh.Client, composeFile, remoteDir string) error {
+	if composeFile == "" {
+		return nil
+	}
+
+	if _, err := os.Stat(composeFile); err != nil {
+		return nil
+	}
+
+	content, err := os.ReadFile(composeFile)
+	if err != nil {
+		return fmt.Errorf("read compose file: %w", err)
+	}
+
+	return m.syncContent(client, string(content), remoteDir+"/docker-compose.yml")
+}
+
+func (m *Model) syncEnvFile(client *ssh.Client, composeFile, remoteDir string) error {
+	if composeFile == "" {
+		return nil
+	}
+
+	envFile := composeFile[:len(composeFile)-len(".compose.yaml")] + ".env"
+	if _, err := os.Stat(envFile); err != nil {
+		return nil
+	}
+
+	content, err := os.ReadFile(envFile)
+	if err != nil {
+		return fmt.Errorf("read env file: %w", err)
+	}
+
+	envFileName := filepath.Base(envFile)
+	return m.syncContent(client, string(content), remoteDir+"/"+envFileName)
+}
+
+func (m *Model) syncInfraFiles(client *ssh.Client, serviceName, serverName, remoteDir, workDir string) error {
+	gatewayFile := filepath.Join(workDir, "deployments", serverName, serviceName+".gate.yaml")
+	if _, err := os.Stat(gatewayFile); err == nil {
+		content, err := os.ReadFile(gatewayFile)
+		if err != nil {
+			return fmt.Errorf("read gateway file: %w", err)
+		}
+		if err := m.syncContent(client, string(content), remoteDir+"/gateway.yml"); err != nil {
+			return err
+		}
+	}
+
+	sslConfigFile := filepath.Join(workDir, "userdata", string(m.Environment), "volumes", "ssl", "config.yml")
+	if _, err := os.Stat(sslConfigFile); err == nil {
+		if err := client.MkdirAllSudoWithPerm(remoteDir+"/ssl-config", "755"); err != nil {
+			return fmt.Errorf("create ssl-config directory: %w", err)
+		}
+		content, err := os.ReadFile(sslConfigFile)
+		if err != nil {
+			return fmt.Errorf("read ssl config file: %w", err)
+		}
+		if err := m.syncContent(client, string(content), remoteDir+"/ssl-config/config.yml"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *Model) syncContent(client *ssh.Client, content, remotePath string) error {
+	tmpFile, err := os.CreateTemp("", constants.TempFilePattern)
+	if err != nil {
+		return fmt.Errorf("create temp file: %w", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	if _, err := tmpFile.WriteString(content); err != nil {
+		return fmt.Errorf("write temp file: %w", err)
+	}
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("close temp file: %w", err)
+	}
+
+	return client.UploadFileSudo(tmpFile.Name(), remotePath)
 }
 
 func (m Model) hasSelectedRestartServices() bool {

@@ -17,6 +17,7 @@ type ServiceStatusFetchResult struct {
 type serviceInfo struct {
 	Name   string
 	Server string
+	Type   NodeType
 }
 
 func fetchServiceStatus(servers []serverWithSSH, infraServices []serviceWithServer, bizServices []serviceWithServer, secrets map[string]string, env string) map[string]NodeStatus {
@@ -145,12 +146,12 @@ func getSelectedServicesInfo(nodes []*TreeNode) []serviceInfo {
 			switch leaf.Type {
 			case NodeTypeInfra:
 				if !serviceSet[leaf.Name] {
-					services = append(services, serviceInfo{Name: leaf.Name, Server: serverName})
+					services = append(services, serviceInfo{Name: leaf.Name, Server: serverName, Type: NodeTypeInfra})
 					serviceSet[leaf.Name] = true
 				}
 			case NodeTypeBiz:
 				if !serviceSet[leaf.Name] {
-					services = append(services, serviceInfo{Name: leaf.Name, Server: serverName})
+					services = append(services, serviceInfo{Name: leaf.Name, Server: serverName, Type: NodeTypeBiz})
 					serviceSet[leaf.Name] = true
 				}
 			}

@@ -7,6 +7,7 @@ type GatewayConfig struct {
 	Whitelist          []string
 	SSLMode            string
 	SSLEndpoint        string
+	SSLAPIKey          string
 	SSLAutoUpdate      bool
 	SSLUpdateCheckTime string
 }

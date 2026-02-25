@@ -41,6 +41,7 @@ type sslConfig struct {
 		Endpoint          string `yaml:"endpoint"`
 		AutoUpdate        bool   `yaml:"auto_update"`
 		UpdateCheckWindow string `yaml:"update_check_window,omitempty"`
+		APIKey            string `yaml:"api_key,omitempty"`
 	} `yaml:"remote"`
 }
 
@@ -98,11 +99,13 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 				Endpoint          string `yaml:"endpoint"`
 				AutoUpdate        bool   `yaml:"auto_update"`
 				UpdateCheckWindow string `yaml:"update_check_window,omitempty"`
+				APIKey            string `yaml:"api_key,omitempty"`
 			}{
 				Enabled:           sslEnabled,
 				Endpoint:          cfg.SSLEndpoint,
 				AutoUpdate:        cfg.SSLAutoUpdate,
 				UpdateCheckWindow: cfg.SSLUpdateCheckTime,
+				APIKey:            cfg.SSLAPIKey,
 			},
 		},
 		Hosts: make([]hostConfig, 0, len(hosts)),

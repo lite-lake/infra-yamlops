@@ -159,6 +159,7 @@ func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayCon
 	var whitelist []string
 	sslMode := ""
 	sslEndpoint := ""
+	sslAPIKey := ""
 
 	if gw.GatewayWAF != nil {
 		wafEnabled = gw.GatewayWAF.Enabled
@@ -167,6 +168,7 @@ func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayCon
 	if gw.GatewaySSL != nil {
 		sslMode = gw.GatewaySSL.Mode
 		sslEndpoint = gw.GatewaySSL.Endpoint
+		sslAPIKey = gw.GatewaySSL.APIKey
 	}
 
 	httpPort := constants.DefaultHTTPPort
@@ -181,6 +183,7 @@ func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayCon
 		Whitelist:          whitelist,
 		SSLMode:            sslMode,
 		SSLEndpoint:        sslEndpoint,
+		SSLAPIKey:          sslAPIKey,
 		SSLAutoUpdate:      true,
 		SSLUpdateCheckTime: "00:00-00:59",
 	}

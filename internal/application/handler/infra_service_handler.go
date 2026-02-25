@@ -45,6 +45,43 @@ func (h *InfraServiceHandler) Apply(ctx context.Context, change *valueobject.Cha
 	})
 }
 
+func (h *InfraServiceHandler) SyncInfraFiles(serviceName string, deployCtx *ServiceDeployContext, deps DepsProvider) error {
+	gatewayFile := h.getGatewayFilePath(deployCtx.ServerName, serviceName, deps)
+	if gatewayFile != "" {
+		if _, err := os.Stat(gatewayFile); err == nil {
+			content, err := os.ReadFile(gatewayFile)
+			if err != nil {
+				return fmt.Errorf("%w: gateway file %s: %w", domainerr.ErrFileReadFailed, gatewayFile, err)
+			}
+			if err := SyncContent(deployCtx.Client, string(content), deployCtx.RemoteDir+"/gateway.yml"); err != nil {
+				return fmt.Errorf("%w: gateway file %s to %s/gateway.yml: %w", domainerr.ErrComposeSyncFailed, gatewayFile, deployCtx.RemoteDir, err)
+			}
+		}
+	}
+
+	sslConfigFile := h.getSSLConfigFilePathFromWorkDir(deps)
+	if sslConfigFile != "" {
+		if _, err := os.Stat(sslConfigFile); err == nil {
+			content, err := os.ReadFile(sslConfigFile)
+			if err != nil {
+				return fmt.Errorf("%w: SSL config file %s: %w", domainerr.ErrFileReadFailed, sslConfigFile, err)
+			}
+			if err := deployCtx.Client.MkdirAllSudoWithPerm(deployCtx.RemoteDir+"/ssl-config", "755"); err != nil {
+				return fmt.Errorf("%w: ssl-config directory at %s/ssl-config: %w", domainerr.ErrDirectoryCreateFailed, deployCtx.RemoteDir, err)
+			}
+			if err := SyncContent(deployCtx.Client, string(content), deployCtx.RemoteDir+"/ssl-config/config.yml"); err != nil {
+				return fmt.Errorf("%w: SSL config file %s to %s/ssl-config/config.yml: %w", domainerr.ErrComposeSyncFailed, sslConfigFile, deployCtx.RemoteDir, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (h *InfraServiceHandler) getSSLConfigFilePathFromWorkDir(deps DepsProvider) string {
+	return filepath.Join(deps.WorkDir(), "userdata", deps.Env(), "volumes", "ssl", "config.yml")
+}
+
 func (h *InfraServiceHandler) createInfraTypeHook(infra *entity.InfraService, serviceName string, deployCtx *ServiceDeployContext, deps DepsProvider) func(*Result) error {
 	return func(result *Result) error {
 		if infra != nil && infra.Type == entity.InfraServiceTypeGateway {
