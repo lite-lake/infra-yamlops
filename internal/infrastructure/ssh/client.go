@@ -3,12 +3,14 @@ package ssh
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/litelake/yamlops/internal/constants"
@@ -24,6 +26,8 @@ func closeWithLog(closer io.Closer, name string) {
 		logger.Debug("close error", "name", name, "error", err)
 	}
 }
+
+var knownHostsMu sync.Mutex
 
 type Client struct {
 	client *ssh.Client
@@ -185,11 +189,16 @@ func createHostKeyCallback(knownHostsPath string, strict bool) (ssh.HostKeyCallb
 
 		logger.Warn("auto-accepting unknown host key", "hostname", hostname, "fingerprint", ssh.FingerprintSHA256(key))
 		line := knownhosts.Line([]string{hostname}, key)
+		knownHostsMu.Lock()
 		f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, constants.FilePermissionOwnerRW)
 		if err != nil {
+			knownHostsMu.Unlock()
 			return domainerr.WrapOp("open known_hosts", domainerr.ErrSSHConnectFailed)
 		}
-		defer closeWithLog(f, "known_hosts file")
+		defer func() {
+			closeWithLog(f, "known_hosts file")
+			knownHostsMu.Unlock()
+		}()
 		if _, err := fmt.Fprintln(f, line); err != nil {
 			return domainerr.WrapOp("write known_hosts", domainerr.ErrSSHConnectFailed)
 		}
@@ -364,7 +373,7 @@ func (c *Client) FileExists(path string) (bool, error) {
 	return true, nil
 }
 
-func (c *Client) StreamRun(cmd string, stdoutChan, stderrChan chan string) error {
+func (c *Client) StreamRun(ctx context.Context, cmd string, stdoutChan, stderrChan chan string) error {
 	session, err := c.client.NewSession()
 	if err != nil {
 		return domainerr.WrapOp("create session", domainerr.ErrSSHSessionFailed)
@@ -386,23 +395,76 @@ func (c *Client) StreamRun(cmd string, stdoutChan, stderrChan chan string) error
 		return domainerr.WrapOp("start command", domainerr.ErrSSHCommandFailed)
 	}
 
-	go streamReader(stdoutPipe, stdoutChan)
-	go streamReader(stderrPipe, stderrChan)
+	done := make(chan struct{})
+	go func() {
+		streamReader(ctx, stdoutPipe, stdoutChan)
+		streamReader(ctx, stderrPipe, stderrChan)
+		close(done)
+	}()
 
-	return session.Wait()
+	select {
+	case <-ctx.Done():
+		session.Signal(ssh.SIGKILL)
+		session.Close()
+		<-done
+		return ctx.Err()
+	case err := <-waitSession(session, done):
+		return err
+	}
 }
 
-func streamReader(reader io.Reader, ch chan string) {
+func waitSession(session *ssh.Session, done <-chan struct{}) <-chan error {
+	ch := make(chan error, 1)
+	go func() {
+		defer close(ch)
+		ch <- session.Wait()
+		<-done
+	}()
+	return ch
+}
+
+func streamReader(ctx context.Context, reader io.Reader, ch chan string) {
 	buf := make([]byte, constants.SSHStreamBufferSize)
 	for {
-		n, err := reader.Read(buf)
-		if n > 0 && ch != nil {
-			ch <- string(buf[:n])
+		// Create a channel to receive read result
+		type readResult struct {
+			n   int
+			err error
 		}
-		if err != nil {
-			if err != io.EOF && ch != nil {
-				ch <- err.Error()
+		readDone := make(chan readResult, 1)
+
+		go func() {
+			n, err := reader.Read(buf)
+			readDone <- readResult{n: n, err: err}
+		}()
+
+		// Wait for read or context cancellation
+		select {
+		case result := <-readDone:
+			n, err := result.n, result.err
+			if n > 0 && ch != nil {
+				select {
+				case ch <- string(buf[:n]):
+				case <-ctx.Done():
+					if ch != nil {
+						close(ch)
+					}
+					return
+				}
 			}
+			if err != nil {
+				if !errors.Is(err, io.EOF) && ch != nil {
+					select {
+					case ch <- err.Error():
+					case <-ctx.Done():
+					}
+				}
+				if ch != nil {
+					close(ch)
+				}
+				return
+			}
+		case <-ctx.Done():
 			if ch != nil {
 				close(ch)
 			}

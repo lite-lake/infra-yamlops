@@ -1,7 +1,6 @@
 package entity
 
 import (
-	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -31,7 +30,7 @@ func (d *Domain) Validate() error {
 		return fmt.Errorf("%w: invalid domain format %s", domain.ErrInvalidDomain, d.Name)
 	}
 	if d.DNSISP == "" {
-		return errors.New("dns_isp is required")
+		return domain.RequiredField("dns_isp")
 	}
 	for i, r := range d.Records {
 		if err := r.Validate(); err != nil {

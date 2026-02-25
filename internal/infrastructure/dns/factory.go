@@ -2,6 +2,7 @@ package dns
 
 import (
 	"fmt"
+	"sync"
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
@@ -12,6 +13,7 @@ import (
 type CreatorFunc func(isp *entity.ISP, secrets map[string]string) (dnsprovider.Provider, error)
 
 type Factory struct {
+	mu       sync.RWMutex
 	creators map[string]CreatorFunc
 }
 
@@ -26,7 +28,9 @@ func NewFactory() *Factory {
 }
 
 func (f *Factory) Create(isp *entity.ISP, secrets map[string]string) (dnsprovider.Provider, error) {
+	f.mu.RLock()
 	creator, ok := f.creators[string(isp.Type)]
+	f.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", domainerr.ErrUnsupportedProvider, isp.Type)
 	}
@@ -34,6 +38,8 @@ func (f *Factory) Create(isp *entity.ISP, secrets map[string]string) (dnsprovide
 }
 
 func (f *Factory) Register(providerType string, creator CreatorFunc) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	f.creators[providerType] = creator
 }
 
