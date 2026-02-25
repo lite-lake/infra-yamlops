@@ -24,7 +24,7 @@ func (h *ServerHandler) EntityType() string {
 func (h *ServerHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
-	switch change.Type {
+	switch change.Type() {
 	case valueobject.ChangeTypeCreate, valueobject.ChangeTypeUpdate:
 		return h.handleCreateOrUpdate(ctx, change, deps)
 	case valueobject.ChangeTypeDelete:
@@ -43,21 +43,21 @@ func (h *ServerHandler) handleCreateOrUpdate(ctx context.Context, change *valueo
 
 	server := h.getServerFromChange(change)
 	if server == nil {
-		result.Error = fmt.Errorf("%w: %s", domainerr.ErrServerNotRegistered, change.Name)
+		result.Error = fmt.Errorf("%w: %s", domainerr.ErrServerNotRegistered, change.Name())
 		return result, nil
 	}
 
 	if len(server.Environment.Registries) == 0 {
 		result.Success = true
 		action := "updated"
-		if change.Type == valueobject.ChangeTypeCreate {
+		if change.Type() == valueobject.ChangeTypeCreate {
 			action = "registered"
 		}
 		result.Output = fmt.Sprintf("server %s (no registries configured)", action)
 		return result, nil
 	}
 
-	client, err := deps.SSHClient(change.Name)
+	client, err := deps.SSHClient(change.Name())
 	if err != nil {
 		result.Error = fmt.Errorf("get SSH client: %w", err)
 		return result, nil
@@ -83,12 +83,12 @@ func (h *ServerHandler) handleCreateOrUpdate(ctx context.Context, change *valueo
 	if hasErrors {
 		result.Success = true
 		result.Output = fmt.Sprintf("server %s with registry login issues:\n%s",
-			map[bool]string{true: "registered", false: "updated"}[change.Type == valueobject.ChangeTypeCreate],
+			map[bool]string{true: "registered", false: "updated"}[change.Type() == valueobject.ChangeTypeCreate],
 			strings.Join(loginResults, "\n"))
 	} else {
 		result.Success = true
 		result.Output = fmt.Sprintf("server %s and logged in to %d registries:\n%s",
-			map[bool]string{true: "registered", false: "updated"}[change.Type == valueobject.ChangeTypeCreate],
+			map[bool]string{true: "registered", false: "updated"}[change.Type() == valueobject.ChangeTypeCreate],
 			len(loginResults),
 			strings.Join(loginResults, "\n"))
 	}
@@ -97,13 +97,13 @@ func (h *ServerHandler) handleCreateOrUpdate(ctx context.Context, change *valueo
 }
 
 func (h *ServerHandler) getServerFromChange(change *valueobject.Change) *entity.Server {
-	if change.NewState != nil {
-		if server, ok := change.NewState.(*entity.Server); ok {
+	if change.NewState() != nil {
+		if server, ok := change.NewState().(*entity.Server); ok {
 			return server
 		}
 	}
-	if change.OldState != nil {
-		if server, ok := change.OldState.(*entity.Server); ok {
+	if change.OldState() != nil {
+		if server, ok := change.OldState().(*entity.Server); ok {
 			return server
 		}
 	}

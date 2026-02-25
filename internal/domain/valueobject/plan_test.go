@@ -10,23 +10,23 @@ func TestPlan_NewPlan(t *testing.T) {
 	if plan == nil {
 		t.Fatal("expected non-nil plan")
 	}
-	if plan.Changes == nil {
+	if plan.Changes() == nil {
 		t.Error("expected initialized changes slice")
 	}
-	if plan.Scope == nil {
+	if plan.Scope() == nil {
 		t.Error("expected initialized scope")
 	}
 }
 
 func TestPlan_NewPlanWithScope(t *testing.T) {
-	scope := &Scope{Zone: "zone1"}
+	scope := NewScope().WithZone("zone1")
 	plan := NewPlanWithScope(scope)
 
 	if plan == nil {
 		t.Fatal("expected non-nil plan")
 	}
-	if plan.Scope.Zone != "zone1" {
-		t.Errorf("expected scope zone 'zone1', got %s", plan.Scope.Zone)
+	if plan.Scope().Zone() != "zone1" {
+		t.Errorf("expected scope zone 'zone1', got %s", plan.Scope().Zone())
 	}
 }
 
@@ -36,30 +36,26 @@ func TestPlan_NewPlanWithScope_NilScope(t *testing.T) {
 	if plan == nil {
 		t.Fatal("expected non-nil plan")
 	}
-	if plan.Scope == nil {
+	if plan.Scope() == nil {
 		t.Error("expected initialized scope")
 	}
 }
 
 func TestPlan_AddChange(t *testing.T) {
 	plan := NewPlan()
-	change := &Change{
-		Type:   ChangeTypeCreate,
-		Entity: "server",
-		Name:   "srv1",
-	}
+	change := NewChange(ChangeTypeCreate, "server", "srv1")
 
 	plan.AddChange(change)
 
-	if len(plan.Changes) != 1 {
-		t.Errorf("expected 1 change, got %d", len(plan.Changes))
+	if len(plan.Changes()) != 1 {
+		t.Errorf("expected 1 change, got %d", len(plan.Changes()))
 	}
 }
 
 func TestPlan_HasChanges(t *testing.T) {
 	t.Run("with changes", func(t *testing.T) {
 		plan := NewPlan()
-		plan.AddChange(&Change{Type: ChangeTypeCreate})
+		plan.AddChange(NewChange(ChangeTypeCreate, "server", "srv1"))
 
 		if !plan.HasChanges() {
 			t.Error("expected HasChanges to return true")
@@ -68,7 +64,7 @@ func TestPlan_HasChanges(t *testing.T) {
 
 	t.Run("with noop only", func(t *testing.T) {
 		plan := NewPlan()
-		plan.AddChange(&Change{Type: ChangeTypeNoop})
+		plan.AddChange(NewChange(ChangeTypeNoop, "server", "srv1"))
 
 		if plan.HasChanges() {
 			t.Error("expected HasChanges to return false")
@@ -86,9 +82,9 @@ func TestPlan_HasChanges(t *testing.T) {
 
 func TestPlan_FilterByType(t *testing.T) {
 	plan := NewPlan()
-	plan.AddChange(&Change{Type: ChangeTypeCreate, Name: "c1"})
-	plan.AddChange(&Change{Type: ChangeTypeUpdate, Name: "u1"})
-	plan.AddChange(&Change{Type: ChangeTypeCreate, Name: "c2"})
+	plan.AddChange(NewChangeFull(ChangeTypeCreate, "server", "c1", nil, nil, nil, false))
+	plan.AddChange(NewChangeFull(ChangeTypeUpdate, "server", "u1", nil, nil, nil, false))
+	plan.AddChange(NewChangeFull(ChangeTypeCreate, "server", "c2", nil, nil, nil, false))
 
 	creates := plan.FilterByType(ChangeTypeCreate)
 
@@ -99,9 +95,9 @@ func TestPlan_FilterByType(t *testing.T) {
 
 func TestPlan_FilterByEntity(t *testing.T) {
 	plan := NewPlan()
-	plan.AddChange(&Change{Entity: "server", Name: "s1"})
-	plan.AddChange(&Change{Entity: "service", Name: "svc1"})
-	plan.AddChange(&Change{Entity: "server", Name: "s2"})
+	plan.AddChange(NewChangeFull(ChangeTypeCreate, "server", "s1", nil, nil, nil, false))
+	plan.AddChange(NewChangeFull(ChangeTypeCreate, "service", "svc1", nil, nil, nil, false))
+	plan.AddChange(NewChangeFull(ChangeTypeCreate, "server", "s2", nil, nil, nil, false))
 
 	servers := plan.FilterByEntity("server")
 
@@ -122,7 +118,7 @@ func TestScope_Matches(t *testing.T) {
 	}{
 		{
 			name:     "empty scope matches all",
-			scope:    &Scope{},
+			scope:    NewScope(),
 			zone:     "zone1",
 			server:   "srv1",
 			service:  "svc1",
@@ -131,70 +127,70 @@ func TestScope_Matches(t *testing.T) {
 		},
 		{
 			name:     "zone filter match",
-			scope:    &Scope{Zone: "zone1"},
+			scope:    NewScope().WithZone("zone1"),
 			zone:     "zone1",
 			expected: true,
 		},
 		{
 			name:     "zone filter no match",
-			scope:    &Scope{Zone: "zone1"},
+			scope:    NewScope().WithZone("zone1"),
 			zone:     "zone2",
 			expected: false,
 		},
 		{
 			name:     "server filter match",
-			scope:    &Scope{Server: "srv1"},
+			scope:    NewScope().WithServer("srv1"),
 			server:   "srv1",
 			expected: true,
 		},
 		{
 			name:     "service filter match",
-			scope:    &Scope{Service: "svc1"},
+			scope:    NewScope().WithService("svc1"),
 			service:  "svc1",
 			expected: true,
 		},
 		{
 			name:     "domain filter match",
-			scope:    &Scope{Domain: "example.com"},
+			scope:    NewScope().WithDomain("example.com"),
 			domain:   "example.com",
 			expected: true,
 		},
 		{
 			name:     "multiple filters all match",
-			scope:    &Scope{Zone: "zone1", Server: "srv1"},
+			scope:    NewScope().WithZone("zone1").WithServer("srv1"),
 			zone:     "zone1",
 			server:   "srv1",
 			expected: true,
 		},
 		{
 			name:     "multiple filters partial match",
-			scope:    &Scope{Zone: "zone1", Server: "srv1"},
+			scope:    NewScope().WithZone("zone1").WithServer("srv1"),
 			zone:     "zone1",
 			server:   "srv2",
 			expected: false,
 		},
 		{
 			name:     "services slice match",
-			scope:    &Scope{Services: []string{"svc1", "svc2"}},
+			scope:    NewScope().WithServices([]string{"svc1", "svc2"}),
 			service:  "svc1",
 			expected: true,
 		},
 		{
 			name:     "services slice no match",
-			scope:    &Scope{Services: []string{"svc1", "svc2"}},
+			scope:    NewScope().WithServices([]string{"svc1", "svc2"}),
 			service:  "svc3",
 			expected: false,
 		},
 		{
 			name:     "services slice with zone match",
-			scope:    &Scope{Zone: "zone1", Services: []string{"svc1"}},
+			scope:    NewScope().WithZone("zone1").WithServices([]string{"svc1"}),
 			zone:     "zone1",
 			service:  "svc1",
 			expected: true,
 		},
 		{
 			name:     "services slice with zone no match service",
-			scope:    &Scope{Zone: "zone1", Services: []string{"svc1"}},
+			scope:    NewScope().WithZone("zone1").WithServices([]string{"svc1"}),
 			zone:     "zone1",
 			service:  "svc2",
 			expected: false,

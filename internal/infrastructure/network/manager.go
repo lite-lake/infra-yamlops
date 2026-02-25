@@ -7,13 +7,9 @@ import (
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
-
-type SSHClient interface {
-	Run(cmd string) (stdout, stderr string, err error)
-	RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error)
-}
 
 type NetworkInfo struct {
 	Name   string
@@ -22,10 +18,10 @@ type NetworkInfo struct {
 }
 
 type Manager struct {
-	client SSHClient
+	client interfaces.SSHRunner
 }
 
-func NewManager(client SSHClient) *Manager {
+func NewManager(client interfaces.SSHRunner) *Manager {
 	return &Manager{client: client}
 }
 

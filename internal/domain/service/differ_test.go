@@ -33,7 +33,7 @@ func TestDifferService_NewDifferService(t *testing.T) {
 func TestDifferService_PlanISPs(t *testing.T) {
 	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
-	scope := &valueobject.Scope{}
+	scope := valueobject.NewScope()
 
 	cfgMap := map[string]*entity.ISP{
 		"isp1": {Name: "isp1", Type: "cloudflare"},
@@ -42,8 +42,8 @@ func TestDifferService_PlanISPs(t *testing.T) {
 
 	svc.PlanISPs(plan, cfgMap, scope)
 
-	if len(plan.Changes) != 2 {
-		t.Errorf("expected 2 changes, got %d", len(plan.Changes))
+	if len(plan.Changes()) != 2 {
+		t.Errorf("expected 2 changes, got %d", len(plan.Changes()))
 	}
 }
 
@@ -55,7 +55,7 @@ func TestDifferService_PlanISPs_Update(t *testing.T) {
 	}
 	svc := NewDifferService(state)
 	plan := valueobject.NewPlan()
-	scope := &valueobject.Scope{}
+	scope := valueobject.NewScope()
 
 	cfgMap := map[string]*entity.ISP{
 		"isp1": {Name: "isp1", Type: "cloudflare", Services: []entity.ISPService{"server", "domain"}},
@@ -63,11 +63,11 @@ func TestDifferService_PlanISPs_Update(t *testing.T) {
 
 	svc.PlanISPs(plan, cfgMap, scope)
 
-	if len(plan.Changes) != 1 {
-		t.Errorf("expected 1 change, got %d", len(plan.Changes))
+	if len(plan.Changes()) != 1 {
+		t.Errorf("expected 1 change, got %d", len(plan.Changes()))
 	}
-	if plan.Changes[0].Type != valueobject.ChangeTypeUpdate {
-		t.Errorf("expected update change, got %v", plan.Changes[0].Type)
+	if plan.Changes()[0].Type() != valueobject.ChangeTypeUpdate {
+		t.Errorf("expected update change, got %v", plan.Changes()[0].Type())
 	}
 }
 
@@ -79,17 +79,17 @@ func TestDifferService_PlanISPs_Delete(t *testing.T) {
 	}
 	svc := NewDifferService(state)
 	plan := valueobject.NewPlan()
-	scope := &valueobject.Scope{}
+	scope := valueobject.NewScope()
 
 	cfgMap := map[string]*entity.ISP{}
 
 	svc.PlanISPs(plan, cfgMap, scope)
 
-	if len(plan.Changes) != 1 {
-		t.Errorf("expected 1 change, got %d", len(plan.Changes))
+	if len(plan.Changes()) != 1 {
+		t.Errorf("expected 1 change, got %d", len(plan.Changes()))
 	}
-	if plan.Changes[0].Type != valueobject.ChangeTypeDelete {
-		t.Errorf("expected delete change, got %v", plan.Changes[0].Type)
+	if plan.Changes()[0].Type() != valueobject.ChangeTypeDelete {
+		t.Errorf("expected delete change, got %v", plan.Changes()[0].Type())
 	}
 }
 
@@ -288,9 +288,9 @@ func TestServiceEquals(t *testing.T) {
 		{
 			name: "equal services",
 			a: &entity.BizService{Name: "svc1", Server: "srv1", Image: "app:v1",
-				Ports: []entity.ServicePort{{Host: 8080}}, Env: map[string]valueobject.SecretRef{"KEY": {Plain: "val"}}},
+				Ports: []entity.ServicePort{{Host: 8080}}, Env: map[string]valueobject.SecretRef{"KEY": *valueobject.NewSecretRefPlain("val")}},
 			b: &entity.BizService{Name: "svc1", Server: "srv1", Image: "app:v1",
-				Ports: []entity.ServicePort{{Host: 8080}}, Env: map[string]valueobject.SecretRef{"KEY": {Plain: "val"}}},
+				Ports: []entity.ServicePort{{Host: 8080}}, Env: map[string]valueobject.SecretRef{"KEY": *valueobject.NewSecretRefPlain("val")}},
 			expected: true,
 		},
 		{
@@ -307,8 +307,8 @@ func TestServiceEquals(t *testing.T) {
 		},
 		{
 			name:     "different env",
-			a:        &entity.BizService{Name: "svc1", Env: map[string]valueobject.SecretRef{"KEY": {Plain: "val1"}}},
-			b:        &entity.BizService{Name: "svc1", Env: map[string]valueobject.SecretRef{"KEY": {Plain: "val2"}}},
+			a:        &entity.BizService{Name: "svc1", Env: map[string]valueobject.SecretRef{"KEY": *valueobject.NewSecretRefPlain("val1")}},
+			b:        &entity.BizService{Name: "svc1", Env: map[string]valueobject.SecretRef{"KEY": *valueobject.NewSecretRefPlain("val2")}},
 			expected: false,
 		},
 	}
@@ -326,7 +326,7 @@ func TestServiceEquals(t *testing.T) {
 func TestDifferService_PlanZones(t *testing.T) {
 	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
-	scope := &valueobject.Scope{}
+	scope := valueobject.NewScope()
 
 	cfgMap := map[string]*entity.Zone{
 		"zone1": {Name: "zone1", ISP: "isp1"},
@@ -334,18 +334,18 @@ func TestDifferService_PlanZones(t *testing.T) {
 
 	svc.PlanZones(plan, cfgMap, scope)
 
-	if len(plan.Changes) != 1 {
-		t.Errorf("expected 1 change, got %d", len(plan.Changes))
+	if len(plan.Changes()) != 1 {
+		t.Errorf("expected 1 change, got %d", len(plan.Changes()))
 	}
-	if plan.Changes[0].Type != valueobject.ChangeTypeCreate {
-		t.Errorf("expected create change, got %v", plan.Changes[0].Type)
+	if plan.Changes()[0].Type() != valueobject.ChangeTypeCreate {
+		t.Errorf("expected create change, got %v", plan.Changes()[0].Type())
 	}
 }
 
 func TestDifferService_PlanDomains(t *testing.T) {
 	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
-	scope := &valueobject.Scope{}
+	scope := valueobject.NewScope()
 
 	cfgMap := map[string]*entity.Domain{
 		"example.com": {Name: "example.com", ISP: "isp1"},
@@ -353,15 +353,15 @@ func TestDifferService_PlanDomains(t *testing.T) {
 
 	svc.PlanDomains(plan, cfgMap, scope)
 
-	if len(plan.Changes) != 1 {
-		t.Errorf("expected 1 change, got %d", len(plan.Changes))
+	if len(plan.Changes()) != 1 {
+		t.Errorf("expected 1 change, got %d", len(plan.Changes()))
 	}
 }
 
 func TestDifferService_PlanRecords(t *testing.T) {
 	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
-	scope := &valueobject.Scope{}
+	scope := valueobject.NewScope()
 
 	cfgRecords := []entity.DNSRecord{
 		{Domain: "example.com", Type: "A", Name: "www", Value: "1.2.3.4", TTL: 300},
@@ -369,15 +369,15 @@ func TestDifferService_PlanRecords(t *testing.T) {
 
 	svc.PlanRecords(plan, cfgRecords, scope)
 
-	if len(plan.Changes) != 1 {
-		t.Errorf("expected 1 change, got %d", len(plan.Changes))
+	if len(plan.Changes()) != 1 {
+		t.Errorf("expected 1 change, got %d", len(plan.Changes()))
 	}
 }
 
 func TestDifferService_PlanServers(t *testing.T) {
 	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
-	scope := &valueobject.Scope{}
+	scope := valueobject.NewScope()
 
 	cfgMap := map[string]*entity.Server{
 		"srv1": {Name: "srv1", Zone: "zone1"},
@@ -388,15 +388,15 @@ func TestDifferService_PlanServers(t *testing.T) {
 
 	svc.PlanServers(plan, cfgMap, zoneMap, scope)
 
-	if len(plan.Changes) != 1 {
-		t.Errorf("expected 1 change, got %d", len(plan.Changes))
+	if len(plan.Changes()) != 1 {
+		t.Errorf("expected 1 change, got %d", len(plan.Changes()))
 	}
 }
 
 func TestDifferService_PlanServices(t *testing.T) {
 	svc := NewDifferService(nil)
 	plan := valueobject.NewPlan()
-	scope := &valueobject.Scope{}
+	scope := valueobject.NewScope()
 
 	cfgMap := map[string]*entity.BizService{
 		"svc1": {Name: "svc1", Server: "srv1"},
@@ -407,8 +407,8 @@ func TestDifferService_PlanServices(t *testing.T) {
 
 	svc.PlanServices(plan, cfgMap, serverMap, scope)
 
-	if len(plan.Changes) != 1 {
-		t.Errorf("expected 1 change, got %d", len(plan.Changes))
+	if len(plan.Changes()) != 1 {
+		t.Errorf("expected 1 change, got %d", len(plan.Changes()))
 	}
 }
 

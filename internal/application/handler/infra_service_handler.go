@@ -34,13 +34,13 @@ func (h *InfraServiceHandler) Apply(ctx context.Context, change *valueobject.Cha
 		return result, nil
 	}
 
-	if change.Type == valueobject.ChangeTypeDelete {
+	if change.Type() == valueobject.ChangeTypeDelete {
 		return DeleteServiceRemote(change, deployCtx.Client, deployCtx.RemoteDir)
 	}
 
-	infra, _ := change.NewState.(*entity.InfraService)
+	infra, _ := change.NewState().(*entity.InfraService)
 	return ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{
-		PostDeployHook: h.createInfraTypeHook(infra, change.Name, deployCtx, deps),
+		PostDeployHook: h.createInfraTypeHook(infra, change.Name(), deployCtx, deps),
 		RestartAfterUp: true,
 	})
 }

@@ -42,7 +42,7 @@ func (h *DNSHandler) Apply(ctx context.Context, change *valueobject.Change, deps
 		return result, nil
 	}
 
-	switch change.Type {
+	switch change.Type() {
 	case valueobject.ChangeTypeDelete:
 		return h.deleteRecord(change, record, provider)
 	case valueobject.ChangeTypeUpdate:
@@ -53,13 +53,13 @@ func (h *DNSHandler) Apply(ctx context.Context, change *valueobject.Change, deps
 }
 
 func (h *DNSHandler) extractDNSRecordFromChange(ch *valueobject.Change) (*entity.DNSRecord, error) {
-	if ch.NewState != nil {
-		if record, ok := ch.NewState.(*entity.DNSRecord); ok {
+	if ch.NewState() != nil {
+		if record, ok := ch.NewState().(*entity.DNSRecord); ok {
 			return record, nil
 		}
 	}
-	if ch.OldState != nil {
-		if record, ok := ch.OldState.(*entity.DNSRecord); ok {
+	if ch.OldState() != nil {
+		if record, ok := ch.OldState().(*entity.DNSRecord); ok {
 			return record, nil
 		}
 	}

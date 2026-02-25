@@ -17,14 +17,15 @@ func planSimpleEntity[T any](
 	for name, state := range stateMap {
 		if _, exists := cfgMap[name]; !exists {
 			if scopeMatcher(name) {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeDelete,
-					Entity:   entityName,
-					Name:     name,
-					OldState: state,
-					NewState: nil,
-					Actions:  []string{fmt.Sprintf("delete %s %s", entityName, name)},
-				})
+				plan.AddChange(valueobject.NewChangeFull(
+					valueobject.ChangeTypeDelete,
+					entityName,
+					name,
+					state,
+					nil,
+					[]string{fmt.Sprintf("delete %s %s", entityName, name)},
+					false,
+				))
 			}
 		}
 	}
@@ -33,26 +34,28 @@ func planSimpleEntity[T any](
 		if state, exists := stateMap[name]; exists {
 			if !equals(state, cfg) {
 				if scopeMatcher(name) {
-					plan.AddChange(&valueobject.Change{
-						Type:     valueobject.ChangeTypeUpdate,
-						Entity:   entityName,
-						Name:     name,
-						OldState: state,
-						NewState: cfg,
-						Actions:  []string{fmt.Sprintf("update %s %s", entityName, name)},
-					})
+					plan.AddChange(valueobject.NewChangeFull(
+						valueobject.ChangeTypeUpdate,
+						entityName,
+						name,
+						state,
+						cfg,
+						[]string{fmt.Sprintf("update %s %s", entityName, name)},
+						false,
+					))
 				}
 			}
 		} else {
 			if scopeMatcher(name) {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeCreate,
-					Entity:   entityName,
-					Name:     name,
-					OldState: nil,
-					NewState: cfg,
-					Actions:  []string{fmt.Sprintf("create %s %s", entityName, name)},
-				})
+				plan.AddChange(valueobject.NewChangeFull(
+					valueobject.ChangeTypeCreate,
+					entityName,
+					name,
+					nil,
+					cfg,
+					[]string{fmt.Sprintf("create %s %s", entityName, name)},
+					false,
+				))
 			}
 		}
 	}

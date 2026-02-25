@@ -73,27 +73,27 @@ func TestServerSSH_Validate(t *testing.T) {
 	}{
 		{
 			name:    "missing host",
-			ssh:     ServerSSH{Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
+			ssh:     ServerSSH{Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")},
 			wantErr: domain.ErrRequired,
 		},
 		{
 			name:    "invalid port zero",
-			ssh:     ServerSSH{Host: "192.168.1.1", Port: 0, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
+			ssh:     ServerSSH{Host: "192.168.1.1", Port: 0, User: "root", Password: *valueobject.NewSecretRefPlain("pass")},
 			wantErr: domain.ErrInvalidPort,
 		},
 		{
 			name:    "invalid port negative",
-			ssh:     ServerSSH{Host: "192.168.1.1", Port: -1, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
+			ssh:     ServerSSH{Host: "192.168.1.1", Port: -1, User: "root", Password: *valueobject.NewSecretRefPlain("pass")},
 			wantErr: domain.ErrInvalidPort,
 		},
 		{
 			name:    "invalid port too large",
-			ssh:     ServerSSH{Host: "192.168.1.1", Port: 65536, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
+			ssh:     ServerSSH{Host: "192.168.1.1", Port: 65536, User: "root", Password: *valueobject.NewSecretRefPlain("pass")},
 			wantErr: domain.ErrInvalidPort,
 		},
 		{
 			name:    "missing user",
-			ssh:     ServerSSH{Host: "192.168.1.1", Port: 22, Password: valueobject.SecretRef{Plain: "pass"}},
+			ssh:     ServerSSH{Host: "192.168.1.1", Port: 22, Password: *valueobject.NewSecretRefPlain("pass")},
 			wantErr: domain.ErrRequired,
 		},
 		{
@@ -103,12 +103,12 @@ func TestServerSSH_Validate(t *testing.T) {
 		},
 		{
 			name:    "valid with plain password",
-			ssh:     ServerSSH{Host: "192.168.1.1", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
+			ssh:     ServerSSH{Host: "192.168.1.1", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")},
 			wantErr: nil,
 		},
 		{
 			name:    "valid with secret reference",
-			ssh:     ServerSSH{Host: "192.168.1.1", Port: 22, User: "root", Password: valueobject.SecretRef{Secret: "ssh_pass"}},
+			ssh:     ServerSSH{Host: "192.168.1.1", Port: 22, User: "root", Password: *valueobject.NewSecretRefSecret("ssh_pass")},
 			wantErr: nil,
 		},
 	}
@@ -172,7 +172,7 @@ func TestServer_Validate(t *testing.T) {
 					Host:     "192.168.1.1",
 					Port:     22,
 					User:     "root",
-					Password: valueobject.SecretRef{Plain: "pass"},
+					Password: *valueobject.NewSecretRefPlain("pass"),
 				},
 			},
 			wantErr: nil,
@@ -189,7 +189,7 @@ func TestServer_Validate(t *testing.T) {
 					Host:     "203.0.113.1",
 					Port:     22,
 					User:     "root",
-					Password: valueobject.SecretRef{Secret: "ssh_pass"},
+					Password: *valueobject.NewSecretRefSecret("ssh_pass"),
 				},
 				Environment: ServerEnvironment{
 					APTSource: "mirror",

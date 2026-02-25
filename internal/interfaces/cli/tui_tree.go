@@ -215,7 +215,7 @@ func (m *Model) generatePlan() {
 		return
 	}
 	m.Action.PlanResult = executionPlan
-	m.Action.ApplyTotal = len(executionPlan.Changes)
+	m.Action.ApplyTotal = len(executionPlan.Changes())
 	if m.Action.ApplyTotal == 0 {
 		m.Action.ApplyTotal = 1
 	}
@@ -236,9 +236,7 @@ func (m *Model) generatePlanAsync() tea.Cmd {
 			m.Config = cfg
 		}
 
-		scope := &valueobject.Scope{
-			DNSOnly: m.ViewMode == ViewModeDNS,
-		}
+		scope := valueobject.NewScope().WithDNSOnly(m.ViewMode == ViewModeDNS)
 		services := make(map[string]bool)
 		infraServices := make(map[string]bool)
 		domains := make(map[string]bool)
@@ -259,17 +257,20 @@ func (m *Model) generatePlanAsync() tea.Cmd {
 				}
 			}
 		}
+		var svcList []string
 		for svc := range services {
-			scope.Services = append(scope.Services, svc)
+			svcList = append(svcList, svc)
 		}
+		var infraList []string
 		for infra := range infraServices {
-			scope.InfraServices = append(scope.InfraServices, infra)
+			infraList = append(infraList, infra)
 		}
-		if len(scope.Services) > 0 || len(scope.InfraServices) > 0 {
-			scope.ForceDeploy = true
+		scope = scope.WithServices(svcList).WithInfraServices(infraList)
+		if len(svcList) > 0 || len(infraList) > 0 {
+			scope = scope.WithForceDeploy(true)
 		}
 		for d := range domains {
-			scope.Domain = d
+			scope = scope.WithDomain(d)
 			break
 		}
 
@@ -379,9 +380,7 @@ func (m *Model) getSelectedDomains() []string {
 }
 
 func (m *Model) buildScopeFromSelection() {
-	m.Action.PlanScope = &valueobject.Scope{
-		DNSOnly: m.ViewMode == ViewModeDNS,
-	}
+	m.Action.PlanScope = valueobject.NewScope().WithDNSOnly(m.ViewMode == ViewModeDNS)
 	services := make(map[string]bool)
 	infraServices := make(map[string]bool)
 	domains := make(map[string]bool)
@@ -402,17 +401,20 @@ func (m *Model) buildScopeFromSelection() {
 			}
 		}
 	}
+	var svcList []string
 	for svc := range services {
-		m.Action.PlanScope.Services = append(m.Action.PlanScope.Services, svc)
+		svcList = append(svcList, svc)
 	}
+	var infraList []string
 	for infra := range infraServices {
-		m.Action.PlanScope.InfraServices = append(m.Action.PlanScope.InfraServices, infra)
+		infraList = append(infraList, infra)
 	}
-	if len(m.Action.PlanScope.Services) > 0 || len(m.Action.PlanScope.InfraServices) > 0 {
-		m.Action.PlanScope.ForceDeploy = true
+	m.Action.PlanScope = m.Action.PlanScope.WithServices(svcList).WithInfraServices(infraList)
+	if len(svcList) > 0 || len(infraList) > 0 {
+		m.Action.PlanScope = m.Action.PlanScope.WithForceDeploy(true)
 	}
 	for d := range domains {
-		m.Action.PlanScope.Domain = d
+		m.Action.PlanScope = m.Action.PlanScope.WithDomain(d)
 		break
 	}
 }

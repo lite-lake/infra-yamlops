@@ -89,16 +89,16 @@ func (p *Planner) Plan(scope *valueobject.Scope) (*valueobject.Plan, error) {
 		p.differService.PlanServers(plan, p.config.GetServerMap(), p.config.GetZoneMap(), scope)
 	}
 
-	if len(scope.Services) > 0 || (!scope.HasAnyServiceSelection() && !scope.DNSOnly) {
+	if len(scope.Services()) > 0 || (!scope.HasAnyServiceSelection() && !scope.DNSOnly()) {
 		p.differService.PlanServices(plan, p.config.GetServiceMap(), p.config.GetServerMap(), scope)
 	}
 
-	if len(scope.InfraServices) > 0 || (!scope.HasAnyServiceSelection() && !scope.DNSOnly) {
+	if len(scope.InfraServices()) > 0 || (!scope.HasAnyServiceSelection() && !scope.DNSOnly()) {
 		p.differService.PlanInfraServices(plan, p.config.GetInfraServiceMap(), p.config.GetServerMap(), scope)
 	}
 
 	logger.Info("plan generated",
-		"changes", len(plan.Changes),
+		"changes", len(plan.Changes()),
 		"env", p.env,
 	)
 

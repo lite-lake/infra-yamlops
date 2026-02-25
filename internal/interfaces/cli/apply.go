@@ -38,12 +38,11 @@ func newApplyCommand(ctx *Context) *cobra.Command {
 
 func runApply(ctx *Context, scope string, filters Filters) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
-	planScope := &valueobject.Scope{
-		Domain:  filters.Domain,
-		Zone:    filters.Zone,
-		Server:  filters.Server,
-		Service: filters.Service,
-	}
+	planScope := valueobject.NewScope().
+		WithDomain(filters.Domain).
+		WithZone(filters.Zone).
+		WithServer(filters.Server).
+		WithService(filters.Service)
 
 	executionPlan, cfg, err := wf.Plan(nil, "", planScope)
 	if err != nil {
@@ -100,12 +99,12 @@ func displayResults(results []*handler.Result) {
 	hasError := false
 	for _, result := range results {
 		if result.Success {
-			fmt.Printf("✓ %s: %s\n", result.Change.Entity, result.Change.Name)
+			fmt.Printf("✓ %s: %s\n", result.Change.Entity(), result.Change.Name())
 			for _, w := range result.Warnings {
 				fmt.Printf("  ⚠ %s\n", w)
 			}
 		} else {
-			fmt.Printf("✗ %s: %s - %v\n", result.Change.Entity, result.Change.Name, result.Error)
+			fmt.Printf("✗ %s: %s - %v\n", result.Change.Entity(), result.Change.Name(), result.Error)
 			hasError = true
 		}
 	}

@@ -80,5 +80,5 @@ func (r *SecretResolver) cacheResolved(ref valueobject.SecretRef, val string) {
 }
 
 func cacheKey(ref valueobject.SecretRef) string {
-	return ref.Plain + "|" + ref.Secret
+	return ref.Plain() + "|" + ref.Secret()
 }

@@ -15,14 +15,15 @@ func (s *DifferService) PlanServers(plan *valueobject.Plan, cfgMap map[string]*e
 				zoneName = state.Zone
 			}
 			if scope.Matches(zoneName, name, "", "") {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeDelete,
-					Entity:   "server",
-					Name:     name,
-					OldState: state,
-					NewState: nil,
-					Actions:  []string{fmt.Sprintf("delete server %s", name)},
-				})
+				plan.AddChange(valueobject.NewChangeFull(
+					valueobject.ChangeTypeDelete,
+					"server",
+					name,
+					state,
+					nil,
+					[]string{fmt.Sprintf("delete server %s", name)},
+					false,
+				))
 			}
 		}
 	}
@@ -37,26 +38,28 @@ func (s *DifferService) PlanServers(plan *valueobject.Plan, cfgMap map[string]*e
 		if state, exists := s.state.Servers[name]; exists {
 			if !ServerEquals(state, cfg) {
 				if scope.Matches(zoneName, name, "", "") {
-					plan.AddChange(&valueobject.Change{
-						Type:     valueobject.ChangeTypeUpdate,
-						Entity:   "server",
-						Name:     name,
-						OldState: state,
-						NewState: cfg,
-						Actions:  []string{fmt.Sprintf("update server %s", name)},
-					})
+					plan.AddChange(valueobject.NewChangeFull(
+						valueobject.ChangeTypeUpdate,
+						"server",
+						name,
+						state,
+						cfg,
+						[]string{fmt.Sprintf("update server %s", name)},
+						false,
+					))
 				}
 			}
 		} else {
 			if scope.Matches(zoneName, name, "", "") {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeCreate,
-					Entity:   "server",
-					Name:     name,
-					OldState: nil,
-					NewState: cfg,
-					Actions:  []string{fmt.Sprintf("create server %s", name)},
-				})
+				plan.AddChange(valueobject.NewChangeFull(
+					valueobject.ChangeTypeCreate,
+					"server",
+					name,
+					nil,
+					cfg,
+					[]string{fmt.Sprintf("create server %s", name)},
+					false,
+				))
 			}
 		}
 	}
@@ -98,15 +101,15 @@ func (s *DifferService) PlanServices(plan *valueobject.Plan, cfgMap map[string]*
 				zoneName = srv.Zone
 			}
 			if scope.Matches(zoneName, serverName, name, "") {
-				plan.AddChange(&valueobject.Change{
-					Type:         valueobject.ChangeTypeDelete,
-					Entity:       "service",
-					Name:         name,
-					OldState:     state,
-					NewState:     nil,
-					Actions:      []string{fmt.Sprintf("delete service %s", name)},
-					RemoteExists: true,
-				})
+				plan.AddChange(valueobject.NewChangeFull(
+					valueobject.ChangeTypeDelete,
+					"service",
+					name,
+					state,
+					nil,
+					[]string{fmt.Sprintf("delete service %s", name)},
+					true,
+				))
 			}
 		}
 	}
@@ -122,31 +125,31 @@ func (s *DifferService) PlanServices(plan *valueobject.Plan, cfgMap map[string]*
 		}
 
 		if state, exists := s.state.Services[name]; exists {
-			if scope.ForceDeploy || !ServiceEquals(state, cfg) {
+			if scope.ForceDeploy() || !ServiceEquals(state, cfg) {
 				changeType := valueobject.ChangeTypeUpdate
-				if scope.ForceDeploy && ServiceEquals(state, cfg) {
+				if scope.ForceDeploy() && ServiceEquals(state, cfg) {
 					changeType = valueobject.ChangeTypeCreate
 				}
-				plan.AddChange(&valueobject.Change{
-					Type:         changeType,
-					Entity:       "service",
-					Name:         name,
-					OldState:     state,
-					NewState:     cfg,
-					Actions:      []string{fmt.Sprintf("deploy service %s", name)},
-					RemoteExists: true,
-				})
+				plan.AddChange(valueobject.NewChangeFull(
+					changeType,
+					"service",
+					name,
+					state,
+					cfg,
+					[]string{fmt.Sprintf("deploy service %s", name)},
+					true,
+				))
 			}
 		} else {
-			plan.AddChange(&valueobject.Change{
-				Type:         valueobject.ChangeTypeCreate,
-				Entity:       "service",
-				Name:         name,
-				OldState:     nil,
-				NewState:     cfg,
-				Actions:      []string{fmt.Sprintf("create service %s", name)},
-				RemoteExists: false,
-			})
+			plan.AddChange(valueobject.NewChangeFull(
+				valueobject.ChangeTypeCreate,
+				"service",
+				name,
+				nil,
+				cfg,
+				[]string{fmt.Sprintf("create service %s", name)},
+				false,
+			))
 		}
 	}
 }
@@ -234,15 +237,15 @@ func (s *DifferService) PlanInfraServices(plan *valueobject.Plan, cfgMap map[str
 				zoneName = srv.Zone
 			}
 			if scope.MatchesInfra(zoneName, serverName, name) {
-				plan.AddChange(&valueobject.Change{
-					Type:         valueobject.ChangeTypeDelete,
-					Entity:       "infra_service",
-					Name:         name,
-					OldState:     state,
-					NewState:     nil,
-					Actions:      []string{fmt.Sprintf("delete infra service %s", name)},
-					RemoteExists: true,
-				})
+				plan.AddChange(valueobject.NewChangeFull(
+					valueobject.ChangeTypeDelete,
+					"infra_service",
+					name,
+					state,
+					nil,
+					[]string{fmt.Sprintf("delete infra service %s", name)},
+					true,
+				))
 			}
 		}
 	}
@@ -258,31 +261,31 @@ func (s *DifferService) PlanInfraServices(plan *valueobject.Plan, cfgMap map[str
 		}
 
 		if state, exists := s.state.InfraServices[name]; exists {
-			if scope.ForceDeploy || !InfraServiceEquals(state, cfg) {
+			if scope.ForceDeploy() || !InfraServiceEquals(state, cfg) {
 				changeType := valueobject.ChangeTypeUpdate
-				if scope.ForceDeploy && InfraServiceEquals(state, cfg) {
+				if scope.ForceDeploy() && InfraServiceEquals(state, cfg) {
 					changeType = valueobject.ChangeTypeCreate
 				}
-				plan.AddChange(&valueobject.Change{
-					Type:         changeType,
-					Entity:       "infra_service",
-					Name:         name,
-					OldState:     state,
-					NewState:     cfg,
-					Actions:      []string{fmt.Sprintf("deploy infra service %s", name)},
-					RemoteExists: true,
-				})
+				plan.AddChange(valueobject.NewChangeFull(
+					changeType,
+					"infra_service",
+					name,
+					state,
+					cfg,
+					[]string{fmt.Sprintf("deploy infra service %s", name)},
+					true,
+				))
 			}
 		} else {
-			plan.AddChange(&valueobject.Change{
-				Type:         valueobject.ChangeTypeCreate,
-				Entity:       "infra_service",
-				Name:         name,
-				OldState:     nil,
-				NewState:     cfg,
-				Actions:      []string{fmt.Sprintf("create infra service %s", name)},
-				RemoteExists: false,
-			})
+			plan.AddChange(valueobject.NewChangeFull(
+				valueobject.ChangeTypeCreate,
+				"infra_service",
+				name,
+				nil,
+				cfg,
+				[]string{fmt.Sprintf("create infra service %s", name)},
+				false,
+			))
 		}
 	}
 }

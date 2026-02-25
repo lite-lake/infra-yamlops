@@ -8,66 +8,71 @@ import (
 )
 
 type SecretRef struct {
-	Plain  string `yaml:"plain,omitempty"`
-	Secret string `yaml:"secret,omitempty"`
+	plain  string `yaml:"plain,omitempty"`
+	secret string `yaml:"secret,omitempty"`
 }
 
 func NewSecretRef(plain, secret string) *SecretRef {
-	return &SecretRef{Plain: plain, Secret: secret}
+	return &SecretRef{plain: plain, secret: secret}
 }
 
 func NewSecretRefPlain(plain string) *SecretRef {
-	return &SecretRef{Plain: plain}
+	return &SecretRef{plain: plain}
 }
 
 func NewSecretRefSecret(secret string) *SecretRef {
-	return &SecretRef{Secret: secret}
+	return &SecretRef{secret: secret}
 }
+
+func (s *SecretRef) Plain() string  { return s.plain }
+func (s *SecretRef) Secret() string { return s.secret }
 
 func (s *SecretRef) Equals(other *SecretRef) bool {
 	if other == nil {
 		return false
 	}
-	return s.Plain == other.Plain && s.Secret == other.Secret
+	return s.plain == other.plain && s.secret == other.secret
 }
 
 func (s *SecretRef) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var plain string
 	if err := unmarshal(&plain); err == nil {
-		s.Plain = plain
+		s.plain = plain
 		return nil
 	}
 
-	type alias SecretRef
-	var ref alias
+	var ref struct {
+		Plain  string `yaml:"plain,omitempty"`
+		Secret string `yaml:"secret,omitempty"`
+	}
 	if err := unmarshal(&ref); err != nil {
 		return err
 	}
-	s.Plain = ref.Plain
-	s.Secret = ref.Secret
+	s.plain = ref.Plain
+	s.secret = ref.Secret
 	return nil
 }
 
 func (s *SecretRef) MarshalYAML() (interface{}, error) {
-	if s.Secret != "" {
-		return map[string]string{"secret": s.Secret}, nil
+	if s.secret != "" {
+		return map[string]string{"secret": s.secret}, nil
 	}
-	return s.Plain, nil
+	return s.plain, nil
 }
 
 func (s *SecretRef) Resolve(secrets map[string]string) (string, error) {
-	if s.Secret != "" {
-		val, ok := secrets[s.Secret]
+	if s.secret != "" {
+		val, ok := secrets[s.secret]
 		if !ok {
-			return "", fmt.Errorf("%w: %s", domain.ErrMissingSecret, s.Secret)
+			return "", fmt.Errorf("%w: %s", domain.ErrMissingSecret, s.secret)
 		}
 		return val, nil
 	}
-	return s.Plain, nil
+	return s.plain, nil
 }
 
 func (s *SecretRef) Validate() error {
-	if s.Plain == "" && s.Secret == "" {
+	if s.plain == "" && s.secret == "" {
 		return domain.ErrEmptyValue
 	}
 	return nil

@@ -48,7 +48,7 @@ func TestISP_Validate(t *testing.T) {
 				Type:     ISPTypeCloudflare,
 				Services: []ISPService{ISPServiceDNS},
 				Credentials: map[string]valueobject.SecretRef{
-					"api_token": {Plain: "token"},
+					"api_token": *valueobject.NewSecretRefPlain("token"),
 				},
 			},
 			wantErr: nil,
@@ -59,7 +59,7 @@ func TestISP_Validate(t *testing.T) {
 				Name:     "aliyun",
 				Services: []ISPService{ISPServiceServer, ISPServiceDNS},
 				Credentials: map[string]valueobject.SecretRef{
-					"access_key": {Secret: "aliyun_key"},
+					"access_key": *valueobject.NewSecretRefSecret("aliyun_key"),
 				},
 			},
 			wantErr: nil,

@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/litelake/yamlops/internal/constants"
+	"github.com/litelake/yamlops/internal/domain"
 )
 
 var (
@@ -76,10 +76,10 @@ func WithLogger(log LogFunc) Option {
 
 func DefaultConfig() *Config {
 	return &Config{
-		MaxAttempts:  constants.DefaultRetryMaxAttempts,
-		InitialDelay: constants.DefaultRetryInitialDelay,
-		MaxDelay:     constants.DefaultRetryMaxDelay,
-		Multiplier:   constants.DefaultRetryMultiplier,
+		MaxAttempts:  domain.DefaultRetryMaxAttempts,
+		InitialDelay: domain.DefaultRetryInitialDelay,
+		MaxDelay:     domain.DefaultRetryMaxDelay,
+		Multiplier:   domain.DefaultRetryMultiplier,
 		IsRetryable:  DefaultIsRetryable,
 		OnRetry:      nil,
 	}

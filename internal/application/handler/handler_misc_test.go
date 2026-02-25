@@ -23,11 +23,7 @@ func TestNoopHandler_Apply(t *testing.T) {
 	ctx := context.Background()
 	deps := newMockDeps()
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "test",
-		Name:   "test-entity",
-	}
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "test", "test-entity")
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -51,12 +47,8 @@ func TestServerHandler_Apply_Create(t *testing.T) {
 	deps := newMockDeps()
 	deps.SetServers(map[string]*ServerInfo{"server1": {Host: "1.2.3.4"}})
 
-	change := &valueobject.Change{
-		Type:     valueobject.ChangeTypeCreate,
-		Entity:   "server",
-		Name:     "server1",
-		NewState: &entity.Server{Name: "server1", Zone: "zone1"},
-	}
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "server", "server1").
+		WithNewState(&entity.Server{Name: "server1", Zone: "zone1"})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -77,12 +69,8 @@ func TestServerHandler_Apply_Update(t *testing.T) {
 	deps := newMockDeps()
 	deps.SetServers(map[string]*ServerInfo{"server1": {Host: "1.2.3.4"}})
 
-	change := &valueobject.Change{
-		Type:     valueobject.ChangeTypeUpdate,
-		Entity:   "server",
-		Name:     "server1",
-		NewState: &entity.Server{Name: "server1", Zone: "zone1"},
-	}
+	change := valueobject.NewChange(valueobject.ChangeTypeUpdate, "server", "server1").
+		WithNewState(&entity.Server{Name: "server1", Zone: "zone1"})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -102,11 +90,7 @@ func TestServerHandler_Apply_Delete(t *testing.T) {
 	ctx := context.Background()
 	deps := newMockDeps()
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeDelete,
-		Entity: "server",
-		Name:   "server1",
-	}
+	change := valueobject.NewChange(valueobject.ChangeTypeDelete, "server", "server1")
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -125,11 +109,7 @@ func TestServerHandler_Apply_Noop(t *testing.T) {
 	ctx := context.Background()
 	deps := newMockDeps()
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeNoop,
-		Entity: "server",
-		Name:   "server1",
-	}
+	change := valueobject.NewChange(valueobject.ChangeTypeNoop, "server", "server1")
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -147,6 +127,64 @@ func TestBaseDeps_New(t *testing.T) {
 	d := NewBaseDeps()
 	if d == nil {
 		t.Fatal("expected non-nil BaseDeps")
+	}
+}
+
+func TestBaseDeps_Options(t *testing.T) {
+	secrets := map[string]string{"key": "value"}
+	domains := map[string]*entity.Domain{"example.com": {Name: "example.com"}}
+	isps := map[string]*entity.ISP{"cloudflare": {Name: "cloudflare"}}
+	servers := map[string]*ServerInfo{"server1": {Host: "1.2.3.4"}}
+	serverEntities := map[string]*entity.Server{"server1": {Name: "server1"}}
+	registries := map[string]*entity.Registry{"reg1": {Name: "reg1"}}
+	mockSSH := &mockSSHClient{}
+
+	d := NewBaseDeps(
+		WithSecrets(secrets),
+		WithDomains(domains),
+		WithISPs(isps),
+		WithServers(servers),
+		WithServerEntities(serverEntities),
+		WithWorkDir("/opt/test"),
+		WithEnv("production"),
+		WithRegistries(registries),
+		WithSSHClient(mockSSH, nil),
+		WithDNSFactory(nil),
+	)
+
+	if d.Secrets()["key"] != "value" {
+		t.Error("secrets not set correctly")
+	}
+	if got, ok := d.Domain("example.com"); !ok || got.Name != "example.com" {
+		t.Error("domains not set correctly")
+	}
+	if isp, ok := d.ISP("cloudflare"); !ok || isp.Name != "cloudflare" {
+		t.Error("ISPs not set correctly")
+	}
+	if info, ok := d.ServerInfo("server1"); !ok || info.Host != "1.2.3.4" {
+		t.Error("servers not set correctly")
+	}
+	if d.WorkDir() != "/opt/test" {
+		t.Errorf("expected /opt/test, got %s", d.WorkDir())
+	}
+	if d.Env() != "production" {
+		t.Errorf("expected production, got %s", d.Env())
+	}
+	if d.RawSSHClient() != mockSSH {
+		t.Error("SSH client not set correctly")
+	}
+}
+
+func TestBaseDeps_NewWithNoOptions(t *testing.T) {
+	d := NewBaseDeps()
+	if d == nil {
+		t.Fatal("expected non-nil BaseDeps")
+	}
+	if d.Secrets() == nil {
+		t.Error("expected initialized secrets map")
+	}
+	if d.WorkDir() != "" {
+		t.Error("expected empty workdir")
 	}
 }
 
@@ -284,7 +322,7 @@ func TestBaseDeps_ResolveSecret(t *testing.T) {
 	d := NewBaseDeps()
 
 	t.Run("plain text", func(t *testing.T) {
-		val, err := d.ResolveSecret(&valueobject.SecretRef{Plain: "secret123"})
+		val, err := d.ResolveSecret(valueobject.NewSecretRefPlain("secret123"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -295,7 +333,7 @@ func TestBaseDeps_ResolveSecret(t *testing.T) {
 
 	t.Run("secret reference found", func(t *testing.T) {
 		d.SetSecrets(map[string]string{"db_pass": "mypassword"})
-		val, err := d.ResolveSecret(&valueobject.SecretRef{Secret: "db_pass"})
+		val, err := d.ResolveSecret(valueobject.NewSecretRefSecret("db_pass"))
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -305,7 +343,7 @@ func TestBaseDeps_ResolveSecret(t *testing.T) {
 	})
 
 	t.Run("secret reference not found", func(t *testing.T) {
-		_, err := d.ResolveSecret(&valueobject.SecretRef{Secret: "nonexistent"})
+		_, err := d.ResolveSecret(valueobject.NewSecretRefSecret("nonexistent"))
 		if err == nil {
 			t.Error("expected error for missing secret")
 		}

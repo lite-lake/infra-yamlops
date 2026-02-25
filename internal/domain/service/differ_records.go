@@ -26,14 +26,15 @@ func (s *DifferService) PlanRecords(plan *valueobject.Plan, cfgRecords []entity.
 	for key, state := range stateMap {
 		if _, exists := cfgMap[key]; !exists {
 			if scope.Matches("", "", "", state.Domain) {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeDelete,
-					Entity:   "dns_record",
-					Name:     key,
-					OldState: state,
-					NewState: nil,
-					Actions:  []string{fmt.Sprintf("delete dns record %s", key)},
-				})
+				plan.AddChange(valueobject.NewChangeFull(
+					valueobject.ChangeTypeDelete,
+					"dns_record",
+					key,
+					state,
+					nil,
+					[]string{fmt.Sprintf("delete dns record %s", key)},
+					false,
+				))
 			}
 		}
 	}
@@ -42,26 +43,28 @@ func (s *DifferService) PlanRecords(plan *valueobject.Plan, cfgRecords []entity.
 		if state, exists := stateMap[key]; exists {
 			if !RecordEquals(state, cfg) {
 				if scope.Matches("", "", "", cfg.Domain) {
-					plan.AddChange(&valueobject.Change{
-						Type:     valueobject.ChangeTypeUpdate,
-						Entity:   "dns_record",
-						Name:     key,
-						OldState: state,
-						NewState: cfg,
-						Actions:  []string{fmt.Sprintf("update dns record %s", key)},
-					})
+					plan.AddChange(valueobject.NewChangeFull(
+						valueobject.ChangeTypeUpdate,
+						"dns_record",
+						key,
+						state,
+						cfg,
+						[]string{fmt.Sprintf("update dns record %s", key)},
+						false,
+					))
 				}
 			}
 		} else {
 			if scope.Matches("", "", "", cfg.Domain) {
-				plan.AddChange(&valueobject.Change{
-					Type:     valueobject.ChangeTypeCreate,
-					Entity:   "dns_record",
-					Name:     key,
-					OldState: nil,
-					NewState: cfg,
-					Actions:  []string{fmt.Sprintf("create dns record %s", key)},
-				})
+				plan.AddChange(valueobject.NewChangeFull(
+					valueobject.ChangeTypeCreate,
+					"dns_record",
+					key,
+					nil,
+					cfg,
+					[]string{fmt.Sprintf("create dns record %s", key)},
+					false,
+				))
 			}
 		}
 	}

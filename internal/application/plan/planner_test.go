@@ -65,7 +65,7 @@ func TestPlanner_Plan(t *testing.T) {
 	if plan == nil {
 		t.Fatal("expected non-nil plan")
 	}
-	if len(plan.Changes) == 0 {
+	if len(plan.Changes()) == 0 {
 		t.Error("expected some changes")
 	}
 }
@@ -79,7 +79,7 @@ func TestPlanner_Plan_WithScope(t *testing.T) {
 	}
 
 	planner := NewPlanner(WithConfig(cfg), WithEnv("dev"))
-	scope := &valueobject.Scope{Zone: "zone1"}
+	scope := valueobject.NewScope().WithZone("zone1")
 	plan, err := planner.Plan(scope)
 
 	if err != nil {
@@ -88,8 +88,8 @@ func TestPlanner_Plan_WithScope(t *testing.T) {
 	if plan == nil {
 		t.Fatal("expected non-nil plan")
 	}
-	if plan.Scope.Zone != "zone1" {
-		t.Errorf("expected scope zone 'zone1', got %s", plan.Scope.Zone)
+	if plan.Scope().Zone() != "zone1" {
+		t.Errorf("expected scope zone 'zone1', got %s", plan.Scope().Zone())
 	}
 }
 

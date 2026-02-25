@@ -15,8 +15,8 @@ func TestSecretResolver_Resolve(t *testing.T) {
 	resolver := NewSecretResolver(secrets)
 
 	t.Run("resolve secret reference", func(t *testing.T) {
-		ref := valueobject.SecretRef{Secret: "db-password"}
-		val, err := resolver.Resolve(ref)
+		ref := valueobject.NewSecretRefSecret("db-password")
+		val, err := resolver.Resolve(*ref)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -26,8 +26,8 @@ func TestSecretResolver_Resolve(t *testing.T) {
 	})
 
 	t.Run("resolve plain value", func(t *testing.T) {
-		ref := valueobject.SecretRef{Plain: "plain-password"}
-		val, err := resolver.Resolve(ref)
+		ref := valueobject.NewSecretRefPlain("plain-password")
+		val, err := resolver.Resolve(*ref)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -37,8 +37,8 @@ func TestSecretResolver_Resolve(t *testing.T) {
 	})
 
 	t.Run("missing secret returns error", func(t *testing.T) {
-		ref := valueobject.SecretRef{Secret: "non-existent"}
-		_, err := resolver.Resolve(ref)
+		ref := valueobject.NewSecretRefSecret("non-existent")
+		_, err := resolver.Resolve(*ref)
 		if err == nil {
 			t.Error("expected error for missing secret")
 		}
@@ -51,10 +51,10 @@ func TestSecretResolver_GetResolvedValue(t *testing.T) {
 	}
 	resolver := NewSecretResolver(secrets)
 
-	ref := valueobject.SecretRef{Secret: "cached-secret"}
-	resolver.cacheResolved(ref, "cached-value")
+	ref := valueobject.NewSecretRefSecret("cached-secret")
+	resolver.cacheResolved(*ref, "cached-value")
 
-	val := resolver.GetResolvedValue(ref)
+	val := resolver.GetResolvedValue(*ref)
 	if val != "cached-value" {
 		t.Errorf("expected 'cached-value', got %q", val)
 	}
@@ -71,7 +71,7 @@ func TestSecretResolver_ResolveAll_DoesNotModifyOriginal(t *testing.T) {
 			{
 				Name: "test-server",
 				SSH: entity.ServerSSH{
-					Password: valueobject.SecretRef{Secret: "test-secret"},
+					Password: *valueobject.NewSecretRefSecret("test-secret"),
 				},
 			},
 		},
@@ -84,12 +84,12 @@ func TestSecretResolver_ResolveAll_DoesNotModifyOriginal(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.Servers[0].SSH.Password.Plain != "" {
-		t.Errorf("ResolveAll modified Password.Plain, expected empty, got %q", cfg.Servers[0].SSH.Password.Plain)
+	if cfg.Servers[0].SSH.Password.Plain() != "" {
+		t.Errorf("ResolveAll modified Password.Plain, expected empty, got %q", cfg.Servers[0].SSH.Password.Plain())
 	}
 
-	if cfg.Servers[0].SSH.Password.Secret != originalSecretRef.Secret {
-		t.Errorf("ResolveAll modified Password.Secret, expected %q, got %q", originalSecretRef.Secret, cfg.Servers[0].SSH.Password.Secret)
+	if cfg.Servers[0].SSH.Password.Secret() != originalSecretRef.Secret() {
+		t.Errorf("ResolveAll modified Password.Secret, expected %q, got %q", originalSecretRef.Secret(), cfg.Servers[0].SSH.Password.Secret())
 	}
 }
 
@@ -104,7 +104,7 @@ func TestSecretResolver_ResolveAll_CachesValues(t *testing.T) {
 			{
 				Name: "test-server",
 				SSH: entity.ServerSSH{
-					Password: valueobject.SecretRef{Secret: "server-password"},
+					Password: *valueobject.NewSecretRefSecret("server-password"),
 				},
 			},
 		},
@@ -133,7 +133,7 @@ func TestSecretResolver_ResolveAll_ISPCredentials(t *testing.T) {
 			{
 				Name: "cloudflare",
 				Credentials: map[string]valueobject.SecretRef{
-					"api_token": {Secret: "api-token"},
+					"api_token": *valueobject.NewSecretRefSecret("api-token"),
 				},
 			},
 		},
@@ -144,13 +144,14 @@ func TestSecretResolver_ResolveAll_ISPCredentials(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.ISPs[0].Credentials["api_token"].Plain != "" {
+	ref := cfg.ISPs[0].Credentials["api_token"]
+	if ref.Plain() != "" {
 		t.Errorf("ResolveAll modified ISP credential Plain field")
 	}
 
-	val := resolver.GetResolvedValue(cfg.ISPs[0].Credentials["api_token"])
-	if val != "token-123" {
-		t.Errorf("GetResolvedValue returned %q, expected 'token-123'", val)
+	resolvedVal := resolver.GetResolvedValue(ref)
+	if resolvedVal != "token-123" {
+		t.Errorf("GetResolvedValue returned %q, expected 'token-123'", resolvedVal)
 	}
 }
 
@@ -166,8 +167,8 @@ func TestSecretResolver_ResolveAll_RegistryCredentials(t *testing.T) {
 			{
 				Name: "docker-hub",
 				Credentials: entity.RegistryCredentials{
-					Username: valueobject.SecretRef{Secret: "registry-user"},
-					Password: valueobject.SecretRef{Secret: "registry-pass"},
+					Username: *valueobject.NewSecretRefSecret("registry-user"),
+					Password: *valueobject.NewSecretRefSecret("registry-pass"),
 				},
 			},
 		},
@@ -178,15 +179,17 @@ func TestSecretResolver_ResolveAll_RegistryCredentials(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if cfg.Registries[0].Credentials.Username.Plain != "" {
+	userRef := cfg.Registries[0].Credentials.Username
+	passRef := cfg.Registries[0].Credentials.Password
+	if userRef.Plain() != "" {
 		t.Errorf("ResolveAll modified Registry username Plain field")
 	}
-	if cfg.Registries[0].Credentials.Password.Plain != "" {
+	if passRef.Plain() != "" {
 		t.Errorf("ResolveAll modified Registry password Plain field")
 	}
 
-	username := resolver.GetResolvedValue(cfg.Registries[0].Credentials.Username)
-	password := resolver.GetResolvedValue(cfg.Registries[0].Credentials.Password)
+	username := resolver.GetResolvedValue(userRef)
+	password := resolver.GetResolvedValue(passRef)
 
 	if username != "admin" {
 		t.Errorf("GetResolvedValue for username returned %q, expected 'admin'", username)

@@ -307,7 +307,7 @@ func TestBizService_Validate(t *testing.T) {
 				Image:  "app:latest",
 				Ports:  []ServicePort{{Container: 8080, Host: 80, Protocol: "tcp"}},
 				Env: map[string]valueobject.SecretRef{
-					"API_KEY": {Plain: "secret"},
+					"API_KEY": *valueobject.NewSecretRefPlain("secret"),
 				},
 				Secrets:     []string{"db_pass"},
 				Healthcheck: &ServiceHealthcheck{Path: "/health"},

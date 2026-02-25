@@ -36,12 +36,11 @@ func newPlanCommand(ctx *Context) *cobra.Command {
 
 func runPlan(ctx *Context, scope string, filters Filters) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
-	planScope := &valueobject.Scope{
-		Domain:  filters.Domain,
-		Zone:    filters.Zone,
-		Server:  filters.Server,
-		Service: filters.Service,
-	}
+	planScope := valueobject.NewScope().
+		WithDomain(filters.Domain).
+		WithZone(filters.Zone).
+		WithServer(filters.Server).
+		WithService(filters.Service)
 
 	executionPlan, _, err := wf.Plan(nil, "", planScope)
 	if err != nil {
@@ -60,9 +59,9 @@ func runPlan(ctx *Context, scope string, filters Filters) {
 func displayPlan(p *valueobject.Plan) {
 	fmt.Println("Execution Plan:")
 	fmt.Println("===============")
-	for _, ch := range p.Changes {
+	for _, ch := range p.Changes() {
 		var prefix string
-		switch ch.Type {
+		switch ch.Type() {
 		case valueobject.ChangeTypeCreate:
 			prefix = "+"
 		case valueobject.ChangeTypeUpdate:
@@ -72,8 +71,8 @@ func displayPlan(p *valueobject.Plan) {
 		default:
 			prefix = " "
 		}
-		fmt.Printf("%s %s: %s\n", prefix, ch.Entity, ch.Name)
-		for _, action := range ch.Actions {
+		fmt.Printf("%s %s: %s\n", prefix, ch.Entity(), ch.Name())
+		for _, action := range ch.Actions() {
 			fmt.Printf("    - %s\n", action)
 		}
 	}

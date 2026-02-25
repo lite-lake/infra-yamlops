@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
@@ -87,9 +86,9 @@ func (v *Validator) Validate() error {
 func (v *Validator) validateISPReferences() error {
 	for _, isp := range v.cfg.ISPs {
 		for _, ref := range isp.Credentials {
-			if ref.Secret != "" {
-				if _, ok := v.secrets[ref.Secret]; !ok {
-					return fmt.Errorf("%w: secret '%s' referenced by isp '%s' does not exist", domain.ErrMissingReference, ref.Secret, isp.Name)
+			if ref.Secret() != "" {
+				if _, ok := v.secrets[ref.Secret()]; !ok {
+					return fmt.Errorf("%w: secret '%s' referenced by isp '%s' does not exist", domain.ErrMissingReference, ref.Secret(), isp.Name)
 				}
 			}
 		}
@@ -127,9 +126,9 @@ func (v *Validator) validateServerReferences() error {
 				return fmt.Errorf("%w: isp '%s' referenced by server '%s' does not exist", domain.ErrMissingReference, server.ISP, server.Name)
 			}
 		}
-		if server.SSH.Password.Secret != "" {
-			if _, ok := v.secrets[server.SSH.Password.Secret]; !ok {
-				return fmt.Errorf("%w: secret '%s' referenced by server '%s' ssh password does not exist", domain.ErrMissingReference, server.SSH.Password.Secret, server.Name)
+		if server.SSH.Password.Secret() != "" {
+			if _, ok := v.secrets[server.SSH.Password.Secret()]; !ok {
+				return fmt.Errorf("%w: secret '%s' referenced by server '%s' ssh password does not exist", domain.ErrMissingReference, server.SSH.Password.Secret(), server.Name)
 			}
 		}
 	}
@@ -238,7 +237,7 @@ func (v *Validator) validateHostnameConflicts() error {
 	for _, service := range v.cfg.Services {
 		for _, route := range service.Gateways {
 			if route.HasGateway() && route.Hostname != "" {
-				hostname := strings.ToLower(route.Hostname)
+				hostname := route.Hostname
 				if existing, ok := hostnames[hostname]; ok {
 					return fmt.Errorf("%w: hostname '%s' is used by both services '%s' and '%s'", domain.ErrHostnameConflict, hostname, existing, service.Name)
 				}

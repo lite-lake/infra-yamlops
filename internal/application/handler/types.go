@@ -5,6 +5,7 @@ import (
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/registry"
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
@@ -18,7 +19,7 @@ type DNSDeps interface {
 }
 
 type ServiceDeps interface {
-	SSHClient(server string) (SSHClient, error)
+	SSHClient(server string) (interfaces.SSHClient, error)
 	ServerInfo(name string) (*ServerInfo, bool)
 	Server(name string) (*entity.Server, bool)
 	WorkDir() string
@@ -48,7 +49,7 @@ type Handler interface {
 }
 
 type BaseDeps struct {
-	sshClient      SSHClient
+	sshClient      interfaces.SSHClient
 	sshError       error
 	dnsFactory     DNSFactory
 	secrets        map[string]string
@@ -61,8 +62,53 @@ type BaseDeps struct {
 	env            string
 }
 
-func NewBaseDeps() *BaseDeps {
-	return &BaseDeps{
+type BaseDepsOption func(*BaseDeps)
+
+func WithSSHClient(client interfaces.SSHClient, err error) BaseDepsOption {
+	return func(d *BaseDeps) {
+		d.sshClient = client
+		d.sshError = err
+	}
+}
+
+func WithDNSFactory(f DNSFactory) BaseDepsOption {
+	return func(d *BaseDeps) { d.dnsFactory = f }
+}
+
+func WithSecrets(s map[string]string) BaseDepsOption {
+	return func(d *BaseDeps) { d.secrets = s }
+}
+
+func WithDomains(domains map[string]*entity.Domain) BaseDepsOption {
+	return func(d *BaseDeps) { d.domains = domains }
+}
+
+func WithISPs(isps map[string]*entity.ISP) BaseDepsOption {
+	return func(d *BaseDeps) { d.isps = isps }
+}
+
+func WithServers(servers map[string]*ServerInfo) BaseDepsOption {
+	return func(d *BaseDeps) { d.servers = servers }
+}
+
+func WithServerEntities(servers map[string]*entity.Server) BaseDepsOption {
+	return func(d *BaseDeps) { d.serverEntities = servers }
+}
+
+func WithWorkDir(w string) BaseDepsOption {
+	return func(d *BaseDeps) { d.workDir = w }
+}
+
+func WithEnv(e string) BaseDepsOption {
+	return func(d *BaseDeps) { d.env = e }
+}
+
+func WithRegistries(r map[string]*entity.Registry) BaseDepsOption {
+	return func(d *BaseDeps) { d.registries = r }
+}
+
+func NewBaseDeps(opts ...BaseDepsOption) *BaseDeps {
+	d := &BaseDeps{
 		secrets:        make(map[string]string),
 		domains:        make(map[string]*entity.Domain),
 		isps:           make(map[string]*entity.ISP),
@@ -70,9 +116,13 @@ func NewBaseDeps() *BaseDeps {
 		serverEntities: make(map[string]*entity.Server),
 		registries:     make(map[string]*entity.Registry),
 	}
+	for _, opt := range opts {
+		opt(d)
+	}
+	return d
 }
 
-func (d *BaseDeps) SetSSHClient(client SSHClient, err error) {
+func (d *BaseDeps) SetSSHClient(client interfaces.SSHClient, err error) {
 	d.sshClient = client
 	d.sshError = err
 }
@@ -146,7 +196,7 @@ func (d *BaseDeps) ISP(name string) (*entity.ISP, bool) {
 	return isp, ok
 }
 
-func (d *BaseDeps) SSHClient(server string) (SSHClient, error) {
+func (d *BaseDeps) SSHClient(server string) (interfaces.SSHClient, error) {
 	if _, ok := d.servers[server]; !ok {
 		return nil, domainerr.ErrServerNotRegistered
 	}
@@ -176,9 +226,9 @@ func (d *BaseDeps) ResolveSecret(ref *valueobject.SecretRef) (string, error) {
 	return ref.Resolve(d.secrets)
 }
 
-func (d *BaseDeps) RawSSHClient() SSHClient    { return d.sshClient }
-func (d *BaseDeps) RawSSHError() error         { return d.sshError }
-func (d *BaseDeps) Secrets() map[string]string { return d.secrets }
+func (d *BaseDeps) RawSSHClient() interfaces.SSHClient { return d.sshClient }
+func (d *BaseDeps) RawSSHError() error                 { return d.sshError }
+func (d *BaseDeps) Secrets() map[string]string         { return d.secrets }
 
 type ServerInfo struct {
 	Host     string
@@ -195,15 +245,6 @@ type Result struct {
 	Warnings []string
 }
 
-type SSHClient interface {
-	Run(cmd string) (stdout, stderr string, err error)
-	RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error)
-	MkdirAllSudoWithPerm(path, perm string) error
-	UploadFileSudo(localPath, remotePath string) error
-	UploadFileSudoWithPerm(localPath, remotePath, perm string) error
-	Close() error
-}
-
 type DNSProvider interface {
 	Name() string
 	ListRecords(domain string) ([]dns.DNSRecord, error)
@@ -213,8 +254,8 @@ type DNSProvider interface {
 }
 
 var (
-	_ SSHClient   = (*ssh.Client)(nil)
-	_ DNSProvider = (*dnsAdapter)(nil)
+	_ interfaces.SSHClient = (*ssh.Client)(nil)
+	_ DNSProvider          = (*dnsAdapter)(nil)
 )
 
 type dnsAdapter struct {

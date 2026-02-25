@@ -1,14 +1,14 @@
 package valueobject
 
 type Plan struct {
-	Changes []*Change
-	Scope   *Scope
+	changes []*Change
+	scope   *Scope
 }
 
 func NewPlan() *Plan {
 	return &Plan{
-		Changes: make([]*Change, 0),
-		Scope:   &Scope{},
+		changes: make([]*Change, 0),
+		scope:   &Scope{},
 	}
 }
 
@@ -17,18 +17,31 @@ func NewPlanWithScope(scope *Scope) *Plan {
 		scope = &Scope{}
 	}
 	return &Plan{
-		Changes: make([]*Change, 0),
-		Scope:   scope,
+		changes: make([]*Change, 0),
+		scope:   scope,
 	}
 }
 
+func (p *Plan) Changes() []*Change { return p.changes }
+func (p *Plan) Scope() *Scope      { return p.scope }
+
 func (p *Plan) AddChange(ch *Change) {
-	p.Changes = append(p.Changes, ch)
+	p.changes = append(p.changes, ch)
+}
+
+func (p *Plan) WithChange(ch *Change) *Plan {
+	newChanges := make([]*Change, len(p.changes)+1)
+	copy(newChanges, p.changes)
+	newChanges[len(p.changes)] = ch
+	return &Plan{
+		changes: newChanges,
+		scope:   p.scope,
+	}
 }
 
 func (p *Plan) HasChanges() bool {
-	for _, c := range p.Changes {
-		if c.Type != ChangeTypeNoop {
+	for _, c := range p.changes {
+		if c.Type() != ChangeTypeNoop {
 			return true
 		}
 	}
@@ -37,8 +50,8 @@ func (p *Plan) HasChanges() bool {
 
 func (p *Plan) FilterByType(changeType ChangeType) []*Change {
 	var result []*Change
-	for _, c := range p.Changes {
-		if c.Type == changeType {
+	for _, c := range p.changes {
+		if c.Type() == changeType {
 			result = append(result, c)
 		}
 	}
@@ -47,8 +60,8 @@ func (p *Plan) FilterByType(changeType ChangeType) []*Change {
 
 func (p *Plan) FilterByEntity(entity string) []*Change {
 	var result []*Change
-	for _, c := range p.Changes {
-		if c.Entity == entity {
+	for _, c := range p.changes {
+		if c.Entity() == entity {
 			result = append(result, c)
 		}
 	}
@@ -59,14 +72,14 @@ func (p *Plan) Equals(other *Plan) bool {
 	if other == nil {
 		return false
 	}
-	if !p.Scope.Equals(other.Scope) {
+	if !p.scope.Equals(other.scope) {
 		return false
 	}
-	if len(p.Changes) != len(other.Changes) {
+	if len(p.changes) != len(other.changes) {
 		return false
 	}
-	for i, c := range p.Changes {
-		if !c.Equals(other.Changes[i]) {
+	for i, c := range p.changes {
+		if !c.Equals(other.changes[i]) {
 			return false
 		}
 	}
@@ -74,20 +87,12 @@ func (p *Plan) Equals(other *Plan) bool {
 }
 
 func (p *Plan) Clone() *Plan {
-	changes := make([]*Change, len(p.Changes))
-	for i, c := range p.Changes {
-		changes[i] = &Change{
-			Type:         c.Type,
-			Entity:       c.Entity,
-			Name:         c.Name,
-			OldState:     c.OldState,
-			NewState:     c.NewState,
-			Actions:      append([]string(nil), c.Actions...),
-			RemoteExists: c.RemoteExists,
-		}
+	changes := make([]*Change, len(p.changes))
+	for i, c := range p.changes {
+		changes[i] = c.Clone()
 	}
 	return &Plan{
-		Changes: changes,
-		Scope:   p.Scope.Clone(),
+		changes: changes,
+		scope:   p.scope.Clone(),
 	}
 }

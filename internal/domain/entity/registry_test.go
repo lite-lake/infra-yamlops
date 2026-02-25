@@ -16,27 +16,27 @@ func TestRegistryCredentials_Validate(t *testing.T) {
 	}{
 		{
 			name:        "empty username",
-			credentials: RegistryCredentials{Password: valueobject.SecretRef{Plain: "pass"}},
+			credentials: RegistryCredentials{Password: *valueobject.NewSecretRefPlain("pass")},
 			wantErr:     domain.ErrEmptyValue,
 		},
 		{
 			name:        "empty password",
-			credentials: RegistryCredentials{Username: valueobject.SecretRef{Plain: "user"}},
+			credentials: RegistryCredentials{Username: *valueobject.NewSecretRefPlain("user")},
 			wantErr:     domain.ErrEmptyValue,
 		},
 		{
 			name: "valid plain credentials",
 			credentials: RegistryCredentials{
-				Username: valueobject.SecretRef{Plain: "user"},
-				Password: valueobject.SecretRef{Plain: "pass"},
+				Username: *valueobject.NewSecretRefPlain("user"),
+				Password: *valueobject.NewSecretRefPlain("pass"),
 			},
 			wantErr: nil,
 		},
 		{
 			name: "valid secret references",
 			credentials: RegistryCredentials{
-				Username: valueobject.SecretRef{Secret: "reg_user"},
-				Password: valueobject.SecretRef{Secret: "reg_pass"},
+				Username: *valueobject.NewSecretRefSecret("reg_user"),
+				Password: *valueobject.NewSecretRefSecret("reg_pass"),
 			},
 			wantErr: nil,
 		},
@@ -87,8 +87,8 @@ func TestRegistry_Validate(t *testing.T) {
 				Name: "dockerhub",
 				URL:  "https://registry.hub.docker.com",
 				Credentials: RegistryCredentials{
-					Username: valueobject.SecretRef{Plain: "user"},
-					Password: valueobject.SecretRef{Plain: "pass"},
+					Username: *valueobject.NewSecretRefPlain("user"),
+					Password: *valueobject.NewSecretRefPlain("pass"),
 				},
 			},
 			wantErr: nil,

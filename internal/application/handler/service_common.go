@@ -8,6 +8,7 @@ import (
 	"github.com/litelake/yamlops/internal/constants"
 	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/network"
 )
@@ -23,10 +24,10 @@ func GetRequiredNetworks(change *valueobject.Change, deps DepsProvider, serverNa
 	}
 
 	var serviceNetworks []string
-	if change.NewState != nil {
-		if getter, ok := change.NewState.(NetworkGetter); ok {
+	if change.NewState() != nil {
+		if getter, ok := change.NewState().(NetworkGetter); ok {
 			serviceNetworks = getter.GetNetworks()
-		} else if svc, ok := change.NewState.(map[string]interface{}); ok {
+		} else if svc, ok := change.NewState().(map[string]interface{}); ok {
 			if nets, ok := svc["networks"].([]interface{}); ok {
 				for _, n := range nets {
 					if name, ok := n.(string); ok {
@@ -55,7 +56,7 @@ func GetRequiredNetworks(change *valueobject.Change, deps DepsProvider, serverNa
 	return requiredNetworks, nil
 }
 
-func EnsureNetworks(client SSHClient, networks []entity.ServerNetwork) error {
+func EnsureNetworks(client interfaces.SSHRunner, networks []entity.ServerNetwork) error {
 	if len(networks) == 0 {
 		return nil
 	}
@@ -68,7 +69,7 @@ func EnsureNetworks(client SSHClient, networks []entity.ServerNetwork) error {
 	return nil
 }
 
-func DeleteServiceRemote(change *valueobject.Change, client SSHClient, remoteDir string) (*Result, error) {
+func DeleteServiceRemote(change *valueobject.Change, client interfaces.SSHRunner, remoteDir string) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
 	cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml down -v 2>/dev/null || true", remoteDir)
@@ -92,7 +93,7 @@ func GetComposeFilePath(ch *valueobject.Change, deps DepsProvider) string {
 	if serverName == "" {
 		return ""
 	}
-	return filepath.Join(deps.WorkDir(), "deployments", serverName, ch.Name+".compose.yaml")
+	return filepath.Join(deps.WorkDir(), "deployments", serverName, ch.Name()+".compose.yaml")
 }
 
 type DeployComposeConfig struct {
@@ -103,7 +104,7 @@ type DeployComposeConfig struct {
 	RestartAfterUp bool
 }
 
-func DeployComposeFile(client SSHClient, cfg *DeployComposeConfig, result *Result) bool {
+func DeployComposeFile(client interfaces.SSHClient, cfg *DeployComposeConfig, result *Result) bool {
 	if cfg.ComposeFile == "" {
 		return true
 	}
@@ -150,13 +151,13 @@ func GetRemoteDir(deps DepsProvider, serviceName string) string {
 	return fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, deps.Env(), serviceName))
 }
 
-func EnsureRemoteDir(client SSHClient, remoteDir string) error {
+func EnsureRemoteDir(client interfaces.SSHClient, remoteDir string) error {
 	return client.MkdirAllSudoWithPerm(remoteDir, "755")
 }
 
 type ServiceDeployContext struct {
 	ServerName string
-	Client     SSHClient
+	Client     interfaces.SSHClient
 	RemoteDir  string
 }
 
@@ -171,7 +172,7 @@ func PrepareServiceDeploy(change *valueobject.Change, deps DepsProvider) (*Servi
 
 	serverName := ExtractServerFromChange(change)
 	if serverName == "" {
-		result.Error = fmt.Errorf("cannot determine server for change %s", change.Name)
+		result.Error = fmt.Errorf("cannot determine server for change %s", change.Name())
 		return nil, result
 	}
 
@@ -181,7 +182,7 @@ func PrepareServiceDeploy(change *valueobject.Change, deps DepsProvider) (*Servi
 		return nil, result
 	}
 
-	remoteDir := GetRemoteDir(deps, change.Name)
+	remoteDir := GetRemoteDir(deps, change.Name())
 
 	return &ServiceDeployContext{
 		ServerName: serverName,
@@ -226,7 +227,7 @@ func ExecuteServiceDeploy(change *valueobject.Change, ctx *ServiceDeployContext,
 		RemoteDir:      ctx.RemoteDir,
 		ComposeFile:    composeFile,
 		Env:            deps.Env(),
-		ServiceName:    change.Name,
+		ServiceName:    change.Name(),
 		RestartAfterUp: opts.RestartAfterUp,
 	}, result) {
 		return result, nil

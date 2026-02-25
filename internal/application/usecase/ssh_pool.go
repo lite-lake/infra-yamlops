@@ -5,21 +5,22 @@ import (
 	"sync"
 
 	"github.com/litelake/yamlops/internal/application/handler"
+	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
 
-type SSHClientFactory func(info *handler.ServerInfo) (handler.SSHClient, error)
+type SSHClientFactory func(info *handler.ServerInfo) (interfaces.SSHClient, error)
 
 type SSHPool struct {
-	clients map[string]handler.SSHClient
+	clients map[string]interfaces.SSHClient
 	mu      sync.RWMutex
 	factory SSHClientFactory
 }
 
 func NewSSHPool() *SSHPool {
 	return &SSHPool{
-		clients: make(map[string]handler.SSHClient),
-		factory: func(info *handler.ServerInfo) (handler.SSHClient, error) {
+		clients: make(map[string]interfaces.SSHClient),
+		factory: func(info *handler.ServerInfo) (interfaces.SSHClient, error) {
 			return ssh.NewClient(info.Host, info.Port, info.User, info.Password)
 		},
 	}
@@ -27,12 +28,12 @@ func NewSSHPool() *SSHPool {
 
 func NewSSHPoolWithFactory(factory SSHClientFactory) *SSHPool {
 	return &SSHPool{
-		clients: make(map[string]handler.SSHClient),
+		clients: make(map[string]interfaces.SSHClient),
 		factory: factory,
 	}
 }
 
-func (p *SSHPool) Get(info *handler.ServerInfo) (handler.SSHClient, error) {
+func (p *SSHPool) Get(info *handler.ServerInfo) (interfaces.SSHClient, error) {
 	key := fmt.Sprintf("%s:%d:%s", info.Host, info.Port, info.User)
 
 	p.mu.RLock()
@@ -63,7 +64,7 @@ func (p *SSHPool) CloseAll() {
 	for _, client := range p.clients {
 		client.Close()
 	}
-	p.clients = make(map[string]handler.SSHClient)
+	p.clients = make(map[string]interfaces.SSHClient)
 }
 
 func (p *SSHPool) Size() int {

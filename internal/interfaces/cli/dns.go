@@ -91,7 +91,7 @@ func newDNSCommand(ctx *Context) *cobra.Command {
 
 func runDNSPlan(ctx *Context, domain, record string) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
-	planScope := &valueobject.Scope{Domain: domain}
+	planScope := valueobject.NewScope().WithDomain(domain)
 
 	executionPlan, _, err := wf.Plan(nil, "", planScope)
 	if err != nil {
@@ -99,7 +99,7 @@ func runDNSPlan(ctx *Context, domain, record string) {
 		os.Exit(1)
 	}
 
-	dnsChanges := filterDNSChanges(executionPlan.Changes, domain, record)
+	dnsChanges := filterDNSChanges(executionPlan.Changes(), domain, record)
 	if len(dnsChanges) == 0 {
 		fmt.Println("No DNS changes detected.")
 		return
@@ -112,7 +112,7 @@ func runDNSPlan(ctx *Context, domain, record string) {
 
 func runDNSApply(ctx *Context, domain, record string, autoApprove bool) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
-	planScope := &valueobject.Scope{Domain: domain}
+	planScope := valueobject.NewScope().WithDomain(domain)
 
 	executionPlan, cfg, err := wf.Plan(nil, "", planScope)
 	if err != nil {
@@ -120,7 +120,7 @@ func runDNSApply(ctx *Context, domain, record string, autoApprove bool) {
 		os.Exit(1)
 	}
 
-	dnsChanges := filterDNSChanges(executionPlan.Changes, domain, record)
+	dnsChanges := filterDNSChanges(executionPlan.Changes(), domain, record)
 	if len(dnsChanges) == 0 {
 		fmt.Println("No DNS changes to apply.")
 		return
@@ -141,7 +141,10 @@ func runDNSApply(ctx *Context, domain, record string, autoApprove bool) {
 		os.Exit(1)
 	}
 
-	filteredPlan := &valueobject.Plan{Changes: dnsChanges}
+	filteredPlan := valueobject.NewPlan()
+	for _, ch := range dnsChanges {
+		filteredPlan.AddChange(ch)
+	}
 	executor := usecase.NewExecutor(&usecase.ExecutorConfig{
 		Plan: filteredPlan,
 		Env:  ctx.Env,
@@ -158,7 +161,7 @@ func runDNSApply(ctx *Context, domain, record string, autoApprove bool) {
 func displayChanges(changes []*valueobject.Change) {
 	for _, ch := range changes {
 		var prefix string
-		switch ch.Type {
+		switch ch.Type() {
 		case valueobject.ChangeTypeCreate:
 			prefix = "+"
 		case valueobject.ChangeTypeUpdate:
@@ -168,8 +171,8 @@ func displayChanges(changes []*valueobject.Change) {
 		default:
 			prefix = " "
 		}
-		fmt.Printf("%s %s: %s\n", prefix, ch.Entity, ch.Name)
-		for _, action := range ch.Actions {
+		fmt.Printf("%s %s: %s\n", prefix, ch.Entity(), ch.Name())
+		for _, action := range ch.Actions() {
 			fmt.Printf("    - %s\n", action)
 		}
 	}
@@ -290,13 +293,13 @@ func runDNSShow(ctx *Context, resource, name string) {
 func filterDNSChanges(changes []*valueobject.Change, domain, record string) []*valueobject.Change {
 	var result []*valueobject.Change
 	for _, ch := range changes {
-		if ch.Entity != "dns_record" && ch.Entity != "domain" {
+		if ch.Entity() != "dns_record" && ch.Entity() != "domain" {
 			continue
 		}
-		if domain != "" && !strings.Contains(ch.Name, domain) {
+		if domain != "" && !strings.Contains(ch.Name(), domain) {
 			continue
 		}
-		if record != "" && !strings.Contains(ch.Name, record) {
+		if record != "" && !strings.Contains(ch.Name(), record) {
 			continue
 		}
 		result = append(result, ch)

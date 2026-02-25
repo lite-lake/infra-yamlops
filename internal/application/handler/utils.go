@@ -6,28 +6,29 @@ import (
 
 	"github.com/litelake/yamlops/internal/constants"
 	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
 func ExtractServerFromChange(ch *valueobject.Change) string {
-	if ch.OldState != nil {
-		if svc, ok := ch.OldState.(map[string]interface{}); ok {
+	if ch.OldState() != nil {
+		if svc, ok := ch.OldState().(map[string]interface{}); ok {
 			if server, ok := svc["server"].(string); ok {
 				return server
 			}
 		}
-		switch v := ch.OldState.(type) {
+		switch v := ch.OldState().(type) {
 		case interface{ GetServer() string }:
 			return v.GetServer()
 		}
 	}
-	if ch.NewState != nil {
-		if svc, ok := ch.NewState.(map[string]interface{}); ok {
+	if ch.NewState() != nil {
+		if svc, ok := ch.NewState().(map[string]interface{}); ok {
 			if server, ok := svc["server"].(string); ok {
 				return server
 			}
 		}
-		switch v := ch.NewState.(type) {
+		switch v := ch.NewState().(type) {
 		case interface{ GetServer() string }:
 			return v.GetServer()
 		}
@@ -35,7 +36,7 @@ func ExtractServerFromChange(ch *valueobject.Change) string {
 	return ""
 }
 
-func SyncContent(client SSHClient, content, remotePath string) error {
+func SyncContent(client interfaces.SSHClient, content, remotePath string) error {
 	tmpFile, err := os.CreateTemp("", constants.TempFilePattern)
 	if err != nil {
 		return fmt.Errorf("syncing to %s: %w: %w", remotePath, domainerr.ErrTempFileFailed, err)

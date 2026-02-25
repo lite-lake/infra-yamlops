@@ -24,7 +24,7 @@ func (h *ServiceHandler) Apply(ctx context.Context, change *valueobject.Change, 
 		return result, nil
 	}
 
-	if change.Type == valueobject.ChangeTypeDelete {
+	if change.Type() == valueobject.ChangeTypeDelete {
 		return DeleteServiceRemote(change, deployCtx.Client, deployCtx.RemoteDir)
 	}
 
@@ -36,11 +36,11 @@ func (h *ServiceHandler) Apply(ctx context.Context, change *valueobject.Change, 
 
 func (h *ServiceHandler) createRegistryLoginHook(change *valueobject.Change, deps DepsProvider, serverName string) func(*Result) error {
 	return func(result *Result) error {
-		if change.NewState == nil {
+		if change.NewState() == nil {
 			return nil
 		}
 
-		svc, ok := change.NewState.(map[string]interface{})
+		svc, ok := change.NewState().(map[string]interface{})
 		if !ok {
 			return nil
 		}

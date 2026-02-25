@@ -8,6 +8,7 @@ import (
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/domain/interfaces"
 )
 
 func shellEscape(s string) string {
@@ -21,20 +22,15 @@ type LoginResult struct {
 	Error   error
 }
 
-type SSHRunner interface {
-	Run(cmd string) (stdout, stderr string, err error)
-	RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error)
-}
-
 type Manager struct {
 	mu         sync.RWMutex
-	client     SSHRunner
+	client     interfaces.SSHRunner
 	registries map[string]*entity.Registry
 	secrets    map[string]string
 	loggedIn   map[string]bool
 }
 
-func NewManager(client SSHRunner, registries []*entity.Registry, secrets map[string]string) *Manager {
+func NewManager(client interfaces.SSHRunner, registries []*entity.Registry, secrets map[string]string) *Manager {
 	m := &Manager{
 		client:     client,
 		registries: make(map[string]*entity.Registry),

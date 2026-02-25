@@ -7,6 +7,7 @@ import (
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/registry"
 	"github.com/litelake/yamlops/internal/providers/dns"
@@ -107,7 +108,7 @@ func (m *mockSSHClient) Close() error {
 type mockDeps struct {
 	dnsProvider    DNSProvider
 	dnsErr         error
-	sshClient      SSHClient
+	sshClient      interfaces.SSHClient
 	sshErr         error
 	domains        map[string]*entity.Domain
 	isps           map[string]*entity.ISP
@@ -145,7 +146,7 @@ func (m *mockDeps) ISP(name string) (*entity.ISP, bool) {
 	return isp, ok
 }
 
-func (m *mockDeps) SSHClient(server string) (SSHClient, error) {
+func (m *mockDeps) SSHClient(server string) (interfaces.SSHClient, error) {
 	if _, ok := m.servers[server]; !ok {
 		return nil, domainerr.ErrServerNotRegistered
 	}
@@ -175,13 +176,13 @@ func (m *mockDeps) ResolveSecret(ref *valueobject.SecretRef) (string, error) {
 	if ref == nil {
 		return "", nil
 	}
-	if ref.Plain != "" {
-		return ref.Plain, nil
+	if ref.Plain() != "" {
+		return ref.Plain(), nil
 	}
-	if val, ok := m.secrets[ref.Secret]; ok {
+	if val, ok := m.secrets[ref.Secret()]; ok {
 		return val, nil
 	}
-	return "", errors.New("secret not found: " + ref.Secret)
+	return "", errors.New("secret not found: " + ref.Secret())
 }
 
 func (m *mockDeps) RegistryManager(server string) (*registry.Manager, error) {
@@ -216,18 +217,14 @@ func TestDNSHandler_Apply_CreateRecord(t *testing.T) {
 	deps.dnsProvider = mockProvider
 	deps.domains["example.com"] = &entity.Domain{Name: "example.com", DNSISP: "test-isp"}
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "dns_record",
-		Name:   "www.example.com",
-		NewState: &entity.DNSRecord{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "dns_record", "www.example.com").
+		WithNewState(&entity.DNSRecord{
 			Domain: "example.com",
 			Type:   entity.DNSRecordTypeA,
 			Name:   "www",
 			Value:  "192.168.1.1",
 			TTL:    300,
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -253,18 +250,14 @@ func TestDNSHandler_Apply_DeleteRecord(t *testing.T) {
 	deps.dnsProvider = mockProvider
 	deps.domains["example.com"] = &entity.Domain{Name: "example.com", DNSISP: "test-isp"}
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeDelete,
-		Entity: "dns_record",
-		Name:   "www.example.com",
-		OldState: &entity.DNSRecord{
+	change := valueobject.NewChange(valueobject.ChangeTypeDelete, "dns_record", "www.example.com").
+		WithOldState(&entity.DNSRecord{
 			Domain: "example.com",
 			Type:   entity.DNSRecordTypeA,
 			Name:   "www",
 			Value:  "192.168.1.1",
 			TTL:    300,
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -288,18 +281,14 @@ func TestDNSHandler_Apply_DeleteRecord_NotFound(t *testing.T) {
 	deps.dnsProvider = mockProvider
 	deps.domains["example.com"] = &entity.Domain{Name: "example.com", DNSISP: "test-isp"}
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeDelete,
-		Entity: "dns_record",
-		Name:   "www.example.com",
-		OldState: &entity.DNSRecord{
+	change := valueobject.NewChange(valueobject.ChangeTypeDelete, "dns_record", "www.example.com").
+		WithOldState(&entity.DNSRecord{
 			Domain: "example.com",
 			Type:   entity.DNSRecordTypeA,
 			Name:   "www",
 			Value:  "192.168.1.1",
 			TTL:    300,
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -322,18 +311,14 @@ func TestDNSHandler_Apply_UpdateRecord(t *testing.T) {
 	deps.dnsProvider = mockProvider
 	deps.domains["example.com"] = &entity.Domain{Name: "example.com", DNSISP: "test-isp"}
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeUpdate,
-		Entity: "dns_record",
-		Name:   "www.example.com",
-		NewState: &entity.DNSRecord{
+	change := valueobject.NewChange(valueobject.ChangeTypeUpdate, "dns_record", "www.example.com").
+		WithNewState(&entity.DNSRecord{
 			Domain: "example.com",
 			Type:   entity.DNSRecordTypeA,
 			Name:   "www",
 			Value:  "192.168.1.2",
 			TTL:    600,
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -353,18 +338,14 @@ func TestDNSHandler_Apply_DomainNotFound(t *testing.T) {
 
 	deps := newMockDeps()
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "dns_record",
-		Name:   "www.nonexistent.com",
-		NewState: &entity.DNSRecord{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "dns_record", "www.nonexistent.com").
+		WithNewState(&entity.DNSRecord{
 			Domain: "nonexistent.com",
 			Type:   entity.DNSRecordTypeA,
 			Name:   "www",
 			Value:  "192.168.1.1",
 			TTL:    300,
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -383,18 +364,14 @@ func TestDNSHandler_Apply_DNSProviderError(t *testing.T) {
 	deps.dnsErr = errors.New("provider unavailable")
 	deps.domains["example.com"] = &entity.Domain{Name: "example.com", DNSISP: "test-isp"}
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "dns_record",
-		Name:   "www.example.com",
-		NewState: &entity.DNSRecord{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "dns_record", "www.example.com").
+		WithNewState(&entity.DNSRecord{
 			Domain: "example.com",
 			Type:   entity.DNSRecordTypeA,
 			Name:   "www",
 			Value:  "192.168.1.1",
 			TTL:    300,
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -411,12 +388,8 @@ func TestDNSHandler_Apply_InvalidChange(t *testing.T) {
 
 	deps := newMockDeps()
 
-	change := &valueobject.Change{
-		Type:     valueobject.ChangeTypeCreate,
-		Entity:   "dns_record",
-		Name:     "invalid",
-		NewState: "not a dns record",
-	}
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "dns_record", "invalid").
+		WithNewState("not a dns record")
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -437,18 +410,14 @@ func TestDNSHandler_Apply_CreateError(t *testing.T) {
 	deps.dnsProvider = mockProvider
 	deps.domains["example.com"] = &entity.Domain{Name: "example.com", DNSISP: "test-isp"}
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "dns_record",
-		Name:   "www.example.com",
-		NewState: &entity.DNSRecord{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "dns_record", "www.example.com").
+		WithNewState(&entity.DNSRecord{
 			Domain: "example.com",
 			Type:   entity.DNSRecordTypeA,
 			Name:   "www",
 			Value:  "192.168.1.1",
 			TTL:    300,
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -470,43 +439,34 @@ func TestDNSHandler_ExtractDNSRecordFromChange(t *testing.T) {
 		wantValue string
 	}{
 		{
-			name: "from new state",
-			change: &valueobject.Change{
-				NewState: &entity.DNSRecord{Name: "www", Value: "1.2.3.4"},
-			},
+			name:      "from new state",
+			change:    valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").WithNewState(&entity.DNSRecord{Name: "www", Value: "1.2.3.4"}),
 			wantErr:   false,
 			wantName:  "www",
 			wantValue: "1.2.3.4",
 		},
 		{
-			name: "from old state",
-			change: &valueobject.Change{
-				OldState: &entity.DNSRecord{Name: "api", Value: "5.6.7.8"},
-			},
+			name:      "from old state",
+			change:    valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").WithOldState(&entity.DNSRecord{Name: "api", Value: "5.6.7.8"}),
 			wantErr:   false,
 			wantName:  "api",
 			wantValue: "5.6.7.8",
 		},
 		{
-			name: "prefer new state",
-			change: &valueobject.Change{
-				OldState: &entity.DNSRecord{Name: "old", Value: "old"},
-				NewState: &entity.DNSRecord{Name: "new", Value: "new"},
-			},
+			name:      "prefer new state",
+			change:    valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").WithOldState(&entity.DNSRecord{Name: "old", Value: "old"}).WithNewState(&entity.DNSRecord{Name: "new", Value: "new"}),
 			wantErr:   false,
 			wantName:  "new",
 			wantValue: "new",
 		},
 		{
 			name:    "no state",
-			change:  &valueobject.Change{},
+			change:  valueobject.NewChange(valueobject.ChangeTypeNoop, "", ""),
 			wantErr: true,
 		},
 		{
-			name: "invalid type",
-			change: &valueobject.Change{
-				NewState: "not a record",
-			},
+			name:    "invalid type",
+			change:  valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").WithNewState("not a record"),
 			wantErr: true,
 		},
 	}

@@ -30,15 +30,11 @@ func TestServiceHandler_Apply_Deploy(t *testing.T) {
 	deps.env = "test"
 	deps.workDir = t.TempDir()
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "service",
-		Name:   "myapp",
-		NewState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
+		WithNewState(map[string]interface{}{
 			"server": "server1",
 			"image":  "nginx:latest",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -62,14 +58,10 @@ func TestServiceHandler_Apply_Delete(t *testing.T) {
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
 	deps.env = "test"
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeDelete,
-		Entity: "service",
-		Name:   "myapp",
-		OldState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeDelete, "service", "myapp").
+		WithOldState(map[string]interface{}{
 			"server": "server1",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -86,12 +78,8 @@ func TestServiceHandler_Apply_ServerNotDetermined(t *testing.T) {
 
 	deps := newMockDeps()
 
-	change := &valueobject.Change{
-		Type:     valueobject.ChangeTypeCreate,
-		Entity:   "service",
-		Name:     "myapp",
-		NewState: map[string]interface{}{},
-	}
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
+		WithNewState(map[string]interface{}{})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -110,14 +98,10 @@ func TestServiceHandler_Apply_SSHError(t *testing.T) {
 	deps.sshErr = errors.New("connection failed")
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "service",
-		Name:   "myapp",
-		NewState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
+		WithNewState(map[string]interface{}{
 			"server": "server1",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -134,14 +118,10 @@ func TestServiceHandler_Apply_ServerNotRegistered(t *testing.T) {
 
 	deps := newMockDeps()
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "service",
-		Name:   "myapp",
-		NewState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
+		WithNewState(map[string]interface{}{
 			"server": "unknown-server",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -162,14 +142,10 @@ func TestServiceHandler_Apply_MkdirError(t *testing.T) {
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
 	deps.env = "test"
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "service",
-		Name:   "myapp",
-		NewState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
+		WithNewState(map[string]interface{}{
 			"server": "server1",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -200,14 +176,10 @@ func TestServiceHandler_Apply_DockerComposeError(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "service",
-		Name:   "myapp",
-		NewState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
+		WithNewState(map[string]interface{}{
 			"server": "server1",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -228,14 +200,10 @@ func TestServiceHandler_DeleteService_RemoveError(t *testing.T) {
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
 	deps.env = "test"
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeDelete,
-		Entity: "service",
-		Name:   "myapp",
-		OldState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeDelete, "service", "myapp").
+		WithOldState(map[string]interface{}{
 			"server": "server1",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -255,32 +223,26 @@ func TestServiceHandler_GetComposeFilePath(t *testing.T) {
 	}{
 		{
 			name: "valid path",
-			change: &valueobject.Change{
-				Name: "myapp",
-				NewState: map[string]interface{}{
+			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "myapp").
+				WithNewState(map[string]interface{}{
 					"server": "server1",
-				},
-			},
+				}),
 			workDir:  "/tmp",
 			expected: filepath.Join("/tmp", "deployments", "server1", "myapp.compose.yaml"),
 		},
 		{
 			name: "no server in state",
-			change: &valueobject.Change{
-				Name:     "myapp",
-				NewState: map[string]interface{}{},
-			},
+			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "myapp").
+				WithNewState(map[string]interface{}{}),
 			workDir:  "/tmp",
 			expected: "",
 		},
 		{
 			name: "server from old state",
-			change: &valueobject.Change{
-				Name: "myapp",
-				OldState: map[string]interface{}{
+			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "myapp").
+				WithOldState(map[string]interface{}{
 					"server": "server2",
-				},
-			},
+				}),
 			workDir:  "/opt",
 			expected: filepath.Join("/opt", "deployments", "server2", "myapp.compose.yaml"),
 		},
@@ -323,14 +285,10 @@ services:
 	deps.env = "prod"
 	deps.workDir = tmpDir
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "service",
-		Name:   "testapp",
-		NewState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "testapp").
+		WithNewState(map[string]interface{}{
 			"server": "server1",
-		},
-	}
+		})
 
 	deployCtx := &ServiceDeployContext{
 		ServerName: "server1",
@@ -368,14 +326,10 @@ func TestServiceHandler_DeployService_ReadFileError(t *testing.T) {
 	deps.env = "test"
 	deps.workDir = tmpDir
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "service",
-		Name:   "testapp",
-		NewState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "testapp").
+		WithNewState(map[string]interface{}{
 			"server": "server1",
-		},
-	}
+		})
 
 	os.Remove(composeFile)
 
@@ -407,15 +361,11 @@ func TestServiceHandler_Apply_UpdateType(t *testing.T) {
 	deps.env = "test"
 	deps.workDir = t.TempDir()
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeUpdate,
-		Entity: "service",
-		Name:   "myapp",
-		NewState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeUpdate, "service", "myapp").
+		WithNewState(map[string]interface{}{
 			"server": "server1",
 			"image":  "nginx:latest",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -434,46 +384,42 @@ func TestExtractServerFromChange_Service(t *testing.T) {
 	}{
 		{
 			name: "server from new state map",
-			change: &valueobject.Change{
-				NewState: map[string]interface{}{
+			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").
+				WithNewState(map[string]interface{}{
 					"server": "server1",
-				},
-			},
+				}),
 			expected: "server1",
 		},
 		{
 			name: "server from old state map",
-			change: &valueobject.Change{
-				OldState: map[string]interface{}{
+			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").
+				WithOldState(map[string]interface{}{
 					"server": "server2",
-				},
-			},
+				}),
 			expected: "server2",
 		},
 		{
 			name: "prefer old state over new",
-			change: &valueobject.Change{
-				OldState: map[string]interface{}{
+			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").
+				WithOldState(map[string]interface{}{
 					"server": "old-server",
-				},
-				NewState: map[string]interface{}{
+				}).
+				WithNewState(map[string]interface{}{
 					"server": "new-server",
-				},
-			},
+				}),
 			expected: "old-server",
 		},
 		{
 			name:     "no server in state",
-			change:   &valueobject.Change{},
+			change:   valueobject.NewChange(valueobject.ChangeTypeNoop, "", ""),
 			expected: "",
 		},
 		{
 			name: "server not a string",
-			change: &valueobject.Change{
-				NewState: map[string]interface{}{
+			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").
+				WithNewState(map[string]interface{}{
 					"server": 123,
-				},
-			},
+				}),
 			expected: "",
 		},
 	}

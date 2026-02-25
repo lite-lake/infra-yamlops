@@ -188,7 +188,7 @@ func TestValidator_References(t *testing.T) {
 	t.Run("valid references", func(t *testing.T) {
 		cfg := &entity.Config{
 			Secrets: []entity.Secret{{Name: "secret1", Value: "value1"}},
-			ISPs:    []entity.ISP{{Name: "isp1", Services: []entity.ISPService{"server"}, Credentials: map[string]valueobject.SecretRef{"key": {Plain: "val"}}}},
+			ISPs:    []entity.ISP{{Name: "isp1", Services: []entity.ISPService{"server"}, Credentials: map[string]valueobject.SecretRef{"key": *valueobject.NewSecretRefPlain("val")}}},
 			Zones:   []entity.Zone{{Name: "zone1", ISP: "isp1", Region: "us-east-1"}},
 		}
 		validator := service.NewValidator(cfg)
@@ -217,7 +217,7 @@ func TestValidator_PortConflicts(t *testing.T) {
 			Servers: []entity.Server{{
 				Name: "srv1",
 				Zone: "zone1",
-				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
+				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")},
 			}},
 			InfraServices: []entity.InfraService{
 				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, Server: "srv1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 38567}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},
@@ -236,7 +236,7 @@ func TestValidator_PortConflicts(t *testing.T) {
 			Servers: []entity.Server{{
 				Name: "srv1",
 				Zone: "zone1",
-				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
+				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")},
 			}},
 			InfraServices: []entity.InfraService{
 				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, Server: "srv1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 38567}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},

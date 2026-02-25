@@ -23,12 +23,8 @@ func TestInfraServiceHandler_Apply_ServerNotDetermined(t *testing.T) {
 	ctx := context.Background()
 	deps := newMockDeps()
 
-	change := &valueobject.Change{
-		Type:     valueobject.ChangeTypeCreate,
-		Entity:   "infra_service",
-		Name:     "gateway1",
-		NewState: map[string]interface{}{},
-	}
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "infra_service", "gateway1").
+		WithNewState(map[string]interface{}{})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -44,14 +40,10 @@ func TestInfraServiceHandler_Apply_ServerNotRegistered(t *testing.T) {
 	ctx := context.Background()
 	deps := newMockDeps()
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "infra_service",
-		Name:   "gateway1",
-		NewState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "infra_service", "gateway1").
+		WithNewState(map[string]interface{}{
 			"server": "unknown",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -70,14 +62,10 @@ func TestInfraServiceHandler_Apply_SSHError(t *testing.T) {
 	deps.sshErr = errors.New("connection failed")
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "infra_service",
-		Name:   "gateway1",
-		NewState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "infra_service", "gateway1").
+		WithNewState(map[string]interface{}{
 			"server": "server1",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -98,14 +86,10 @@ func TestInfraServiceHandler_Apply_MkdirError(t *testing.T) {
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
 	deps.env = "test"
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "infra_service",
-		Name:   "gateway1",
-		NewState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "infra_service", "gateway1").
+		WithNewState(map[string]interface{}{
 			"server": "server1",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -128,16 +112,12 @@ func TestInfraServiceHandler_Apply_Deploy(t *testing.T) {
 	deps.env = "test"
 	deps.workDir = t.TempDir()
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "infra_service",
-		Name:   "gateway1",
-		NewState: &entity.InfraService{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "infra_service", "gateway1").
+		WithNewState(&entity.InfraService{
 			Name:   "gateway1",
 			Server: "server1",
 			Type:   entity.InfraServiceTypeGateway,
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -160,16 +140,12 @@ func TestInfraServiceHandler_Apply_DeploySSL(t *testing.T) {
 	deps.env = "test"
 	deps.workDir = t.TempDir()
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "infra_service",
-		Name:   "ssl1",
-		NewState: &entity.InfraService{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "infra_service", "ssl1").
+		WithNewState(&entity.InfraService{
 			Name:   "ssl1",
 			Server: "server1",
 			Type:   entity.InfraServiceTypeSSL,
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -190,14 +166,10 @@ func TestInfraServiceHandler_Apply_Delete(t *testing.T) {
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
 	deps.env = "test"
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeDelete,
-		Entity: "infra_service",
-		Name:   "gateway1",
-		OldState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeDelete, "infra_service", "gateway1").
+		WithOldState(map[string]interface{}{
 			"server": "server1",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -218,14 +190,10 @@ func TestInfraServiceHandler_Delete_RemoveError(t *testing.T) {
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
 	deps.env = "test"
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeDelete,
-		Entity: "infra_service",
-		Name:   "gateway1",
-		OldState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeDelete, "infra_service", "gateway1").
+		WithOldState(map[string]interface{}{
 			"server": "server1",
-		},
-	}
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -244,12 +212,8 @@ func TestInfraServiceHandler_ExecuteServiceDeploy_InvalidState(t *testing.T) {
 	deps.serverEntities["server1"] = &entity.Server{Name: "server1"}
 	deps.env = "test"
 
-	change := &valueobject.Change{
-		Type:     valueobject.ChangeTypeCreate,
-		Entity:   "infra_service",
-		Name:     "gateway1",
-		NewState: "invalid state",
-	}
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "infra_service", "gateway1").
+		WithNewState("invalid state")
 
 	deployCtx := &ServiceDeployContext{
 		ServerName: "server1",
@@ -288,16 +252,12 @@ services:
 	deps.env = "prod"
 	deps.workDir = tmpDir
 
-	change := &valueobject.Change{
-		Type:   valueobject.ChangeTypeCreate,
-		Entity: "infra_service",
-		Name:   "gateway1",
-		NewState: &entity.InfraService{
+	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "infra_service", "gateway1").
+		WithNewState(&entity.InfraService{
 			Name:   "gateway1",
 			Server: "server1",
 			Type:   entity.InfraServiceTypeGateway,
-		},
-	}
+		})
 
 	deployCtx := &ServiceDeployContext{
 		ServerName: "server1",
@@ -397,12 +357,10 @@ func TestInfraServiceHandler_GetComposeFilePath(t *testing.T) {
 	deps.workDir = "/tmp"
 	deps.servers["server1"] = &ServerInfo{}
 
-	change := &valueobject.Change{
-		Name: "gateway1",
-		NewState: map[string]interface{}{
+	change := valueobject.NewChange(valueobject.ChangeTypeNoop, "", "gateway1").
+		WithNewState(map[string]interface{}{
 			"server": "server1",
-		},
-	}
+		})
 
 	result := GetComposeFilePath(change, deps)
 	expected := filepath.Join("/tmp", "deployments", "server1", "gateway1.compose.yaml")

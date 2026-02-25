@@ -33,7 +33,7 @@ func TestValidator_ISPReferences(t *testing.T) {
 			ISPs: []entity.ISP{{
 				Name:        "isp1",
 				Services:    []entity.ISPService{"server"},
-				Credentials: map[string]valueobject.SecretRef{"key": {Secret: "api_key"}},
+				Credentials: map[string]valueobject.SecretRef{"key": *valueobject.NewSecretRefSecret("api_key")},
 			}},
 		}
 		validator := NewValidator(cfg)
@@ -48,7 +48,7 @@ func TestValidator_ISPReferences(t *testing.T) {
 			ISPs: []entity.ISP{{
 				Name:        "isp1",
 				Services:    []entity.ISPService{"server"},
-				Credentials: map[string]valueobject.SecretRef{"key": {Secret: "nonexistent"}},
+				Credentials: map[string]valueobject.SecretRef{"key": *valueobject.NewSecretRefSecret("nonexistent")},
 			}},
 		}
 		validator := NewValidator(cfg)
@@ -63,7 +63,7 @@ func TestValidator_ISPReferences(t *testing.T) {
 			ISPs: []entity.ISP{{
 				Name:        "my_secret",
 				Services:    []entity.ISPService{"server"},
-				Credentials: map[string]valueobject.SecretRef{"key": {Secret: "my_secret"}},
+				Credentials: map[string]valueobject.SecretRef{"key": *valueobject.NewSecretRefSecret("my_secret")},
 			}},
 		}
 		validator := NewValidator(cfg)
@@ -77,7 +77,7 @@ func TestValidator_ISPReferences(t *testing.T) {
 func TestValidator_ZoneReferences(t *testing.T) {
 	t.Run("valid zone isp reference", func(t *testing.T) {
 		cfg := &entity.Config{
-			ISPs:  []entity.ISP{{Name: "isp1", Services: []entity.ISPService{"server"}, Credentials: map[string]valueobject.SecretRef{"key": {Plain: "val"}}}},
+			ISPs:  []entity.ISP{{Name: "isp1", Services: []entity.ISPService{"server"}, Credentials: map[string]valueobject.SecretRef{"key": *valueobject.NewSecretRefPlain("val")}}},
 			Zones: []entity.Zone{{Name: "zone1", ISP: "isp1", Region: "us-east-1"}},
 		}
 		validator := NewValidator(cfg)
@@ -102,13 +102,13 @@ func TestValidator_ZoneReferences(t *testing.T) {
 func TestValidator_ServerReferences(t *testing.T) {
 	t.Run("valid server references", func(t *testing.T) {
 		cfg := &entity.Config{
-			ISPs:  []entity.ISP{{Name: "isp1", Services: []entity.ISPService{"server"}, Credentials: map[string]valueobject.SecretRef{"key": {Plain: "val"}}}},
+			ISPs:  []entity.ISP{{Name: "isp1", Services: []entity.ISPService{"server"}, Credentials: map[string]valueobject.SecretRef{"key": *valueobject.NewSecretRefPlain("val")}}},
 			Zones: []entity.Zone{{Name: "zone1", ISP: "isp1", Region: "us-east-1"}},
 			Servers: []entity.Server{{
 				Name: "server1",
 				Zone: "zone1",
 				ISP:  "isp1",
-				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
+				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")},
 			}},
 		}
 		validator := NewValidator(cfg)
@@ -123,7 +123,7 @@ func TestValidator_ServerReferences(t *testing.T) {
 			Servers: []entity.Server{{
 				Name: "server1",
 				Zone: "nonexistent",
-				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}},
+				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")},
 			}},
 		}
 		validator := NewValidator(cfg)
@@ -139,7 +139,7 @@ func TestValidator_ServiceReferences(t *testing.T) {
 		cfg := &entity.Config{
 			Secrets: []entity.Secret{{Name: "db_pass", Value: "secret123"}},
 			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
-			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}}},
+			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			Services: []entity.BizService{{
 				Name:    "service1",
 				Server:  "server1",
@@ -172,7 +172,7 @@ func TestValidator_ServiceReferences(t *testing.T) {
 	t.Run("missing secret reference", func(t *testing.T) {
 		cfg := &entity.Config{
 			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
-			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}}},
+			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			Services: []entity.BizService{{
 				Name:    "service1",
 				Server:  "server1",
@@ -191,7 +191,7 @@ func TestValidator_ServiceReferences(t *testing.T) {
 func TestValidator_DomainReferences(t *testing.T) {
 	t.Run("valid domain references", func(t *testing.T) {
 		cfg := &entity.Config{
-			ISPs: []entity.ISP{{Name: "dns_isp", Services: []entity.ISPService{"dns"}, Credentials: map[string]valueobject.SecretRef{"key": {Plain: "val"}}}},
+			ISPs: []entity.ISP{{Name: "dns_isp", Services: []entity.ISPService{"dns"}, Credentials: map[string]valueobject.SecretRef{"key": *valueobject.NewSecretRefPlain("val")}}},
 			Domains: []entity.Domain{{
 				Name:   "example.com",
 				DNSISP: "dns_isp",
@@ -224,8 +224,8 @@ func TestValidator_PortConflicts(t *testing.T) {
 		cfg := &entity.Config{
 			Zones: []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
 			Servers: []entity.Server{
-				{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}},
-				{Name: "server2", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.5", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}},
+				{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}},
+				{Name: "server2", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.5", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}},
 			},
 			InfraServices: []entity.InfraService{
 				{Name: "gw1", Type: entity.InfraServiceTypeGateway, Server: "server1", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
@@ -243,7 +243,7 @@ func TestValidator_PortConflicts(t *testing.T) {
 		cfg := &entity.Config{
 			Zones: []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
 			Servers: []entity.Server{
-				{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}},
+				{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}},
 			},
 			InfraServices: []entity.InfraService{
 				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, Server: "server1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 80}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},
@@ -260,7 +260,7 @@ func TestValidator_PortConflicts(t *testing.T) {
 	t.Run("service port conflict", func(t *testing.T) {
 		cfg := &entity.Config{
 			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
-			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}}},
+			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			Services: []entity.BizService{
 				{Name: "svc1", Server: "server1", Image: "nginx", Ports: []entity.ServicePort{{Container: 80, Host: 8080}}},
 				{Name: "svc2", Server: "server1", Image: "nginx", Ports: []entity.ServicePort{{Container: 80, Host: 8080}}},
@@ -276,7 +276,7 @@ func TestValidator_PortConflicts(t *testing.T) {
 	t.Run("infra and service port conflict", func(t *testing.T) {
 		cfg := &entity.Config{
 			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
-			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}}},
+			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			InfraServices: []entity.InfraService{
 				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, Server: "server1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 8443}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},
 			},
@@ -296,7 +296,7 @@ func TestValidator_HostnameConflicts(t *testing.T) {
 	t.Run("no conflict different hostnames", func(t *testing.T) {
 		cfg := &entity.Config{
 			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
-			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}}},
+			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			Services: []entity.BizService{
 				{
 					Name:   "svc1",
@@ -326,7 +326,7 @@ func TestValidator_HostnameConflicts(t *testing.T) {
 	t.Run("hostname conflict", func(t *testing.T) {
 		cfg := &entity.Config{
 			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
-			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}}},
+			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
 			Services: []entity.BizService{
 				{
 					Name:   "svc1",
@@ -357,7 +357,7 @@ func TestValidator_HostnameConflicts(t *testing.T) {
 func TestValidator_DomainConflicts(t *testing.T) {
 	t.Run("no conflict unique domains", func(t *testing.T) {
 		cfg := &entity.Config{
-			ISPs: []entity.ISP{{Name: "dns_isp", Services: []entity.ISPService{"dns"}, Credentials: map[string]valueobject.SecretRef{"key": {Plain: "val"}}}},
+			ISPs: []entity.ISP{{Name: "dns_isp", Services: []entity.ISPService{"dns"}, Credentials: map[string]valueobject.SecretRef{"key": *valueobject.NewSecretRefPlain("val")}}},
 			Domains: []entity.Domain{
 				{Name: "example.com", DNSISP: "dns_isp"},
 				{Name: "example.org", DNSISP: "dns_isp"},
@@ -372,7 +372,7 @@ func TestValidator_DomainConflicts(t *testing.T) {
 
 	t.Run("duplicate domain", func(t *testing.T) {
 		cfg := &entity.Config{
-			ISPs: []entity.ISP{{Name: "dns_isp", Services: []entity.ISPService{"dns"}, Credentials: map[string]valueobject.SecretRef{"key": {Plain: "val"}}}},
+			ISPs: []entity.ISP{{Name: "dns_isp", Services: []entity.ISPService{"dns"}, Credentials: map[string]valueobject.SecretRef{"key": *valueobject.NewSecretRefPlain("val")}}},
 			Domains: []entity.Domain{
 				{Name: "example.com", DNSISP: "dns_isp"},
 				{Name: "example.com", DNSISP: "dns_isp"},

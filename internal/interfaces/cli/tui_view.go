@@ -181,13 +181,13 @@ func (m Model) renderPlan() string {
 		lines = append(lines, HelpStyle.Render("Esc back  q quit"))
 		return strings.Join(lines, "\n")
 	}
-	if m.Action.PlanResult == nil || len(m.Action.PlanResult.Changes) == 0 {
+	if m.Action.PlanResult == nil || len(m.Action.PlanResult.Changes()) == 0 {
 		lines = append(lines, "No changes detected.")
 	} else {
-		for _, ch := range m.Action.PlanResult.Changes {
+		for _, ch := range m.Action.PlanResult.Changes() {
 			style := ChangeNoopStyle
 			prefix := "~"
-			switch ch.Type {
+			switch ch.Type() {
 			case valueobject.ChangeTypeCreate:
 				style = ChangeCreateStyle
 				prefix = "+"
@@ -198,9 +198,9 @@ func (m Model) renderPlan() string {
 				style = ChangeDeleteStyle
 				prefix = "-"
 			}
-			line := fmt.Sprintf("%s %s: %s", prefix, ch.Entity, ch.Name)
-			if ch.Entity == "service" || ch.Entity == "infra_service" {
-				if ch.RemoteExists {
+			line := fmt.Sprintf("%s %s: %s", prefix, ch.Entity(), ch.Name())
+			if ch.Entity() == "service" || ch.Entity() == "infra_service" {
+				if ch.RemoteExists() {
 					line += " [update]"
 				} else {
 					line += " [new]"
@@ -242,8 +242,8 @@ func (m Model) renderApplyConfirm() string {
 	content.WriteString("Apply the following changes?\n\n")
 	if m.Action.PlanResult != nil {
 		nonNoopCount := 0
-		for _, ch := range m.Action.PlanResult.Changes {
-			if ch.Type != valueobject.ChangeTypeNoop {
+		for _, ch := range m.Action.PlanResult.Changes() {
+			if ch.Type() != valueobject.ChangeTypeNoop {
 				nonNoopCount++
 			}
 		}
@@ -286,13 +286,13 @@ func (m Model) renderApplyComplete() string {
 		for _, result := range m.Action.ApplyResults {
 			if result.Success {
 				successCount++
-				lines = append(lines, ChangeCreateStyle.Render(fmt.Sprintf("✓ %s: %s", result.Change.Entity, result.Change.Name)))
+				lines = append(lines, ChangeCreateStyle.Render(fmt.Sprintf("✓ %s: %s", result.Change.Entity(), result.Change.Name())))
 				for _, w := range result.Warnings {
 					lines = append(lines, WarningStyle.Render(fmt.Sprintf("  ⚠ %s", w)))
 				}
 			} else {
 				failCount++
-				lines = append(lines, ChangeDeleteStyle.Render(fmt.Sprintf("✗ %s: %s - %v", result.Change.Entity, result.Change.Name, result.Error)))
+				lines = append(lines, ChangeDeleteStyle.Render(fmt.Sprintf("✗ %s: %s - %v", result.Change.Entity(), result.Change.Name(), result.Error)))
 			}
 		}
 		lines = append(lines, "")

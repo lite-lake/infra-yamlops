@@ -15,7 +15,7 @@ func TestSecretRef_LogValue(t *testing.T) {
 		{"plain value", NewSecretRefPlain("my-password")},
 		{"secret reference", NewSecretRefSecret("secret-name")},
 		{"both values", NewSecretRef("plain-value-123", "secret-ref-456")},
-		{"empty", &SecretRef{}},
+		{"empty", NewSecretRef("", "")},
 	}
 
 	for _, tt := range tests {
@@ -27,11 +27,11 @@ func TestSecretRef_LogValue(t *testing.T) {
 
 			output := buf.String()
 
-			if tt.ref.Plain != "" && strings.Contains(output, tt.ref.Plain) {
-				t.Errorf("LogValue leaked plain value %q in output: %s", tt.ref.Plain, output)
+			if tt.ref.Plain() != "" && strings.Contains(output, tt.ref.Plain()) {
+				t.Errorf("LogValue leaked plain value %q in output: %s", tt.ref.Plain(), output)
 			}
-			if tt.ref.Secret != "" && strings.Contains(output, tt.ref.Secret) {
-				t.Errorf("LogValue leaked secret reference %q in output: %s", tt.ref.Secret, output)
+			if tt.ref.Secret() != "" && strings.Contains(output, tt.ref.Secret()) {
+				t.Errorf("LogValue leaked secret reference %q in output: %s", tt.ref.Secret(), output)
 			}
 			if !strings.Contains(output, "***") {
 				t.Errorf("LogValue did not mask secret, output: %s", output)

@@ -51,7 +51,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.Action.PlanResult = msg.plan
-		m.Action.ApplyTotal = len(msg.plan.Changes)
+		m.Action.ApplyTotal = len(msg.plan.Changes())
 		if m.Action.ApplyTotal == 0 {
 			m.Action.ApplyTotal = 1
 		}

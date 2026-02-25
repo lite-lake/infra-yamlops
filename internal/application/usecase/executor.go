@@ -1,14 +1,11 @@
 package usecase
 
 import (
-	"context"
-	"fmt"
-
 	"github.com/litelake/yamlops/internal/application/handler"
 	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	infra "github.com/litelake/yamlops/internal/infrastructure/dns"
-	"github.com/litelake/yamlops/internal/infrastructure/logger"
 	"github.com/litelake/yamlops/internal/providers/dns"
 )
 
@@ -18,7 +15,7 @@ type RegistryInterface interface {
 }
 
 type SSHPoolInterface interface {
-	Get(info *handler.ServerInfo) (handler.SSHClient, error)
+	Get(info *handler.ServerInfo) (interfaces.SSHClient, error)
 	CloseAll()
 }
 
@@ -35,17 +32,10 @@ type ExecutorConfig struct {
 }
 
 type Executor struct {
-	plan           *valueobject.Plan
-	registry       RegistryInterface
-	sshPool        SSHPoolInterface
-	secrets        map[string]string
-	servers        map[string]*handler.ServerInfo
-	serverEntities map[string]*entity.Server
-	env            string
-	domains        map[string]*entity.Domain
-	isps           map[string]*entity.ISP
-	workDir        string
-	dnsFactory     DNSFactoryInterface
+	handlerRegistry *HandlerRegistry
+	changeExecutor  *ChangeExecutor
+	plan            *valueobject.Plan
+	env             string
 }
 
 func NewExecutor(cfg *ExecutorConfig) *Executor {
@@ -55,144 +45,80 @@ func NewExecutor(cfg *ExecutorConfig) *Executor {
 	if cfg.Env == "" {
 		cfg.Env = "dev"
 	}
-	if cfg.Registry == nil {
-		cfg.Registry = handler.NewRegistry()
+
+	var hr *HandlerRegistry
+	if cfg.Registry != nil {
+		hr = NewHandlerRegistryWithRegistry(cfg.Registry)
+	} else {
+		hr = NewHandlerRegistry()
 	}
-	if cfg.SSHPool == nil {
-		cfg.SSHPool = NewSSHPool()
+
+	sshPool := cfg.SSHPool
+	if sshPool == nil {
+		sshPool = NewSSHPool()
 	}
-	if cfg.DNSFactory == nil {
-		cfg.DNSFactory = infra.NewFactory()
+
+	dnsFactory := cfg.DNSFactory
+	if dnsFactory == nil {
+		dnsFactory = infra.NewFactory()
+	}
+
+	changeExecutorCfg := &ChangeExecutorConfig{
+		Plan:       cfg.Plan,
+		SSHPool:    sshPool,
+		DNSFactory: dnsFactory,
+		Env:        cfg.Env,
 	}
 
 	return &Executor{
-		plan:           cfg.Plan,
-		registry:       cfg.Registry,
-		sshPool:        cfg.SSHPool,
-		secrets:        make(map[string]string),
-		servers:        make(map[string]*handler.ServerInfo),
-		serverEntities: make(map[string]*entity.Server),
-		domains:        make(map[string]*entity.Domain),
-		isps:           make(map[string]*entity.ISP),
-		env:            cfg.Env,
-		workDir:        ".",
-		dnsFactory:     cfg.DNSFactory,
+		handlerRegistry: hr,
+		changeExecutor:  NewChangeExecutor(changeExecutorCfg),
+		plan:            cfg.Plan,
+		env:             cfg.Env,
 	}
 }
 
-func (e *Executor) SetSecrets(s map[string]string)                { e.secrets = s }
-func (e *Executor) SetDomains(d map[string]*entity.Domain)        { e.domains = d }
-func (e *Executor) SetISPs(i map[string]*entity.ISP)              { e.isps = i }
-func (e *Executor) SetWorkDir(w string)                           { e.workDir = w }
-func (e *Executor) SetServerEntities(s map[string]*entity.Server) { e.serverEntities = s }
+func (e *Executor) SetSecrets(s map[string]string) {
+	e.changeExecutor.SetSecrets(s)
+}
+
+func (e *Executor) SetDomains(d map[string]*entity.Domain) {
+	e.changeExecutor.SetDomains(d)
+}
+
+func (e *Executor) SetISPs(i map[string]*entity.ISP) {
+	e.changeExecutor.SetISPs(i)
+}
+
+func (e *Executor) SetWorkDir(w string) {
+	e.changeExecutor.SetWorkDir(w)
+}
+
+func (e *Executor) SetServerEntities(s map[string]*entity.Server) {
+	e.changeExecutor.SetServerEntities(s)
+}
 
 func (e *Executor) RegisterServer(name, host string, port int, user, password string) {
-	e.servers[name] = &handler.ServerInfo{Host: host, Port: port, User: user, Password: password}
+	e.changeExecutor.RegisterServer(name, host, port, user, password)
 }
 
 func (e *Executor) Apply() []*handler.Result {
-	e.registerHandlers()
-	ctx := logger.WithOperation(context.Background(), "apply")
-	log := logger.FromContext(ctx)
-
-	log.Info("starting apply", "changes", len(e.plan.Changes))
-
-	results := make([]*handler.Result, 0, len(e.plan.Changes))
-	for i, ch := range e.plan.Changes {
-		log.Debug("applying change",
-			"index", i+1,
-			"type", ch.Type,
-			"entity", ch.Entity,
-			"name", ch.Name,
-		)
-		results = append(results, e.applyChange(ctx, ch))
-	}
-
-	successCount := 0
-	failedCount := 0
-	for _, r := range results {
-		if r.Error != nil {
-			failedCount++
-		} else {
-			successCount++
-		}
-	}
-
-	log.Info("apply completed",
-		"total", len(results),
-		"success", successCount,
-		"failed", failedCount,
-	)
-
-	e.sshPool.CloseAll()
-	return results
-}
-
-func (e *Executor) registerHandlers() {
-	defaultHandlers := []struct {
-		entity  string
-		handler handler.Handler
-	}{
-		{"dns_record", handler.NewDNSHandler()},
-		{"service", handler.NewServiceHandler()},
-		{"infra_service", handler.NewInfraServiceHandler()},
-		{"server", handler.NewServerHandler()},
-	}
-	for _, h := range defaultHandlers {
-		if _, ok := e.registry.Get(h.entity); !ok {
-			e.registry.Register(h.handler)
-		}
-	}
-	handler.RegisterNoopHandlers(e.registry)
-}
-
-func (e *Executor) applyChange(ctx context.Context, ch *valueobject.Change) *handler.Result {
-	log := logger.FromContext(ctx)
-
-	h, ok := e.registry.Get(ch.Entity)
-	if !ok {
-		log.Error("no handler found", "entity", ch.Entity)
-		return &handler.Result{Change: ch, Error: fmt.Errorf("no handler for: %s", ch.Entity)}
-	}
-
-	result, err := h.Apply(ctx, ch, e.buildDeps(ch))
-	if err != nil {
-		log.Error("change failed", "entity", ch.Entity, "name", ch.Name, "error", err)
-		return &handler.Result{Change: ch, Error: err}
-	}
-
-	log.Debug("change applied", "entity", ch.Entity, "name", ch.Name)
-	return result
-}
-
-func (e *Executor) buildDeps(ch *valueobject.Change) *handler.BaseDeps {
-	deps := handler.NewBaseDeps()
-	deps.SetSecrets(e.secrets)
-	deps.SetDomains(e.domains)
-	deps.SetISPs(e.isps)
-	deps.SetServers(e.servers)
-	deps.SetServerEntities(e.serverEntities)
-	deps.SetWorkDir(e.workDir)
-	deps.SetEnv(e.env)
-	deps.SetDNSFactory(e.dnsFactory)
-
-	if serverName := handler.ExtractServerFromChange(ch); serverName != "" {
-		if info, ok := e.servers[serverName]; ok {
-			client, err := e.sshPool.Get(info)
-			deps.SetSSHClient(client, err)
-		}
-	}
-	return deps
+	e.handlerRegistry.RegisterDefaults()
+	return e.changeExecutor.Apply(e.handlerRegistry.Registry())
 }
 
 func (e *Executor) FilterPlanByServer(serverName string) *valueobject.Plan {
-	filtered := valueobject.NewPlan()
-	for _, ch := range e.plan.Changes {
-		if handler.ExtractServerFromChange(ch) == serverName {
-			filtered.AddChange(ch)
-		}
-	}
-	return filtered
+	return e.changeExecutor.FilterPlanByServer(serverName)
 }
 
-func (e *Executor) GetRegistry() RegistryInterface { return e.registry }
+func (e *Executor) GetRegistry() RegistryInterface {
+	return e.handlerRegistry.Registry()
+}
+
+func (e *Executor) GetHandlerRegistry() *HandlerRegistry {
+	return e.handlerRegistry
+}
+
+func (e *Executor) GetChangeExecutor() *ChangeExecutor {
+	return e.changeExecutor
+}

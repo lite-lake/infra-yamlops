@@ -93,11 +93,10 @@ func newAppCommand(ctx *Context) *cobra.Command {
 
 func runAppPlan(ctx *Context, filters AppFilters) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
-	planScope := &valueobject.Scope{
-		Zone:    filters.Zone,
-		Server:  filters.Server,
-		Service: filters.Biz,
-	}
+	planScope := valueobject.NewScope().
+		WithZone(filters.Zone).
+		WithServer(filters.Server).
+		WithService(filters.Biz)
 
 	executionPlan, _, err := wf.Plan(nil, "", planScope)
 	if err != nil {
@@ -112,15 +111,15 @@ func runAppPlan(ctx *Context, filters AppFilters) {
 
 	fmt.Println("Execution Plan:")
 	fmt.Println("===============")
-	for _, ch := range executionPlan.Changes {
-		if filters.Infra != "" && ch.Entity != "infra_service" {
+	for _, ch := range executionPlan.Changes() {
+		if filters.Infra != "" && ch.Entity() != "infra_service" {
 			continue
 		}
-		if filters.Biz != "" && ch.Entity != "service" {
+		if filters.Biz != "" && ch.Entity() != "service" {
 			continue
 		}
 		var prefix string
-		switch ch.Type {
+		switch ch.Type() {
 		case valueobject.ChangeTypeCreate:
 			prefix = "+"
 		case valueobject.ChangeTypeUpdate:
@@ -130,8 +129,8 @@ func runAppPlan(ctx *Context, filters AppFilters) {
 		default:
 			prefix = " "
 		}
-		fmt.Printf("%s %s: %s\n", prefix, ch.Entity, ch.Name)
-		for _, action := range ch.Actions {
+		fmt.Printf("%s %s: %s\n", prefix, ch.Entity(), ch.Name())
+		for _, action := range ch.Actions() {
 			fmt.Printf("    - %s\n", action)
 		}
 	}
@@ -139,11 +138,10 @@ func runAppPlan(ctx *Context, filters AppFilters) {
 
 func runAppApply(ctx *Context, filters AppFilters, autoApprove bool) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
-	planScope := &valueobject.Scope{
-		Zone:    filters.Zone,
-		Server:  filters.Server,
-		Service: filters.Biz,
-	}
+	planScope := valueobject.NewScope().
+		WithZone(filters.Zone).
+		WithServer(filters.Server).
+		WithService(filters.Biz)
 
 	executionPlan, cfg, err := wf.Plan(nil, "", planScope)
 	if err != nil {
@@ -197,19 +195,19 @@ func runAppApply(ctx *Context, filters AppFilters, autoApprove bool) {
 
 	hasError := false
 	for _, result := range results {
-		if filters.Infra != "" && result.Change.Entity != "infra_service" {
+		if filters.Infra != "" && result.Change.Entity() != "infra_service" {
 			continue
 		}
-		if filters.Biz != "" && result.Change.Entity != "service" {
+		if filters.Biz != "" && result.Change.Entity() != "service" {
 			continue
 		}
 		if result.Success {
-			fmt.Printf("✓ %s: %s\n", result.Change.Entity, result.Change.Name)
+			fmt.Printf("✓ %s: %s\n", result.Change.Entity(), result.Change.Name())
 			for _, w := range result.Warnings {
 				fmt.Printf("  ⚠ %s\n", w)
 			}
 		} else {
-			fmt.Printf("✗ %s: %s - %v\n", result.Change.Entity, result.Change.Name, result.Error)
+			fmt.Printf("✗ %s: %s - %v\n", result.Change.Entity(), result.Change.Name(), result.Error)
 			hasError = true
 		}
 	}

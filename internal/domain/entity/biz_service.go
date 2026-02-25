@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
@@ -76,11 +75,11 @@ type ServicePort struct {
 }
 
 func (p *ServicePort) Validate() error {
-	if p.Container <= 0 || p.Container > constants.MaxPortNumber {
-		return fmt.Errorf("%w: container port must be between 1 and %d", domain.ErrInvalidPort, constants.MaxPortNumber)
+	if p.Container <= 0 || p.Container > domain.MaxPortNumber {
+		return fmt.Errorf("%w: container port must be between 1 and %d", domain.ErrInvalidPort, domain.MaxPortNumber)
 	}
-	if p.Host <= 0 || p.Host > constants.MaxPortNumber {
-		return fmt.Errorf("%w: host port must be between 1 and %d", domain.ErrInvalidPort, constants.MaxPortNumber)
+	if p.Host <= 0 || p.Host > domain.MaxPortNumber {
+		return fmt.Errorf("%w: host port must be between 1 and %d", domain.ErrInvalidPort, domain.MaxPortNumber)
 	}
 	if p.Protocol != "" && p.Protocol != "tcp" && p.Protocol != "udp" {
 		return fmt.Errorf("%w: protocol must be 'tcp' or 'udp'", domain.ErrInvalidProtocol)
@@ -100,8 +99,8 @@ func (r *ServiceGatewayRoute) Validate() error {
 	if r.Hostname == "" {
 		return domain.RequiredField("gateway hostname")
 	}
-	if r.ContainerPort <= 0 || r.ContainerPort > constants.MaxPortNumber {
-		return fmt.Errorf("%w: container_port must be between 1 and %d", domain.ErrInvalidPort, constants.MaxPortNumber)
+	if r.ContainerPort <= 0 || r.ContainerPort > domain.MaxPortNumber {
+		return fmt.Errorf("%w: container_port must be between 1 and %d", domain.ErrInvalidPort, domain.MaxPortNumber)
 	}
 	return nil
 }
