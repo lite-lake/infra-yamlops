@@ -279,6 +279,18 @@ func TestBizService_Validate(t *testing.T) {
 			wantErr: domain.ErrRequired,
 		},
 		{
+			name: "invalid env empty secretref",
+			service: BizService{
+				Name:   "api",
+				Server: "server-1",
+				Image:  "app:latest",
+				Env: map[string]valueobject.SecretRef{
+					"API_KEY": {},
+				},
+			},
+			wantErr: domain.ErrEmptyValue,
+		},
+		{
 			name: "valid minimal",
 			service: BizService{
 				Name:   "api",

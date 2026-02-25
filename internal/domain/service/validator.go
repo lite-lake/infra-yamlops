@@ -196,17 +196,16 @@ func (v *Validator) validatePortConflicts() error {
 		}
 	}
 
-	servicePorts := make(map[string]map[int]string)
 	for _, service := range v.cfg.Services {
 		key := service.Server
-		if servicePorts[key] == nil {
-			servicePorts[key] = make(map[int]string)
+		if serverPorts[key] == nil {
+			serverPorts[key] = make(map[int]string)
 		}
 		for _, port := range service.Ports {
-			if existing, ok := servicePorts[key][port.Host]; ok {
-				return fmt.Errorf("%w: host port %d on server '%s' is used by both services '%s' and '%s'", domain.ErrPortConflict, port.Host, service.Server, existing, service.Name)
+			if existing, ok := serverPorts[key][port.Host]; ok {
+				return fmt.Errorf("%w: host port %d on server '%s' is used by both '%s' and '%s'", domain.ErrPortConflict, port.Host, service.Server, existing, service.Name)
 			}
-			servicePorts[key][port.Host] = service.Name
+			serverPorts[key][port.Host] = service.Name
 		}
 	}
 

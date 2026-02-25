@@ -400,10 +400,12 @@ func streamReader(reader io.Reader, ch chan string) {
 			ch <- string(buf[:n])
 		}
 		if err != nil {
-			if err != io.EOF {
+			if err != io.EOF && ch != nil {
 				ch <- err.Error()
 			}
-			close(ch)
+			if ch != nil {
+				close(ch)
+			}
 			return
 		}
 	}

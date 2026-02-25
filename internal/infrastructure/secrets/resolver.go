@@ -8,12 +8,14 @@ import (
 )
 
 type SecretResolver struct {
-	secrets map[string]string
+	secrets        map[string]string
+	resolvedValues map[string]string
 }
 
 func NewSecretResolver(secrets []*entity.Secret) *SecretResolver {
 	s := &SecretResolver{
-		secrets: make(map[string]string),
+		secrets:        make(map[string]string),
+		resolvedValues: make(map[string]string),
 	}
 	for _, secret := range secrets {
 		s.secrets[secret.Name] = secret.Value
@@ -32,30 +34,51 @@ func (r *SecretResolver) ResolveAll(cfg *entity.Config) error {
 			if err != nil {
 				return fmt.Errorf("isps[%s].credentials[%s]: %w", cfg.ISPs[i].Name, key, err)
 			}
-			cfg.ISPs[i].Credentials[key] = valueobject.SecretRef{Plain: val}
+			r.cacheResolved(ref, val)
 		}
 	}
 
 	for i := range cfg.Servers {
-		val, err := r.Resolve(cfg.Servers[i].SSH.Password)
+		ref := cfg.Servers[i].SSH.Password
+		val, err := r.Resolve(ref)
 		if err != nil {
 			return fmt.Errorf("servers[%s].ssh.password: %w", cfg.Servers[i].Name, err)
 		}
-		cfg.Servers[i].SSH.Password = valueobject.SecretRef{Plain: val}
+		r.cacheResolved(ref, val)
 	}
 
 	for i := range cfg.Registries {
-		username, err := r.Resolve(cfg.Registries[i].Credentials.Username)
+		usernameRef := cfg.Registries[i].Credentials.Username
+		username, err := r.Resolve(usernameRef)
 		if err != nil {
 			return fmt.Errorf("registries[%s].credentials.username: %w", cfg.Registries[i].Name, err)
 		}
-		password, err := r.Resolve(cfg.Registries[i].Credentials.Password)
+		r.cacheResolved(usernameRef, username)
+
+		passwordRef := cfg.Registries[i].Credentials.Password
+		password, err := r.Resolve(passwordRef)
 		if err != nil {
 			return fmt.Errorf("registries[%s].credentials.password: %w", cfg.Registries[i].Name, err)
 		}
-		cfg.Registries[i].Credentials.Username = valueobject.SecretRef{Plain: username}
-		cfg.Registries[i].Credentials.Password = valueobject.SecretRef{Plain: password}
+		r.cacheResolved(passwordRef, password)
 	}
 
 	return nil
+}
+
+func (r *SecretResolver) GetResolvedValue(ref valueobject.SecretRef) string {
+	key := cacheKey(ref)
+	if val, ok := r.resolvedValues[key]; ok {
+		return val
+	}
+	val, _ := r.Resolve(ref)
+	return val
+}
+
+func (r *SecretResolver) cacheResolved(ref valueobject.SecretRef, val string) {
+	r.resolvedValues[cacheKey(ref)] = val
+}
+
+func cacheKey(ref valueobject.SecretRef) string {
+	return ref.Plain + "|" + ref.Secret
 }

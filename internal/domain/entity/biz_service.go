@@ -148,6 +148,11 @@ func (s *BizService) Validate() error {
 			return fmt.Errorf("port %d: %w", i, err)
 		}
 	}
+	for key, ref := range s.Env {
+		if err := ref.Validate(); err != nil {
+			return fmt.Errorf("env[%s]: %w", key, err)
+		}
+	}
 	if s.Healthcheck != nil {
 		if err := s.Healthcheck.Validate(); err != nil {
 			return err

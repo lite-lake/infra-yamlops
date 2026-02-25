@@ -272,6 +272,24 @@ func TestValidator_PortConflicts(t *testing.T) {
 			t.Errorf("expected port conflict error, got %v", err)
 		}
 	})
+
+	t.Run("infra and service port conflict", func(t *testing.T) {
+		cfg := &entity.Config{
+			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
+			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: valueobject.SecretRef{Plain: "pass"}}}},
+			InfraServices: []entity.InfraService{
+				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, Server: "server1", Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 8443}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl", Sync: true}}},
+			},
+			Services: []entity.BizService{
+				{Name: "svc1", Server: "server1", Image: "nginx", Ports: []entity.ServicePort{{Container: 80, Host: 8443}}},
+			},
+		}
+		validator := NewValidator(cfg)
+		err := validator.Validate()
+		if err == nil || !strings.Contains(err.Error(), "port conflict") {
+			t.Errorf("expected port conflict error between infra and service, got %v", err)
+		}
+	})
 }
 
 func TestValidator_HostnameConflicts(t *testing.T) {

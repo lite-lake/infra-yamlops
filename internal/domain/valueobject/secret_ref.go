@@ -2,6 +2,7 @@ package valueobject
 
 import (
 	"fmt"
+	"log/slog"
 
 	"github.com/litelake/yamlops/internal/domain"
 )
@@ -70,4 +71,8 @@ func (s *SecretRef) Validate() error {
 		return domain.ErrEmptyValue
 	}
 	return nil
+}
+
+func (s *SecretRef) LogValue() slog.Value {
+	return slog.StringValue("***")
 }

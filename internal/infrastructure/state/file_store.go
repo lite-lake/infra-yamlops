@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/gofrs/flock"
 	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
@@ -13,14 +14,23 @@ import (
 )
 
 type FileStore struct {
-	path string
+	path  string
+	flock *flock.Flock
 }
 
 func NewFileStore(path string) *FileStore {
-	return &FileStore{path: path}
+	return &FileStore{
+		path:  path,
+		flock: flock.New(path + ".lock"),
+	}
 }
 
 func (s *FileStore) Load() (*repository.DeploymentState, error) {
+	if err := s.flock.Lock(); err != nil {
+		return nil, fmt.Errorf("acquiring lock: %w", err)
+	}
+	defer s.flock.Unlock()
+
 	data, err := os.ReadFile(s.path)
 	if err != nil {
 		return nil, fmt.Errorf("reading state file %s: %w", s.path, domain.WrapOp("read state file", domain.ErrStateReadFailed))
@@ -61,6 +71,11 @@ func (s *FileStore) Load() (*repository.DeploymentState, error) {
 }
 
 func (s *FileStore) Save(state *repository.DeploymentState) error {
+	if err := s.flock.Lock(); err != nil {
+		return fmt.Errorf("acquiring lock: %w", err)
+	}
+	defer s.flock.Unlock()
+
 	cfg := &entity.Config{
 		Services:      make([]entity.BizService, 0, len(state.Services)),
 		InfraServices: make([]entity.InfraService, 0, len(state.InfraServices)),
