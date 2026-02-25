@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 
+	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain"
 )
 
@@ -20,11 +21,11 @@ type GatewayPorts struct {
 }
 
 func (p *GatewayPorts) Validate() error {
-	if p.HTTP <= 0 || p.HTTP > 65535 {
-		return fmt.Errorf("%w: http port must be between 1 and 65535", domain.ErrInvalidPort)
+	if p.HTTP <= 0 || p.HTTP > constants.MaxPortNumber {
+		return fmt.Errorf("%w: http port must be between 1 and %d", domain.ErrInvalidPort, constants.MaxPortNumber)
 	}
-	if p.HTTPS <= 0 || p.HTTPS > 65535 {
-		return fmt.Errorf("%w: https port must be between 1 and 65535", domain.ErrInvalidPort)
+	if p.HTTPS <= 0 || p.HTTPS > constants.MaxPortNumber {
+		return fmt.Errorf("%w: https port must be between 1 and %d", domain.ErrInvalidPort, constants.MaxPortNumber)
 	}
 	return nil
 }
@@ -254,8 +255,8 @@ type SSLPorts struct {
 }
 
 func (p *SSLPorts) Validate() error {
-	if p.API <= 0 || p.API > 65535 {
-		return fmt.Errorf("%w: api port must be between 1 and 65535", domain.ErrInvalidPort)
+	if p.API <= 0 || p.API > constants.MaxPortNumber {
+		return fmt.Errorf("%w: api port must be between 1 and %d", domain.ErrInvalidPort, constants.MaxPortNumber)
 	}
 	return nil
 }

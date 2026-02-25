@@ -1,6 +1,7 @@
 package gate
 
 import (
+	"github.com/litelake/yamlops/internal/constants"
 	"gopkg.in/yaml.v3"
 )
 
@@ -74,7 +75,7 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 			Level:         cfg.LogLevel,
 			EnableConsole: true,
 			EnableFile:    true,
-			LogDir:        "./applogs",
+			LogDir:        constants.DefaultLogDir,
 		},
 		WAF: wafConfig{
 			Enabled: cfg.WAFEnabled,
@@ -88,7 +89,7 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 				Version string `yaml:"version"`
 			}{
 				Enabled: true,
-				Version: "v4.19.0",
+				Version: constants.DefaultCRSVersion,
 			},
 		},
 		SSL: sslConfig{

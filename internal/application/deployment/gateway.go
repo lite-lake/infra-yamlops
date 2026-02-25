@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/infrastructure/generator/compose"
 	"github.com/litelake/yamlops/internal/infrastructure/generator/gate"
@@ -69,7 +70,7 @@ func (g *Generator) buildGatewayRoutes(gw *entity.InfraService, config *entity.C
 			if server, ok := serverMap[svc.Server]; ok && server.IP.Private != "" {
 				backendIP = server.IP.Private
 			} else {
-				backendIP = "host.docker.internal"
+				backendIP = constants.HostDockerInternal
 			}
 
 			hostPort := route.ContainerPort
@@ -93,8 +94,8 @@ func (g *Generator) buildGatewayRoutes(gw *entity.InfraService, config *entity.C
 				sslPort = gw.GatewayPorts.HTTPS
 			}
 
-			healthInterval := "30s"
-			healthTimeout := "10s"
+			healthInterval := constants.DefaultHealthInterval
+			healthTimeout := constants.DefaultHealthTimeout
 			if svc.Healthcheck != nil {
 				if svc.Healthcheck.Interval != "" {
 					healthInterval = svc.Healthcheck.Interval
@@ -104,7 +105,7 @@ func (g *Generator) buildGatewayRoutes(gw *entity.InfraService, config *entity.C
 				}
 			}
 
-			httpPort := 80
+			httpPort := constants.DefaultHTTPPort
 			if gw.GatewayPorts != nil {
 				httpPort = gw.GatewayPorts.HTTP
 			}
@@ -135,8 +136,8 @@ func (g *Generator) buildGatewayRoutes(gw *entity.InfraService, config *entity.C
 		sslEndpoint = gw.GatewaySSL.Endpoint
 	}
 
-	httpPort := 80
-	httpsPort := 443
+	httpPort := constants.DefaultHTTPPort
+	httpsPort := constants.DefaultHTTPSPort
 	if gw.GatewayPorts != nil {
 		httpPort = gw.GatewayPorts.HTTP
 		httpsPort = gw.GatewayPorts.HTTPS
@@ -196,8 +197,8 @@ func (g *Generator) generateGatewayCompose(gw *entity.InfraService, httpPort, ht
 	}
 
 	volumes := []string{
-		"./gateway.yml:/app/configs/server.yml:ro",
-		"./cache:/app/cache",
+		constants.GatewayConfigPath,
+		constants.GatewayCachePath,
 	}
 
 	composeSvc := &compose.ComposeService{
@@ -206,7 +207,7 @@ func (g *Generator) generateGatewayCompose(gw *entity.InfraService, httpPort, ht
 		Ports:      ports,
 		Volumes:    volumes,
 		Networks:   []string{networkName},
-		ExtraHosts: []string{"host.docker.internal:host-gateway"},
+		ExtraHosts: []string{constants.HostDockerGateway},
 	}
 
 	return g.composeGen.Generate(composeSvc, g.env)

@@ -7,6 +7,7 @@ import (
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
 
 type SSHClient interface {
@@ -67,7 +68,7 @@ func (m *Manager) Exists(name string) (bool, error) {
 }
 
 func (m *Manager) Inspect(name string) (*NetworkInfo, error) {
-	cmd := fmt.Sprintf("sudo docker network inspect %s --format '{{json .}}'", ShellEscape(name))
+	cmd := fmt.Sprintf("sudo docker network inspect %s --format '{{json .}}'", ssh.ShellEscape(name))
 	stdout, stderr, err := m.client.Run(cmd)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %s: %w, stderr: %s", domainerr.ErrNetworkInspectFailed, name, err, stderr)
@@ -91,7 +92,7 @@ func (m *Manager) Inspect(name string) (*NetworkInfo, error) {
 
 func (m *Manager) Create(spec *entity.ServerNetwork) error {
 	driver := spec.GetDriver()
-	cmd := fmt.Sprintf("sudo docker network create --driver %s %s", ShellEscape(driver), ShellEscape(spec.Name))
+	cmd := fmt.Sprintf("sudo docker network create --driver %s %s", ssh.ShellEscape(driver), ssh.ShellEscape(spec.Name))
 	_, stderr, err := m.client.Run(cmd)
 	if err != nil {
 		return fmt.Errorf("%w: %s: %w, stderr: %s", domainerr.ErrNetworkCreateFailed, spec.Name, err, stderr)

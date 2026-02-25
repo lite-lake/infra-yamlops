@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/litelake/yamlops/internal/constants"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common/profile"
 	dnspod "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/dnspod/v20210323"
@@ -40,7 +41,7 @@ func (p *TencentProvider) ListRecords(domain string) ([]DNSRecord, error) {
 	var records []DNSRecord
 	if resp.Response != nil && resp.Response.RecordList != nil {
 		for _, r := range resp.Response.RecordList {
-			ttl := 600
+			ttl := constants.DefaultDNSRecordTTL
 			if r.TTL != nil {
 				ttl = int(*r.TTL)
 			}
@@ -59,7 +60,7 @@ func (p *TencentProvider) ListRecords(domain string) ([]DNSRecord, error) {
 func (p *TencentProvider) CreateRecord(domain string, record *DNSRecord) error {
 	ttl := uint64(record.TTL)
 	if ttl == 0 {
-		ttl = 600
+		ttl = constants.DefaultDNSRecordTTL
 	}
 
 	req := dnspod.NewCreateRecordRequest()
@@ -101,7 +102,7 @@ func (p *TencentProvider) UpdateRecord(domain string, recordID string, record *D
 
 	ttl := uint64(record.TTL)
 	if ttl == 0 {
-		ttl = 600
+		ttl = constants.DefaultDNSRecordTTL
 	}
 
 	req := dnspod.NewModifyRecordRequest()
@@ -148,7 +149,7 @@ func (p *TencentProvider) GetRecordsByType(domain string, recordType string) ([]
 	var records []DNSRecord
 	if resp.Response != nil && resp.Response.RecordList != nil {
 		for _, r := range resp.Response.RecordList {
-			ttl := 600
+			ttl := constants.DefaultDNSRecordTTL
 			if r.TTL != nil {
 				ttl = int(*r.TTL)
 			}
@@ -177,7 +178,7 @@ func (p *TencentProvider) GetRecordsBySubDomain(domain string, subDomain string)
 	var records []DNSRecord
 	if resp.Response != nil && resp.Response.RecordList != nil {
 		for _, r := range resp.Response.RecordList {
-			ttl := 600
+			ttl := constants.DefaultDNSRecordTTL
 			if r.TTL != nil {
 				ttl = int(*r.TTL)
 			}

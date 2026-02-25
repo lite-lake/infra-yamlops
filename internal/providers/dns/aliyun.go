@@ -4,6 +4,7 @@ import (
 	alidns "github.com/alibabacloud-go/alidns-20150109/v4/client"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	"github.com/alibabacloud-go/tea/tea"
+	"github.com/litelake/yamlops/internal/constants"
 	domainerr "github.com/litelake/yamlops/internal/domain"
 )
 
@@ -40,7 +41,7 @@ func (p *AliyunProvider) ListRecords(domainName string) ([]DNSRecord, error) {
 	var records []DNSRecord
 	if resp.Body != nil && resp.Body.DomainRecords != nil {
 		for _, r := range resp.Body.DomainRecords.Record {
-			ttl := 600
+			ttl := constants.DefaultDNSRecordTTL
 			if r.TTL != nil {
 				ttl = int(*r.TTL)
 			}
@@ -59,7 +60,7 @@ func (p *AliyunProvider) ListRecords(domainName string) ([]DNSRecord, error) {
 func (p *AliyunProvider) CreateRecord(domainName string, record *DNSRecord) error {
 	ttl := int64(record.TTL)
 	if ttl == 0 {
-		ttl = 600
+		ttl = constants.DefaultDNSRecordTTL
 	}
 
 	req := &alidns.AddDomainRecordRequest{
@@ -92,7 +93,7 @@ func (p *AliyunProvider) DeleteRecord(domainName string, recordID string) error 
 func (p *AliyunProvider) UpdateRecord(domainName string, recordID string, record *DNSRecord) error {
 	ttl := int64(record.TTL)
 	if ttl == 0 {
-		ttl = 600
+		ttl = constants.DefaultDNSRecordTTL
 	}
 
 	req := &alidns.UpdateDomainRecordRequest{
@@ -139,7 +140,7 @@ func (p *AliyunProvider) GetRecordsByType(domainName string, recordType string) 
 	var records []DNSRecord
 	if resp.Body != nil && resp.Body.DomainRecords != nil {
 		for _, r := range resp.Body.DomainRecords.Record {
-			ttl := 600
+			ttl := constants.DefaultDNSRecordTTL
 			if r.TTL != nil {
 				ttl = int(*r.TTL)
 			}
@@ -168,7 +169,7 @@ func (p *AliyunProvider) GetRecordsByName(domainName string, name string) ([]DNS
 	var records []DNSRecord
 	if resp.Body != nil && resp.Body.DomainRecords != nil {
 		for _, r := range resp.Body.DomainRecords.Record {
-			ttl := 600
+			ttl := constants.DefaultDNSRecordTTL
 			if r.TTL != nil {
 				ttl = int(*r.TTL)
 			}

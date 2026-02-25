@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
 
 	"github.com/litelake/yamlops/internal/domain/entity"
@@ -152,7 +154,7 @@ func runConfigShow(ctx *Context, cfgType, name string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("%s: %s\n", strings.Title(cfgType), name)
+	fmt.Printf("%s: %s\n", cases.Title(language.English).String(cfgType), name)
 	fmt.Println(string(data))
 }
 

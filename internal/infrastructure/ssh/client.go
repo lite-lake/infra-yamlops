@@ -38,7 +38,7 @@ type SSHConfig struct {
 func DefaultSSHConfig() *SSHConfig {
 	return &SSHConfig{
 		StrictHostKeyChecking: true,
-		Timeout:               30 * time.Second,
+		Timeout:               constants.DefaultSSHTimeout,
 	}
 }
 
@@ -121,9 +121,9 @@ type SSHRetryConfig struct {
 
 func DefaultSSHRetryConfig() *SSHRetryConfig {
 	return &SSHRetryConfig{
-		MaxAttempts:  3,
-		InitialDelay: 1 * time.Second,
-		MaxDelay:     30 * time.Second,
+		MaxAttempts:  constants.DefaultSSHRetryAttempts,
+		InitialDelay: constants.DefaultSSHRetryInitialDelay,
+		MaxDelay:     constants.DefaultSSHRetryMaxDelay,
 	}
 }
 
@@ -149,10 +149,10 @@ func NewClientWithRetry(ctx context.Context, host string, port int, user, passwo
 
 func createHostKeyCallback(knownHostsPath string, strict bool) (ssh.HostKeyCallback, error) {
 	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(filepath.Dir(knownHostsPath), 0700); err != nil {
+		if err := os.MkdirAll(filepath.Dir(knownHostsPath), constants.DirPermissionOwner); err != nil {
 			return nil, fmt.Errorf("creating known_hosts directory %s: %w", filepath.Dir(knownHostsPath), err)
 		}
-		if err := os.WriteFile(knownHostsPath, []byte{}, 0600); err != nil {
+		if err := os.WriteFile(knownHostsPath, []byte{}, constants.FilePermissionOwnerRW); err != nil {
 			return nil, fmt.Errorf("creating known_hosts file %s: %w", knownHostsPath, err)
 		}
 	}
@@ -185,7 +185,7 @@ func createHostKeyCallback(knownHostsPath string, strict bool) (ssh.HostKeyCallb
 
 		logger.Warn("auto-accepting unknown host key", "hostname", hostname, "fingerprint", ssh.FingerprintSHA256(key))
 		line := knownhosts.Line([]string{hostname}, key)
-		f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, 0600)
+		f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, constants.FilePermissionOwnerRW)
 		if err != nil {
 			return domainerr.WrapOp("open known_hosts", domainerr.ErrSSHConnectFailed)
 		}
@@ -311,7 +311,7 @@ func (c *Client) MkdirAllSudoWithPerm(path, perm string) error {
 }
 
 func (c *Client) UploadFileSudo(localPath, remotePath string) error {
-	return c.UploadFileSudoWithPerm(localPath, remotePath, "644")
+	return c.UploadFileSudoWithPerm(localPath, remotePath, constants.DefaultRemoteFilePerm)
 }
 
 func (c *Client) UploadFileSudoWithPerm(localPath, remotePath, perm string) error {
@@ -393,7 +393,7 @@ func (c *Client) StreamRun(cmd string, stdoutChan, stderrChan chan string) error
 }
 
 func streamReader(reader io.Reader, ch chan string) {
-	buf := make([]byte, 1024)
+	buf := make([]byte, constants.SSHStreamBufferSize)
 	for {
 		n, err := reader.Read(buf)
 		if n > 0 && ch != nil {

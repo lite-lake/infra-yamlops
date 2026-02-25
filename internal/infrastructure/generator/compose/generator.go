@@ -3,6 +3,7 @@ package compose
 import (
 	"fmt"
 
+	"github.com/litelake/yamlops/internal/constants"
 	domainerr "github.com/litelake/yamlops/internal/domain"
 	"gopkg.in/yaml.v3"
 )
@@ -37,7 +38,7 @@ func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 		Volumes:       svc.Volumes,
 		HealthCheck:   svc.HealthCheck,
 		Networks:      svc.Networks,
-		Restart:       "unless-stopped",
+		Restart:       constants.DefaultRestartPolicy,
 		ExtraHosts:    svc.ExtraHosts,
 	}
 
@@ -53,7 +54,7 @@ func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 	}
 
 	compose := ComposeFile{
-		Version: "3.8",
+		Version: constants.ComposeVersion,
 		Services: map[string]Service{
 			serviceName: service,
 		},

@@ -1,6 +1,7 @@
 package plan
 
 import (
+	"github.com/litelake/yamlops/internal/application/deployment"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/repository"
 	"github.com/litelake/yamlops/internal/domain/service"
@@ -61,7 +62,7 @@ func NewPlanner(opts ...PlannerOption) *Planner {
 		opt(p)
 	}
 	if p.deployGen == nil {
-		p.deployGen = NewDeploymentGeneratorAdapter(p.env, p.outputDir)
+		p.deployGen = deployment.NewGenerator(p.env, p.outputDir)
 	}
 	return p
 }

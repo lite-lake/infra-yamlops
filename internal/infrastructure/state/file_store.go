@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/repository"
@@ -94,7 +95,7 @@ func (s *FileStore) Save(state *repository.DeploymentState) error {
 	}
 
 	tmpPath := filepath.Join(filepath.Dir(s.path), "."+filepath.Base(s.path)+".tmp")
-	if err := os.WriteFile(tmpPath, data, 0600); err != nil {
+	if err := os.WriteFile(tmpPath, data, constants.FilePermissionOwnerRW); err != nil {
 		return fmt.Errorf("writing temp state file %s: %w", tmpPath, domain.WrapOp("write temp state file", domain.ErrStateWriteFailed))
 	}
 

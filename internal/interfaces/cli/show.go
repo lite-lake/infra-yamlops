@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
 )
 
@@ -88,6 +90,6 @@ func runShow(ctx *Context, entity, name string) {
 		os.Exit(1)
 	}
 
-	fmt.Printf("%s: %s\n", strings.Title(entity), name)
+	fmt.Printf("%s: %s\n", cases.Title(language.English).String(entity), name)
 	fmt.Println(string(data))
 }

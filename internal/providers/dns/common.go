@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/litelake/yamlops/internal/constants"
 	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/retry"
 )
@@ -34,7 +35,7 @@ func NormalizeTTL(ttl int) int {
 }
 
 func DefaultTTL() int {
-	return 600
+	return constants.DefaultDNSRecordTTL
 }
 
 func GetFullDomain(subDomain, domain string) string {
@@ -113,9 +114,9 @@ type RetryConfig struct {
 
 func DefaultRetryConfig() *RetryConfig {
 	return &RetryConfig{
-		MaxAttempts:  3,
-		InitialDelay: 500,
-		MaxDelay:     30000,
+		MaxAttempts:  constants.DefaultDNSRetryAttempts,
+		InitialDelay: constants.DefaultDNSRetryInitialDelayMs,
+		MaxDelay:     constants.DefaultDNSRetryMaxDelayMs,
 	}
 }
 
@@ -129,7 +130,7 @@ func EnsureRecord(ctx context.Context, provider Provider, domain string, desired
 		var err error
 		records, err = provider.ListRecords(domain)
 		return err
-	}, retry.WithMaxAttempts(retryCfg.MaxAttempts), retry.WithInitialDelay(500), retry.WithIsRetryable(IsRetryableDNSError))
+	}, retry.WithMaxAttempts(retryCfg.MaxAttempts), retry.WithInitialDelay(constants.DefaultDNSRetryInitialDelay), retry.WithIsRetryable(IsRetryableDNSError))
 	if err != nil {
 		return domainerr.WrapOp("list records", err)
 	}
