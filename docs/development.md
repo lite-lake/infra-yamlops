@@ -307,6 +307,8 @@ internal/
 │   │   ├── types.go            # 依赖接口定义
 │   │   ├── dns_handler.go      # DNS 处理器
 │   │   ├── service_handler.go  # 服务处理器
+│   │   ├── service_common.go   # 服务公共逻辑
+│   │   ├── infra_service_handler.go # 基础设施服务处理器
 │   │   ├── server_handler.go   # 服务器处理器
 │   │   ├── noop_handler.go     # 空操作处理器
 │   │   ├── registry.go         # 处理器注册表
@@ -317,6 +319,7 @@ internal/
 │   ├── deployment/             # 部署文件生成器
 │   │   ├── generator.go        # 主入口
 │   │   ├── compose_service.go  # Compose 生成
+│   │   ├── compose_infra.go    # 基础设施服务 Compose 生成
 │   │   ├── gateway.go          # Gateway 配置
 │   │   └── utils.go            # 工具函数
 │   ├── plan/                   # 规划器
@@ -340,10 +343,14 @@ internal/
 │   │   └── gate/               # infra-gate 配置
 │   ├── secrets/                # 密钥解析器
 │   │   └── resolver.go         # SecretResolver
-│   └── logger/                 # 日志
-│       ├── logger.go           # 主入口
-│       ├── context.go          # 上下文日志
-│       └── metrics.go          # 指标记录
+│   ├── logger/                 # 日志
+│   │   ├── logger.go           # 主入口
+│   │   ├── context.go          # 上下文日志
+│   │   └── metrics.go          # 指标记录
+│   ├── network/                # Docker 网络管理
+│   │   └── manager.go
+│   └── registry/               # 镜像仓库管理
+│       └── manager.go
 ├── interfaces/                 # 接口层
 │   └── cli/                    # CLI 命令
 │       ├── root.go             # 根命令

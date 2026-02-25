@@ -324,8 +324,7 @@ Config (聚合根)
 ├── Servers[]           # 服务器
 ├── InfraServices[]     # 基础设施服务 (gateway/ssl)
 ├── Services[]          # 业务服务
-├── Domains[]           # 域名
-└── Certificates[]      # SSL 证书
+└── Domains[]           # 域名
 ```
 
 ### 实体层级关系
@@ -338,8 +337,7 @@ ISP (底层基础设施提供商)
         │     └── BizService (业务服务)
         │           └── ServiceGatewayRoute (网关路由)
         └── Domain (域名)
-              ├── DNSRecord (DNS记录)
-              └── Certificate (SSL证书)
+              └── DNSRecord (DNS记录)
 ```
 
 ---

@@ -10,7 +10,10 @@
 - **密钥管理**：支持明文和密钥引用两种方式
 - **DNS 管理**：支持 Cloudflare、阿里云、腾讯云
 - **Docker Compose**：自动生成和部署
-- **交互式 TUI**：基于 BubbleTea 的终端界面
+- **交互式 TUI**：基于 BubbleTea 的终端界面，支持服务重启、多选、滚动视图
+- **服务器环境管理**：Docker 安装、Registry 登录、APT 源配置
+- **网关管理**：infra-gate 配置自动生成
+- **清理功能**：自动识别并清理孤立资源
 
 ## 目录
 
@@ -89,12 +92,12 @@ go build -o yamlops ./cmd/yamlops
     │   ├── zones.yaml       # 网区
     │   ├── servers.yaml     # 服务器
     │   ├── services_biz.yaml    # 业务服务
-    │   ├── services_infra.yaml  # 基础设施服务 (gateway/ssl)
-    │   ├── registries.yaml  # Docker Registry
-    │   ├── dns.yaml         # 域名和 DNS 记录
-    │   └── volumes/         # 配置文件
-    │       ├── infra-gate/
-    │       └── api-server/
+│   ├── services_infra.yaml  # 基础设施服务 (gateway/ssl)
+│   ├── registries.yaml  # Docker Registry
+│   ├── dns.yaml         # 域名和 DNS 记录
+│   └── volumes/         # 配置文件
+│       ├── infra-gate/
+│       └── api-server/
     ├── staging/             # 预发环境
     ├── dev/                 # 开发环境
     └── demo/                # 演示环境
@@ -281,6 +284,7 @@ yamlops
 | A/N | 全选/全不选 |
 | p | 生成计划 |
 | r | 刷新配置 |
+| s | 同步（在服务器检查视图） |
 | x | 取消操作 |
 | Esc | 返回 |
 | q/Ctrl+C | 退出 |
@@ -343,6 +347,10 @@ servers:
     environment:
       apt_source: tuna              # tuna | aliyun | tencent | official
       registries: [registry-aliyun]
+    networks:
+      - name: yamlops-prod
+        type: bridge
+        driver: bridge
 ```
 
 ### services_biz.yaml - 业务服务配置
@@ -360,6 +368,8 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgres://db:5432/myapp
       REDIS_PASSWORD: {secret: redis_password}
+    secrets:
+      - redis_password
     healthcheck:
       path: /health
       interval: 30s
@@ -380,6 +390,8 @@ services:
         http: true
         https: true
     internal: false
+    networks:
+      - yamlops-prod
 ```
 
 **Volume 格式**:
@@ -395,29 +407,31 @@ infra_services:
     type: gateway                  # gateway | ssl
     server: srv-east-01
     image: infra-gate:latest
-    ports:
+    gatewayPorts:
       http: 80
       https: 443
-    config:
+    gatewayConfig:
       source: volumes://infra-gate
       sync: true
-    ssl:
+    gatewaySSL:
       mode: remote                  # local | remote
       endpoint: http://infra-ssl:38567
-    waf:
+    gatewayWAF:
       enabled: true
       whitelist:
         - 10.0.0.0/8
         - 192.168.0.0/16
-    log_level: 1
+    gatewayLogLevel: 1
+    networks:
+      - yamlops-prod
 
   - name: infra-ssl
     type: ssl
     server: srv-east-01
     image: infra-ssl:latest
-    ports:
+    gatewayPorts:
       api: 38567
-    config:
+    gatewayConfig:
       auth:
         enabled: true
         apikey: {secret: ssl_api_key}
@@ -577,15 +591,13 @@ networks:
 
 ### DNS 解析
 
-| 服务商 | API | DNS-01 挑战 |
-|--------|-----|-------------|
-| Cloudflare | ✅ | ✅ |
-| 阿里云 DNS | ✅ | ✅ |
-| 腾讯云 DNSPod | ✅ | ✅ |
+| 服务商 | API |
+|--------|-----|
+| Cloudflare | ✅ |
+| 阿里云 DNS | ✅ |
+| 腾讯云 DNSPod | ✅ |
 
 ## 故障排查
-
-### 配置验证失败
 
 ```bash
 ./yamlops validate -e prod

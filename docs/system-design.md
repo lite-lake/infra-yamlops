@@ -21,11 +21,11 @@
 
 YAMLOps 是一个基于 Go 语言开发的基础设施即代码（IaC）管理工具，通过 YAML 配置文件管理：
 
-- **服务器**：SSH 连接、环境配置
+- **服务器**：SSH 连接、环境配置、Docker 网络
 - **服务**：Docker Compose 部署
 - **网关**：infra-gate 配置管理
 - **DNS**：域名和记录管理（支持 Cloudflare、阿里云、腾讯云）
-- **SSL 证书**：Let's Encrypt、ZeroSSL 自动化证书管理
+- **SSL 证书**：通过 infra-ssl 服务管理
 
 ### 1.2 核心特性
 
@@ -217,8 +217,7 @@ Config (聚合根)
 ├── Servers[]           # 服务器
 ├── InfraServices[]     # 基础设施服务 (gateway/ssl)
 ├── Services[]          # 业务服务
-├── Domains[]           # 域名
-└── Certificates[]      # SSL 证书
+└── Domains[]           # 域名
 ```
 
 ### 3.2 实体详情
@@ -400,16 +399,7 @@ domains:
 
 **DNS 记录类型**: A | AAAA | CNAME | MX | TXT | NS | SRV
 
-#### 3.2.9 Certificate（证书）
 
-```yaml
-certificates:
-  - name: wildcard-cert
-    domains: ["*.example.com", "example.com"]
-    provider: letsencrypt    # letsencrypt | zerossl
-    dns_provider: cloudflare
-    renew_before: 720h
-```
 
 ### 3.3 值对象
 
@@ -467,8 +457,7 @@ ISP (底层基础设施提供商)
         │     └── BizService (业务服务)
         │           └── ServiceGatewayRoute (网关路由)
         └── Domain (域名)
-              ├── DNSRecord (DNS记录)
-              └── Certificate (SSL证书)
+              └── DNSRecord (DNS记录)
 ```
 
 ---
@@ -557,7 +546,7 @@ type BaseDeps struct {
 | ServiceHandler | service | Docker Compose 服务部署 |
 | InfraServiceHandler | infra_service | 基础设施服务部署 (gateway/ssl) |
 | ServerHandler | server | 服务器环境同步（含 Registry 登录） |
-| NoopHandler | isp/zone/domain/certificate | 空操作（非部署实体，跳过） |
+| NoopHandler | isp/zone/domain/registry | 空操作（非部署实体，跳过） |
 
 ### 4.6 Executor 执行器
 
@@ -649,12 +638,11 @@ func (l *ConfigLoader) Validate(cfg *entity.Config) error
 1. secrets.yaml
 2. isps.yaml
 3. zones.yaml
-4. services_infra.yaml
+4. registries.yaml
 5. servers.yaml
-6. services_biz.yaml
-7. registries.yaml
+6. services_infra.yaml
+7. services_biz.yaml
 8. dns.yaml
-9. certificates.yaml
 
 ### 5.2 状态存储
 
@@ -964,8 +952,7 @@ userdata/
 │   ├── services_biz.yaml
 │   ├── services_infra.yaml
 │   ├── registries.yaml
-│   ├── dns.yaml
-│   └── certificates.yaml
+│   └── dns.yaml
 ├── staging/                 # 预发布环境
 │   └── ...
 └── dev/                     # 开发环境
@@ -1001,7 +988,6 @@ password: {secret: db_password}
 - InfraService 必须引用存在的 Server
 - BizService 必须引用存在的 Server
 - Domain 必须引用存在的 DNS ISP
-- Certificate 必须引用存在的 Domain
 
 ### 9.2 唯一性约束
 
@@ -1132,8 +1118,8 @@ type DeploymentState struct {
     Zones         map[string]*entity.Zone
     Domains       map[string]*entity.Domain
     Records       map[string]*entity.DNSRecord
-    Certs         map[string]*entity.Certificate
     ISPs          map[string]*entity.ISP
+    Registries    map[string]*entity.Registry
 }
 ```
 

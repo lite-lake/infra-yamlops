@@ -14,8 +14,7 @@ userdata/
 │   ├── services_infra.yaml  # 基础设施服务配置
 │   ├── services_biz.yaml    # 业务服务配置
 │   ├── registries.yaml      # Docker 仓库配置
-│   ├── dns.yaml             # DNS 配置
-│   └── certificates.yaml    # SSL 证书配置（可选）
+│   └── dns.yaml             # DNS 配置
 ├── staging/                 # 预发布环境
 │   └── ...
 ├── dev/                     # 开发环境
@@ -79,7 +78,7 @@ isps:
   - name: aliyun
     type: aliyun                    # aliyun | cloudflare | tencent
     services:
-      - domain                      # domain | dns | server | certificate
+      - domain                      # domain | dns | server
       - dns
     credentials:
       access_key_id:
@@ -92,7 +91,6 @@ isps:
     type: cloudflare
     services:
       - dns
-      - certificate
     credentials:
       api_token:
         secret: cloudflare_api_token
@@ -120,7 +118,6 @@ isps:
 - `server` - 服务器管理
 - `domain` - 域名管理
 - `dns` - DNS 管理
-- `certificate` - SSL 证书
 
 ---
 
@@ -172,7 +169,9 @@ servers:
     networks:
       - name: yamlops-prod
         type: bridge
+        driver: bridge
     environment:
+      apt_source: aliyun
       registries:
         - dockerhub                  # 引用 registries.yaml
     remark: 主应用服务器
@@ -192,6 +191,7 @@ servers:
 | `ssh.password` | SecretRef | 是 | SSH 密码 |
 | `networks` | []Network | 否 | Docker 网络配置 |
 | `environment.registries` | []string | 否 | Registry 引用列表 |
+| `environment.apt_source` | string | 否 | APT 源 |
 | `remark` | string | 否 | 备注说明 |
 
 ---
@@ -240,29 +240,31 @@ infra_services:
     type: gateway                    # gateway | ssl
     server: prod-server-1            # 引用 servers.yaml
     image: litelake/infra-gate:latest
-    ports:
+    gatewayPorts:
       http: 80
       https: 443
-    config:
+    gatewayConfig:
       source: volumes://infra-gate
       sync: true
-    ssl:
+    gatewaySSL:
       mode: remote                   # local | remote
       endpoint: http://infra-ssl:38567
-    waf:
+    gatewayWAF:
       enabled: true
       whitelist:
         - 192.168.0.0/16
         - 10.0.0.0/8
-    log_level: 1
+    gatewayLogLevel: 1
+    networks:
+      - yamlops-prod
 
   - name: infra-ssl
     type: ssl
     server: prod-server-1
     image: litelake/infra-ssl:latest
-    ports:
+    gatewayPorts:
       api: 38567
-    config:
+    gatewayConfig:
       auth:
         enabled: true
         apikey:
@@ -273,6 +275,8 @@ infra_services:
       defaults:
         issue_provider: letsencrypt_prod
         storage_provider: local_default
+    networks:
+      - yamlops-prod
 ```
 
 **Gateway 类型字段：**
@@ -283,15 +287,16 @@ infra_services:
 | `type` | string | 是 | 必须为 `gateway` |
 | `server` | string | 是 | 部署服务器 |
 | `image` | string | 是 | Docker 镜像 |
-| `ports.http` | int | 是 | HTTP 端口 |
-| `ports.https` | int | 否 | HTTPS 端口 |
-| `config.source` | string | 否 | 配置源路径 |
-| `config.sync` | bool | 否 | 是否同步配置 |
-| `ssl.mode` | string | 否 | SSL 模式（local/remote） |
-| `ssl.endpoint` | string | 条件 | SSL 服务端点（remote 模式必填） |
-| `waf.enabled` | bool | 否 | 启用 WAF |
-| `waf.whitelist` | []string | 否 | IP 白名单（CIDR 格式） |
-| `log_level` | int | 否 | 日志级别 |
+| `gatewayPorts.http` | int | 是 | HTTP 端口 |
+| `gatewayPorts.https` | int | 否 | HTTPS 端口 |
+| `gatewayConfig.source` | string | 否 | 配置源路径 |
+| `gatewayConfig.sync` | bool | 否 | 是否同步配置 |
+| `gatewaySSL.mode` | string | 否 | SSL 模式（local/remote） |
+| `gatewaySSL.endpoint` | string | 条件 | SSL 服务端点（remote 模式必填） |
+| `gatewayWAF.enabled` | bool | 否 | 启用 WAF |
+| `gatewayWAF.whitelist` | []string | 否 | IP 白名单（CIDR 格式） |
+| `gatewayLogLevel` | int | 否 | 日志级别 |
+| `networks` | []string | 否 | 网络列表 |
 
 **SSL 类型字段：**
 
@@ -301,11 +306,12 @@ infra_services:
 | `type` | string | 是 | 必须为 `ssl` |
 | `server` | string | 是 | 部署服务器 |
 | `image` | string | 是 | Docker 镜像 |
-| `ports.api` | int | 是 | API 端口 |
-| `config.auth.enabled` | bool | 否 | 启用认证 |
-| `config.auth.apikey` | SecretRef | 条件 | API 密钥 |
-| `config.storage.type` | string | 否 | 存储类型 |
-| `config.storage.path` | string | 否 | 存储路径 |
+| `gatewayPorts.api` | int | 是 | API 端口 |
+| `gatewayConfig.auth.enabled` | bool | 否 | 启用认证 |
+| `gatewayConfig.auth.apikey` | SecretRef | 条件 | API 密钥 |
+| `gatewayConfig.storage.type` | string | 否 | 存储类型 |
+| `gatewayConfig.storage.path` | string | 否 | 存储路径 |
+| `networks` | []string | 否 | 网络列表 |
 
 ---
 
@@ -328,6 +334,9 @@ services:
       REDIS_URL:
         secret: redis_url
       LOG_LEVEL: info
+    secrets:
+      - db_password
+      - redis_password
     volumes:
       - source: /data/app
         target: /app/data
@@ -344,6 +353,8 @@ services:
         http: true
         https: true
     internal: false
+    networks:
+      - yamlops-prod
 ```
 
 | 字段 | 类型 | 必填 | 描述 |
@@ -351,8 +362,9 @@ services:
 | `name` | string | 是 | 服务名称 |
 | `server` | string | 是 | 部署服务器 |
 | `image` | string | 是 | Docker 镜像 |
-| `ports` | []Port | 是 | 端口映射列表 |
+| `ports` | []Port | 否 | 端口映射列表 |
 | `env` | map | 否 | 环境变量 |
+| `secrets` | []string | 否 | 需要的密钥列表 |
 | `volumes` | []Volume | 否 | 卷挂载 |
 | `healthcheck.path` | string | 否 | 健康检查路径 |
 | `healthcheck.interval` | string | 否 | 检查间隔 |
@@ -361,6 +373,7 @@ services:
 | `resources.memory` | string | 否 | 内存限制 |
 | `gateways` | []Gateway | 否 | 网关路由配置 |
 | `internal` | bool | 否 | 是否仅内部访问 |
+| `networks` | []string | 否 | 网络列表 |
 
 **Port 字段：**
 
@@ -451,32 +464,7 @@ domains:
 
 ---
 
-### 9. certificates.yaml（可选）
-
-定义 SSL 证书配置。
-
-```yaml
-certificates:
-  - name: wildcard-cert
-    domains:
-      - "*.example.com"
-      - "example.com"
-    provider: letsencrypt            # letsencrypt | zerossl
-    dns_provider: cloudflare
-    renew_before: 720h
-```
-
-| 字段 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `name` | string | 是 | 证书名称 |
-| `domains` | []string | 是 | 域名列表（支持通配符） |
-| `provider` | string | 是 | 证书提供商 |
-| `dns_provider` | string | 条件 | DNS 提供商（用于验证） |
-| `renew_before` | string | 否 | 提前续期时间 |
-
----
-
-## 密钥引用规则
+### 6. services_infra.yaml
 
 YAMLOps 支持两种密钥格式：
 
@@ -535,7 +523,6 @@ YAMLOps 按以下顺序加载配置文件：
 6. `services_infra.yaml` - 基础设施服务
 7. `services_biz.yaml` - 业务服务
 8. `dns.yaml` - DNS 配置
-9. `certificates.yaml` - SSL 证书
 
 ---
 

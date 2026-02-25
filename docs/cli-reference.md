@@ -67,11 +67,13 @@ yamlops --env staging --config /path/to/config
 | `↓` / `j` | 下移 |
 | `Space` | 切换选择 |
 | `Enter` | 确认/展开 |
+| `Tab` | 切换视图 |
 | `a` / `n` | 选择/取消当前项 |
 | `A` / `N` | 全选/全不选 |
 | `p` | 生成计划 |
 | `r` | 刷新配置 |
 | `s` | 同步（在服务器检查视图） |
+| `x` | 取消操作 |
 | `Esc` | 返回 |
 | `q` / `Ctrl+C` | 退出 |
 
@@ -187,6 +189,7 @@ yamlops list records -e prod
 | `zones` | 网络区域列表 |
 | `servers` | 服务器列表 |
 | `services` | 业务服务列表 |
+| `infra_services` | 基础设施服务列表 |
 | `registries` | Docker 仓库列表 |
 | `domains` | 域名列表 |
 | `records` / `dns` | DNS 记录列表 |

@@ -4,7 +4,7 @@ Guidelines for AI coding agents working in the YAMLOps codebase.
 
 ## Project Overview
 
-YAMLOps is a Go-based infrastructure operations tool that manages servers, services, DNS, and SSL certificates through YAML configurations. Supports multi-environment (prod/staging/dev) with plan/apply workflow.
+YAMLOps is a Go-based infrastructure operations tool that manages servers, services, DNS, and SSL certificates through YAML configurations. Supports multi-environment (prod/staging/dev/demo) with plan/apply workflow.
 
 - **Go version**: 1.24+
 - **Module path**: `github.com/litelake/yamlops`
@@ -51,13 +51,19 @@ internal/
 ├── application/
 │   ├── handler/                # Change handlers (Strategy Pattern)
 │   ├── usecase/                # Executor, SSHPool
-│   └── deployment/             # Deployment generators (compose, gateway)
+│   ├── deployment/             # Deployment generators (compose, gateway)
+│   ├── plan/                   # Planner coordination
+│   └── orchestrator/           # Workflow orchestration
 ├── infrastructure/
 │   ├── persistence/            # Config loader
 │   ├── ssh/                    # SSH client, SFTP, shell_escape
 │   ├── state/                  # File-based state storage
+│   ├── dns/                    # DNS Factory
 │   ├── secrets/                # SecretResolver
-│   └── logger/                 # Logging infrastructure
+│   ├── logger/                 # Logging infrastructure
+│   ├── network/                # Docker network manager
+│   ├── registry/               # Docker registry manager
+│   └── generator/              # Compose and Gate config generators
 ├── interfaces/cli/             # Cobra commands, BubbleTea TUI
 ├── constants/                  # Shared constants
 ├── environment/                # Environment setup with embedded templates

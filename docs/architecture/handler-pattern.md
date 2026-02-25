@@ -90,8 +90,6 @@ func (e *Executor) registerHandlers() {
     e.registry.Register(NewServerHandler())
     e.registry.Register(NewNoopHandler("isp"))
     e.registry.Register(NewNoopHandler("zone"))
-    e.registry.Register(NewNoopHandler("domain"))
-    e.registry.Register(NewNoopHandler("certificate"))
     e.registry.Register(NewNoopHandler("registry"))
 }
 ```
@@ -303,7 +301,7 @@ func (h *NoopHandler) Apply(ctx context.Context, change *valueobject.Change, dep
 | ServiceHandler | `service` | Docker Compose 服务部署 |
 | InfraServiceHandler | `infra_service` | 基础设施服务部署 (gateway/ssl) |
 | ServerHandler | `server` | 服务器环境同步 |
-| NoopHandler | `isp`/`zone`/`domain`/`certificate`/`registry` | 空操作（非部署实体） |
+| NoopHandler | `isp`/`zone`/`domain`/`registry` | 空操作（非部署实体） |
 
 ---
 
