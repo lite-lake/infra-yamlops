@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/litelake/yamlops/internal/version"
 	"github.com/spf13/cobra"
 )
 
@@ -13,7 +14,7 @@ var (
 	flagShowVersion bool
 )
 
-var Version = "dev"
+var Version = version.Version
 
 func Execute() {
 	ctx := NewContext()

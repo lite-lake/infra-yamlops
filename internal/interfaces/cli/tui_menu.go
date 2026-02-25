@@ -3,6 +3,8 @@ package cli
 import (
 	"fmt"
 	"strings"
+
+	"github.com/litelake/yamlops/internal/version"
 )
 
 func (m Model) renderMainMenu() string {
@@ -34,6 +36,7 @@ func (m Model) renderMainMenu() string {
 	}
 
 	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Enter select  q quit"))
+	sb.WriteString("\n" + HelpStyle.Render(fmt.Sprintf("  v%s", version.Version)))
 
 	return BaseStyle.Render(sb.String())
 }
