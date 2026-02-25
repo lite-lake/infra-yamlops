@@ -20,7 +20,7 @@ func (h *ServiceHealthcheck) Validate() error {
 		return domain.RequiredField("healthcheck path")
 	}
 	if !strings.HasPrefix(h.Path, "/") {
-		return fmt.Errorf("%w: healthcheck path must start with /", domain.ErrInvalidDomain)
+		return fmt.Errorf("%w: healthcheck path must start with /", domain.ErrInvalidPath)
 	}
 	return nil
 }
@@ -41,7 +41,7 @@ func (v *ServiceVolume) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	if err := unmarshal(&short); err == nil {
 		parts := strings.SplitN(short, ":", 2)
 		if len(parts) != 2 {
-			return fmt.Errorf("%w: invalid volume format, expected source:target", domain.ErrInvalidDomain)
+			return fmt.Errorf("%w: invalid volume format, expected source:target", domain.ErrInvalidFormat)
 		}
 		v.Source = parts[0]
 		v.Target = parts[1]

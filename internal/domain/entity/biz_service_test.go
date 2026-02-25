@@ -22,7 +22,7 @@ func TestServiceHealthcheck_Validate(t *testing.T) {
 		{
 			name:        "path without leading slash",
 			healthcheck: ServiceHealthcheck{Path: "health"},
-			wantErr:     domain.ErrInvalidDomain,
+			wantErr:     domain.ErrInvalidPath,
 		},
 		{
 			name:        "valid",
@@ -256,7 +256,7 @@ func TestBizService_Validate(t *testing.T) {
 				Image:       "app:latest",
 				Healthcheck: &ServiceHealthcheck{Path: "invalid"},
 			},
-			wantErr: domain.ErrInvalidDomain,
+			wantErr: domain.ErrInvalidPath,
 		},
 		{
 			name: "invalid volume",

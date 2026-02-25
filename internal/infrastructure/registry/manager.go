@@ -7,8 +7,8 @@ import (
 	"sync"
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/litelake/yamlops/internal/domain/contract"
 	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/interfaces"
 )
 
 func shellEscape(s string) string {
@@ -24,13 +24,13 @@ type LoginResult struct {
 
 type Manager struct {
 	mu         sync.RWMutex
-	client     interfaces.SSHRunner
+	client     contract.SSHRunner
 	registries map[string]*entity.Registry
 	secrets    map[string]string
 	loggedIn   map[string]bool
 }
 
-func NewManager(client interfaces.SSHRunner, registries []*entity.Registry, secrets map[string]string) *Manager {
+func NewManager(client contract.SSHRunner, registries []*entity.Registry, secrets map[string]string) *Manager {
 	m := &Manager{
 		client:     client,
 		registries: make(map[string]*entity.Registry),

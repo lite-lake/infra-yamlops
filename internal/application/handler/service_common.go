@@ -7,8 +7,8 @@ import (
 
 	"github.com/litelake/yamlops/internal/constants"
 	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/litelake/yamlops/internal/domain/contract"
 	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/network"
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
@@ -57,7 +57,7 @@ func GetRequiredNetworks(change *valueobject.Change, deps DepsProvider, serverNa
 	return requiredNetworks, nil
 }
 
-func EnsureNetworks(client interfaces.SSHRunner, networks []entity.ServerNetwork) error {
+func EnsureNetworks(client contract.SSHRunner, networks []entity.ServerNetwork) error {
 	if len(networks) == 0 {
 		return nil
 	}
@@ -70,7 +70,7 @@ func EnsureNetworks(client interfaces.SSHRunner, networks []entity.ServerNetwork
 	return nil
 }
 
-func DeleteServiceRemote(change *valueobject.Change, client interfaces.SSHRunner, remoteDir string) (*Result, error) {
+func DeleteServiceRemote(change *valueobject.Change, client contract.SSHRunner, remoteDir string) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
 	escapedDir := ssh.ShellEscape(remoteDir)
@@ -107,7 +107,7 @@ type DeployComposeConfig struct {
 	RestartAfterUp bool
 }
 
-func DeployComposeFile(client interfaces.SSHClient, cfg *DeployComposeConfig, result *Result) bool {
+func DeployComposeFile(client contract.SSHClient, cfg *DeployComposeConfig, result *Result) bool {
 	if cfg.ComposeFile == "" {
 		return true
 	}
@@ -172,13 +172,13 @@ func GetRemoteDir(deps DepsProvider, serviceName string) string {
 	return fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, deps.Env(), serviceName))
 }
 
-func EnsureRemoteDir(client interfaces.SSHClient, remoteDir string) error {
+func EnsureRemoteDir(client contract.SSHClient, remoteDir string) error {
 	return client.MkdirAllSudoWithPerm(remoteDir, "755")
 }
 
 type ServiceDeployContext struct {
 	ServerName string
-	Client     interfaces.SSHClient
+	Client     contract.SSHClient
 	RemoteDir  string
 }
 

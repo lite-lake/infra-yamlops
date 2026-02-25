@@ -193,6 +193,20 @@ func (v *Validator) validatePortConflicts() error {
 			}
 			serverPorts[key][infra.SSLConfig.Ports.API] = infra.Name
 		}
+		if infra.GatewayPorts != nil {
+			if infra.GatewayPorts.HTTP > 0 {
+				if existing, ok := serverPorts[key][infra.GatewayPorts.HTTP]; ok {
+					return fmt.Errorf("%w: gateway http port %d on server '%s' is used by both '%s' and '%s'", domain.ErrPortConflict, infra.GatewayPorts.HTTP, infra.Server, existing, infra.Name)
+				}
+				serverPorts[key][infra.GatewayPorts.HTTP] = infra.Name
+			}
+			if infra.GatewayPorts.HTTPS > 0 {
+				if existing, ok := serverPorts[key][infra.GatewayPorts.HTTPS]; ok {
+					return fmt.Errorf("%w: gateway https port %d on server '%s' is used by both '%s' and '%s'", domain.ErrPortConflict, infra.GatewayPorts.HTTPS, infra.Server, existing, infra.Name)
+				}
+				serverPorts[key][infra.GatewayPorts.HTTPS] = infra.Name
+			}
+		}
 	}
 
 	for _, service := range v.cfg.Services {

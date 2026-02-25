@@ -15,7 +15,7 @@ type TencentProvider struct {
 	client *dnspod.Client
 }
 
-func NewTencentProvider(secretID, secretKey string) (*TencentProvider, error) {
+func NewTencentProvider(secretID, secretKey string) (Provider, error) {
 	credential := common.NewCredential(secretID, secretKey)
 	cpf := profile.NewClientProfile()
 	cpf.HttpProfile.Endpoint = "dnspod.tencentcloudapi.com"
@@ -137,7 +137,7 @@ func (p *TencentProvider) ListDomains(ctx context.Context) ([]string, error) {
 	return domains, nil
 }
 
-func (p *TencentProvider) GetRecordsByType(domain string, recordType string) ([]DNSRecord, error) {
+func (p *TencentProvider) GetRecordsByTypes(ctx context.Context, domain string, recordType string) ([]DNSRecord, error) {
 	req := dnspod.NewDescribeRecordListRequest()
 	req.Domain = common.StringPtr(domain)
 	req.RecordType = common.StringPtr(recordType)

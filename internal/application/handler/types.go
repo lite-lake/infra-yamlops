@@ -4,8 +4,8 @@ import (
 	"context"
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/litelake/yamlops/internal/domain/contract"
 	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/dns"
 	"github.com/litelake/yamlops/internal/infrastructure/registry"
@@ -13,13 +13,13 @@ import (
 )
 
 type DNSDeps interface {
-	DNSProvider(ispName string) (DNSProvider, error)
+	DNSProvider(ispName string) (contract.DNSProvider, error)
 	Domain(name string) (*entity.Domain, bool)
 	ISP(name string) (*entity.ISP, bool)
 }
 
 type ServiceDeps interface {
-	SSHClient(server string) (interfaces.SSHClient, error)
+	SSHClient(server string) (contract.SSHClient, error)
 	ServerInfo(name string) (*ServerInfo, bool)
 	Server(name string) (*entity.Server, bool)
 	WorkDir() string
@@ -49,7 +49,7 @@ type Handler interface {
 }
 
 type BaseDeps struct {
-	sshClient      interfaces.SSHClient
+	sshClient      contract.SSHClient
 	sshError       error
 	dnsFactory     DNSFactory
 	secrets        map[string]string
@@ -64,7 +64,7 @@ type BaseDeps struct {
 
 type BaseDepsOption func(*BaseDeps)
 
-func WithSSHClient(client interfaces.SSHClient, err error) BaseDepsOption {
+func WithSSHClient(client contract.SSHClient, err error) BaseDepsOption {
 	return func(d *BaseDeps) {
 		d.sshClient = client
 		d.sshError = err
@@ -122,7 +122,7 @@ func NewBaseDeps(opts ...BaseDepsOption) *BaseDeps {
 	return d
 }
 
-func (d *BaseDeps) SetSSHClient(client interfaces.SSHClient, err error) {
+func (d *BaseDeps) SetSSHClient(client contract.SSHClient, err error) {
 	d.sshClient = client
 	d.sshError = err
 }
@@ -162,7 +162,6 @@ func (d *BaseDeps) RegistryManager(server string) (*registry.Manager, error) {
 		return nil, domainerr.ErrSSHClientNotAvailable
 	}
 
-	// Convert map to slice
 	var registryList []*entity.Registry
 	for _, r := range d.registries {
 		registryList = append(registryList, r)
@@ -171,7 +170,7 @@ func (d *BaseDeps) RegistryManager(server string) (*registry.Manager, error) {
 	return registry.NewManager(d.sshClient, registryList, d.secrets), nil
 }
 
-func (d *BaseDeps) DNSProvider(ispName string) (DNSProvider, error) {
+func (d *BaseDeps) DNSProvider(ispName string) (contract.DNSProvider, error) {
 	isp, ok := d.isps[ispName]
 	if !ok {
 		return nil, domainerr.ErrISPNotFound
@@ -183,7 +182,7 @@ func (d *BaseDeps) DNSProvider(ispName string) (DNSProvider, error) {
 	if err != nil {
 		return nil, err
 	}
-	return WrapDNSProvider(provider), nil
+	return provider, nil
 }
 
 func (d *BaseDeps) Domain(name string) (*entity.Domain, bool) {
@@ -196,7 +195,7 @@ func (d *BaseDeps) ISP(name string) (*entity.ISP, bool) {
 	return isp, ok
 }
 
-func (d *BaseDeps) SSHClient(server string) (interfaces.SSHClient, error) {
+func (d *BaseDeps) SSHClient(server string) (contract.SSHClient, error) {
 	if _, ok := d.servers[server]; !ok {
 		return nil, domainerr.ErrServerNotRegistered
 	}
@@ -226,9 +225,9 @@ func (d *BaseDeps) ResolveSecret(ref *valueobject.SecretRef) (string, error) {
 	return ref.Resolve(d.secrets)
 }
 
-func (d *BaseDeps) RawSSHClient() interfaces.SSHClient { return d.sshClient }
-func (d *BaseDeps) RawSSHError() error                 { return d.sshError }
-func (d *BaseDeps) Secrets() map[string]string         { return d.secrets }
+func (d *BaseDeps) RawSSHClient() contract.SSHClient { return d.sshClient }
+func (d *BaseDeps) RawSSHError() error               { return d.sshError }
+func (d *BaseDeps) Secrets() map[string]string       { return d.secrets }
 
 type ServerInfo struct {
 	Host     string
@@ -237,51 +236,8 @@ type ServerInfo struct {
 	Password string
 }
 
-type Result struct {
-	Change   *valueobject.Change
-	Success  bool
-	Error    error
-	Output   string
-	Warnings []string
-}
-
-type DNSProvider interface {
-	Name() string
-	ListRecords(ctx context.Context, domain string) ([]dns.DNSRecord, error)
-	CreateRecord(ctx context.Context, domain string, record *dns.DNSRecord) error
-	DeleteRecord(ctx context.Context, domain string, recordID string) error
-	UpdateRecord(ctx context.Context, domain string, recordID string, record *dns.DNSRecord) error
-}
+type Result = contract.Result
 
 var (
-	_ interfaces.SSHClient = (*ssh.Client)(nil)
-	_ DNSProvider          = (*dnsAdapter)(nil)
+	_ contract.SSHClient = (*ssh.Client)(nil)
 )
-
-type dnsAdapter struct {
-	provider dns.Provider
-}
-
-func (a *dnsAdapter) Name() string {
-	return a.provider.Name()
-}
-
-func (a *dnsAdapter) ListRecords(ctx context.Context, domain string) ([]dns.DNSRecord, error) {
-	return a.provider.ListRecords(ctx, domain)
-}
-
-func (a *dnsAdapter) CreateRecord(ctx context.Context, domain string, record *dns.DNSRecord) error {
-	return a.provider.CreateRecord(ctx, domain, record)
-}
-
-func (a *dnsAdapter) DeleteRecord(ctx context.Context, domain string, recordID string) error {
-	return a.provider.DeleteRecord(ctx, domain, recordID)
-}
-
-func (a *dnsAdapter) UpdateRecord(ctx context.Context, domain string, recordID string, record *dns.DNSRecord) error {
-	return a.provider.UpdateRecord(ctx, domain, recordID, record)
-}
-
-func WrapDNSProvider(p dns.Provider) DNSProvider {
-	return &dnsAdapter{provider: p}
-}

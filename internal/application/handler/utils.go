@@ -6,7 +6,7 @@ import (
 
 	"github.com/litelake/yamlops/internal/constants"
 	domainerr "github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/domain/interfaces"
+	"github.com/litelake/yamlops/internal/domain/contract"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
@@ -36,7 +36,7 @@ func ExtractServerFromChange(ch *valueobject.Change) string {
 	return ""
 }
 
-func SyncContent(client interfaces.SSHClient, content, remotePath string) error {
+func SyncContent(client contract.SSHClient, content, remotePath string) error {
 	tmpFile, err := os.CreateTemp("", constants.TempFilePattern)
 	if err != nil {
 		return fmt.Errorf("syncing to %s: %w: %w", remotePath, domainerr.ErrTempFileFailed, err)

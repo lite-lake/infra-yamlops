@@ -290,6 +290,38 @@ func TestValidator_PortConflicts(t *testing.T) {
 			t.Errorf("expected port conflict error between infra and service, got %v", err)
 		}
 	})
+
+	t.Run("gateway http port conflict", func(t *testing.T) {
+		cfg := &entity.Config{
+			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
+			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
+			InfraServices: []entity.InfraService{
+				{Name: "gw1", Type: entity.InfraServiceTypeGateway, Server: "server1", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
+				{Name: "gw2", Type: entity.InfraServiceTypeGateway, Server: "server1", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 8443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
+			},
+		}
+		validator := NewValidator(cfg)
+		err := validator.Validate()
+		if err == nil || !strings.Contains(err.Error(), "gateway http port") {
+			t.Errorf("expected gateway http port conflict error, got %v", err)
+		}
+	})
+
+	t.Run("gateway https port conflict", func(t *testing.T) {
+		cfg := &entity.Config{
+			Zones:   []entity.Zone{{Name: "zone1", Region: "us-east-1"}},
+			Servers: []entity.Server{{Name: "server1", Zone: "zone1", SSH: entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")}}},
+			InfraServices: []entity.InfraService{
+				{Name: "gw1", Type: entity.InfraServiceTypeGateway, Server: "server1", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 80, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
+				{Name: "gw2", Type: entity.InfraServiceTypeGateway, Server: "server1", Image: "nginx", GatewayPorts: &entity.GatewayPorts{HTTP: 8080, HTTPS: 443}, GatewayConfig: &entity.GatewayConfig{Source: "test", Sync: true}},
+			},
+		}
+		validator := NewValidator(cfg)
+		err := validator.Validate()
+		if err == nil || !strings.Contains(err.Error(), "gateway https port") {
+			t.Errorf("expected gateway https port conflict error, got %v", err)
+		}
+	})
 }
 
 func TestValidator_HostnameConflicts(t *testing.T) {

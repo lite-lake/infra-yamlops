@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/litelake/yamlops/internal/domain/contract"
 	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
 )
 
@@ -18,10 +18,10 @@ type NetworkInfo struct {
 }
 
 type Manager struct {
-	client interfaces.SSHRunner
+	client contract.SSHRunner
 }
 
-func NewManager(client interfaces.SSHRunner) *Manager {
+func NewManager(client contract.SSHRunner) *Manager {
 	return &Manager{client: client}
 }
 

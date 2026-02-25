@@ -6,42 +6,45 @@ import (
 	"testing"
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/litelake/yamlops/internal/domain/contract"
 	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
-	"github.com/litelake/yamlops/internal/infrastructure/dns"
 	"github.com/litelake/yamlops/internal/infrastructure/registry"
 )
 
 type mockDNSProvider struct {
 	name    string
-	records []dns.DNSRecord
+	records []contract.DNSRecord
 	err     error
 	deleted []string
-	updated map[string]*dns.DNSRecord
-	created []*dns.DNSRecord
+	updated map[string]*contract.DNSRecord
+	created []*contract.DNSRecord
 }
 
 func newMockDNSProvider(name string) *mockDNSProvider {
 	return &mockDNSProvider{
 		name:    name,
-		records: []dns.DNSRecord{},
+		records: []contract.DNSRecord{},
 		deleted: []string{},
-		updated: make(map[string]*dns.DNSRecord),
-		created: []*dns.DNSRecord{},
+		updated: make(map[string]*contract.DNSRecord),
+		created: []*contract.DNSRecord{},
 	}
 }
 
 func (m *mockDNSProvider) Name() string { return m.name }
 
-func (m *mockDNSProvider) ListRecords(ctx context.Context, domain string) ([]dns.DNSRecord, error) {
+func (m *mockDNSProvider) ListDomains(ctx context.Context) ([]string, error) {
+	return nil, nil
+}
+
+func (m *mockDNSProvider) ListRecords(ctx context.Context, domain string) ([]contract.DNSRecord, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
 	return m.records, nil
 }
 
-func (m *mockDNSProvider) CreateRecord(ctx context.Context, domain string, record *dns.DNSRecord) error {
+func (m *mockDNSProvider) CreateRecord(ctx context.Context, domain string, record *contract.DNSRecord) error {
 	if m.err != nil {
 		return m.err
 	}
@@ -57,11 +60,27 @@ func (m *mockDNSProvider) DeleteRecord(ctx context.Context, domain string, recor
 	return nil
 }
 
-func (m *mockDNSProvider) UpdateRecord(ctx context.Context, domain string, recordID string, record *dns.DNSRecord) error {
+func (m *mockDNSProvider) UpdateRecord(ctx context.Context, domain string, recordID string, record *contract.DNSRecord) error {
 	if m.err != nil {
 		return m.err
 	}
 	m.updated[recordID] = record
+	return nil
+}
+
+func (m *mockDNSProvider) GetRecordsByTypes(ctx context.Context, domain, recordType string) ([]contract.DNSRecord, error) {
+	return nil, nil
+}
+
+func (m *mockDNSProvider) BatchCreateRecords(ctx context.Context, domain string, records []*contract.DNSRecord) error {
+	return nil
+}
+
+func (m *mockDNSProvider) BatchDeleteRecords(ctx context.Context, domain string, recordIDs []string) error {
+	return nil
+}
+
+func (m *mockDNSProvider) EnsureRecord(ctx context.Context, domain string, record *contract.DNSRecord) error {
 	return nil
 }
 
@@ -106,9 +125,9 @@ func (m *mockSSHClient) Close() error {
 }
 
 type mockDeps struct {
-	dnsProvider    DNSProvider
+	dnsProvider    contract.DNSProvider
 	dnsErr         error
-	sshClient      interfaces.SSHClient
+	sshClient      contract.SSHClient
 	sshErr         error
 	domains        map[string]*entity.Domain
 	isps           map[string]*entity.ISP
@@ -129,7 +148,7 @@ func newMockDeps() *mockDeps {
 	}
 }
 
-func (m *mockDeps) DNSProvider(ispName string) (DNSProvider, error) {
+func (m *mockDeps) DNSProvider(ispName string) (contract.DNSProvider, error) {
 	if m.dnsErr != nil {
 		return nil, m.dnsErr
 	}
@@ -146,7 +165,7 @@ func (m *mockDeps) ISP(name string) (*entity.ISP, bool) {
 	return isp, ok
 }
 
-func (m *mockDeps) SSHClient(server string) (interfaces.SSHClient, error) {
+func (m *mockDeps) SSHClient(server string) (contract.SSHClient, error) {
 	if _, ok := m.servers[server]; !ok {
 		return nil, domainerr.ErrServerNotRegistered
 	}
@@ -243,7 +262,7 @@ func TestDNSHandler_Apply_DeleteRecord(t *testing.T) {
 	ctx := context.Background()
 
 	mockProvider := newMockDNSProvider("mock")
-	mockProvider.records = []dns.DNSRecord{
+	mockProvider.records = []contract.DNSRecord{
 		{ID: "rec-123", Name: "www", Type: "A", Value: "192.168.1.1", TTL: 300},
 	}
 	deps := newMockDeps()
@@ -276,7 +295,7 @@ func TestDNSHandler_Apply_DeleteRecord_NotFound(t *testing.T) {
 	ctx := context.Background()
 
 	mockProvider := newMockDNSProvider("mock")
-	mockProvider.records = []dns.DNSRecord{}
+	mockProvider.records = []contract.DNSRecord{}
 	deps := newMockDeps()
 	deps.dnsProvider = mockProvider
 	deps.domains["example.com"] = &entity.Domain{Name: "example.com", DNSISP: "test-isp"}
@@ -304,7 +323,7 @@ func TestDNSHandler_Apply_UpdateRecord(t *testing.T) {
 	ctx := context.Background()
 
 	mockProvider := newMockDNSProvider("mock")
-	mockProvider.records = []dns.DNSRecord{
+	mockProvider.records = []contract.DNSRecord{
 		{ID: "rec-123", Name: "www", Type: "A", Value: "192.168.1.1", TTL: 300},
 	}
 	deps := newMockDeps()

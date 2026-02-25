@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/litelake/yamlops/internal/application/handler"
-	"github.com/litelake/yamlops/internal/domain/interfaces"
+	"github.com/litelake/yamlops/internal/domain/contract"
 )
 
 type mockSSHClient struct {
@@ -72,7 +72,7 @@ func TestSSHPool_Concurrency(t *testing.T) {
 }
 
 func TestSSHPool_GetWithFactory(t *testing.T) {
-	pool := NewSSHPoolWithFactory(func(info *handler.ServerInfo) (interfaces.SSHClient, error) {
+	pool := NewSSHPoolWithFactory(func(info *handler.ServerInfo) (contract.SSHClient, error) {
 		return &mockSSHClient{}, nil
 	})
 

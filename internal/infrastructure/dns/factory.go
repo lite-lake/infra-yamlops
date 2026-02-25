@@ -62,7 +62,7 @@ func createCloudflare(isp *entity.ISP, secrets map[string]string) (Provider, err
 			return nil, fmt.Errorf("resolve account_id: %w", err)
 		}
 	}
-	return NewCloudflareProvider(apiToken, accountID), nil
+	return NewCloudflareProvider(apiToken, accountID)
 }
 
 func createAliyun(isp *entity.ISP, secrets map[string]string) (Provider, error) {

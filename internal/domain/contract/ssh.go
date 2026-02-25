@@ -1,4 +1,4 @@
-package interfaces
+package contract
 
 type SSHRunner interface {
 	Run(cmd string) (stdout, stderr string, err error)

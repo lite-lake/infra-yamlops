@@ -16,11 +16,11 @@ type CloudflareProvider struct {
 	accountID string
 }
 
-func NewCloudflareProvider(apiToken string, accountID string) Provider {
+func NewCloudflareProvider(apiToken string, accountID string) (Provider, error) {
 	client := cloudflare.NewClient(
 		option.WithAPIToken(apiToken),
 	)
-	return &CloudflareProvider{client: client, accountID: accountID}
+	return &CloudflareProvider{client: client, accountID: accountID}, nil
 }
 
 func (p *CloudflareProvider) Name() string {
@@ -245,7 +245,7 @@ func (p *CloudflareProvider) ListDomains(ctx context.Context) ([]string, error) 
 	return zoneNames, nil
 }
 
-func (p *CloudflareProvider) GetRecordsByType(ctx context.Context, domainName string, recordType string) ([]DNSRecord, error) {
+func (p *CloudflareProvider) GetRecordsByTypes(ctx context.Context, domainName string, recordType string) ([]DNSRecord, error) {
 	zoneID, err := p.getZoneID(ctx, domainName)
 	if err != nil {
 		return nil, err

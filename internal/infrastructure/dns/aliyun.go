@@ -14,7 +14,7 @@ type AliyunProvider struct {
 	client *alidns.Client
 }
 
-func NewAliyunProvider(accessKeyID, accessKeySecret string) (*AliyunProvider, error) {
+func NewAliyunProvider(accessKeyID, accessKeySecret string) (Provider, error) {
 	config := &openapi.Config{
 		AccessKeyId:     tea.String(accessKeyID),
 		AccessKeySecret: tea.String(accessKeySecret),
@@ -129,7 +129,7 @@ func (p *AliyunProvider) ListDomains(ctx context.Context) ([]string, error) {
 	return domains, nil
 }
 
-func (p *AliyunProvider) GetRecordsByType(domainName string, recordType string) ([]DNSRecord, error) {
+func (p *AliyunProvider) GetRecordsByTypes(ctx context.Context, domainName string, recordType string) ([]DNSRecord, error) {
 	req := &alidns.DescribeDomainRecordsRequest{
 		DomainName: tea.String(domainName),
 		Type:       tea.String(recordType),

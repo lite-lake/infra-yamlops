@@ -16,6 +16,8 @@ var (
 	ErrInvalidTTL           = errors.New("invalid TTL")
 	ErrInvalidDuration      = errors.New("invalid duration")
 	ErrInvalidType          = errors.New("invalid type")
+	ErrInvalidPath          = errors.New("invalid path")
+	ErrInvalidFormat        = errors.New("invalid format")
 	ErrEmptyValue           = errors.New("empty value")
 	ErrRequired             = errors.New("required field missing")
 	ErrMissingSecret        = errors.New("missing secret reference")

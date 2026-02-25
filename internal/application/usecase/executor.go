@@ -2,8 +2,8 @@ package usecase
 
 import (
 	"github.com/litelake/yamlops/internal/application/handler"
+	"github.com/litelake/yamlops/internal/domain/contract"
 	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	infra "github.com/litelake/yamlops/internal/infrastructure/dns"
 )
@@ -14,7 +14,7 @@ type RegistryInterface interface {
 }
 
 type SSHPoolInterface interface {
-	Get(info *handler.ServerInfo) (interfaces.SSHClient, error)
+	Get(info *handler.ServerInfo) (contract.SSHClient, error)
 	CloseAll()
 }
 

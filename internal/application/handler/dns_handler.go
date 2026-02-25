@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/litelake/yamlops/internal/domain/contract"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
-	"github.com/litelake/yamlops/internal/infrastructure/dns"
 )
 
 type DNSHandler struct{}
@@ -66,10 +66,10 @@ func (h *DNSHandler) extractDNSRecordFromChange(ch *valueobject.Change) (*entity
 	return nil, fmt.Errorf("cannot extract DNS record from change")
 }
 
-func (h *DNSHandler) createRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider DNSProvider) (*Result, error) {
+func (h *DNSHandler) createRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider contract.DNSProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
-	dnsRecord := &dns.DNSRecord{
+	dnsRecord := &contract.DNSRecord{
 		Name:  record.Name,
 		Type:  string(record.Type),
 		Value: record.Value,
@@ -86,7 +86,7 @@ func (h *DNSHandler) createRecord(ctx context.Context, change *valueobject.Chang
 	return result, nil
 }
 
-func (h *DNSHandler) updateRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider DNSProvider) (*Result, error) {
+func (h *DNSHandler) updateRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider contract.DNSProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
 	existingRecords, err := provider.ListRecords(ctx, record.Domain)
@@ -95,7 +95,7 @@ func (h *DNSHandler) updateRecord(ctx context.Context, change *valueobject.Chang
 		return result, nil
 	}
 
-	dnsRecord := &dns.DNSRecord{
+	dnsRecord := &contract.DNSRecord{
 		Name:  record.Name,
 		Type:  string(record.Type),
 		Value: record.Value,
@@ -124,7 +124,7 @@ func (h *DNSHandler) updateRecord(ctx context.Context, change *valueobject.Chang
 	return result, nil
 }
 
-func (h *DNSHandler) deleteRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider DNSProvider) (*Result, error) {
+func (h *DNSHandler) deleteRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider contract.DNSProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
 	existingRecords, err := provider.ListRecords(ctx, record.Domain)

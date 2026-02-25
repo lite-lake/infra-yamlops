@@ -44,19 +44,35 @@ func (g *Generator) generateGatewayConfigs(config *entity.Config) error {
 }
 
 func (g *Generator) buildGatewayRoutes(gw *entity.InfraService, config *entity.Config) *gatewayRouteResult {
-	serverMap := config.GetServerMap()
-	var hosts []gate.HostRoute
+	hosts := g.collectHostRoutes(gw, config)
+	gatewayConfig := g.buildGatewayConfig(gw)
 
+	return &gatewayRouteResult{
+		hosts:         hosts,
+		gatewayConfig: gatewayConfig,
+		httpPort:      gatewayConfig.Port,
+		httpsPort:     constants.DefaultHTTPSPort,
+	}
+}
+
+func (g *Generator) buildContainerPortMap(config *entity.Config, serverName string) map[string]int {
 	containerPortToHostPort := make(map[string]int)
 	for _, svc := range config.Services {
-		if svc.Server == gw.Server {
+		if svc.Server == serverName {
 			for _, port := range svc.Ports {
 				key := fmt.Sprintf("%s:%d", svc.Name, port.Container)
 				containerPortToHostPort[key] = port.Host
 			}
 		}
 	}
+	return containerPortToHostPort
+}
 
+func (g *Generator) collectHostRoutes(gw *entity.InfraService, config *entity.Config) []gate.HostRoute {
+	serverMap := config.GetServerMap()
+	containerPortToHostPort := g.buildContainerPortMap(config, gw.Server)
+
+	var hosts []gate.HostRoute
 	for _, svc := range config.Services {
 		if svc.Server != gw.Server {
 			continue
@@ -65,63 +81,80 @@ func (g *Generator) buildGatewayRoutes(gw *entity.InfraService, config *entity.C
 			if !route.HasGateway() {
 				continue
 			}
-
-			var backendIP string
-			if server, ok := serverMap[svc.Server]; ok && server.IP.Private != "" {
-				backendIP = server.IP.Private
-			} else {
-				backendIP = constants.HostDockerInternal
-			}
-
-			hostPort := route.ContainerPort
-			if key := fmt.Sprintf("%s:%d", svc.Name, route.ContainerPort); containerPortToHostPort[key] > 0 {
-				hostPort = containerPortToHostPort[key]
-			}
-			backend := fmt.Sprintf("http://%s:%d", backendIP, hostPort)
-
-			hostname := route.Hostname
-			if hostname == "" {
-				hostname = svc.Name
-			}
-
-			healthPath := "/"
-			if svc.Healthcheck != nil && svc.Healthcheck.Path != "" {
-				healthPath = svc.Healthcheck.Path
-			}
-
-			sslPort := 0
-			if route.HTTPS && gw.GatewayPorts != nil {
-				sslPort = gw.GatewayPorts.HTTPS
-			}
-
-			healthInterval := constants.DefaultHealthInterval
-			healthTimeout := constants.DefaultHealthTimeout
-			if svc.Healthcheck != nil {
-				if svc.Healthcheck.Interval != "" {
-					healthInterval = svc.Healthcheck.Interval
-				}
-				if svc.Healthcheck.Timeout != "" {
-					healthTimeout = svc.Healthcheck.Timeout
-				}
-			}
-
-			httpPort := constants.DefaultHTTPPort
-			if gw.GatewayPorts != nil {
-				httpPort = gw.GatewayPorts.HTTP
-			}
-
-			hosts = append(hosts, gate.HostRoute{
-				Name:                hostname,
-				Port:                httpPort,
-				SSLPort:             sslPort,
-				Backend:             []string{backend},
-				HealthCheck:         healthPath,
-				HealthCheckInterval: healthInterval,
-				HealthCheckTimeout:  healthTimeout,
-			})
+			hosts = append(hosts, g.buildHostRoute(&svc, &route, serverMap, containerPortToHostPort, gw))
 		}
 	}
+	return hosts
+}
 
+func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.ServiceGatewayRoute, serverMap map[string]*entity.Server, containerPortToHostPort map[string]int, gw *entity.InfraService) gate.HostRoute {
+	backendIP := g.resolveBackendIP(svc.Server, serverMap)
+	hostPort := g.resolveHostPort(svc.Name, route.ContainerPort, containerPortToHostPort)
+	backend := fmt.Sprintf("http://%s:%d", backendIP, hostPort)
+
+	hostname := route.Hostname
+	if hostname == "" {
+		hostname = svc.Name
+	}
+
+	healthPath := "/"
+	if svc.Healthcheck != nil && svc.Healthcheck.Path != "" {
+		healthPath = svc.Healthcheck.Path
+	}
+
+	sslPort := 0
+	if route.HTTPS && gw.GatewayPorts != nil {
+		sslPort = gw.GatewayPorts.HTTPS
+	}
+
+	healthInterval, healthTimeout := g.buildHealthCheckConfig(svc)
+
+	httpPort := constants.DefaultHTTPPort
+	if gw.GatewayPorts != nil {
+		httpPort = gw.GatewayPorts.HTTP
+	}
+
+	return gate.HostRoute{
+		Name:                hostname,
+		Port:                httpPort,
+		SSLPort:             sslPort,
+		Backend:             []string{backend},
+		HealthCheck:         healthPath,
+		HealthCheckInterval: healthInterval,
+		HealthCheckTimeout:  healthTimeout,
+	}
+}
+
+func (g *Generator) resolveBackendIP(serverName string, serverMap map[string]*entity.Server) string {
+	if server, ok := serverMap[serverName]; ok && server.IP.Private != "" {
+		return server.IP.Private
+	}
+	return constants.HostDockerInternal
+}
+
+func (g *Generator) resolveHostPort(svcName string, containerPort int, containerPortToHostPort map[string]int) int {
+	key := fmt.Sprintf("%s:%d", svcName, containerPort)
+	if hostPort := containerPortToHostPort[key]; hostPort > 0 {
+		return hostPort
+	}
+	return containerPort
+}
+
+func (g *Generator) buildHealthCheckConfig(svc *entity.BizService) (string, string) {
+	healthInterval := constants.DefaultHealthInterval
+	healthTimeout := constants.DefaultHealthTimeout
+	if svc.Healthcheck != nil {
+		if svc.Healthcheck.Interval != "" {
+			healthInterval = svc.Healthcheck.Interval
+		}
+		if svc.Healthcheck.Timeout != "" {
+			healthTimeout = svc.Healthcheck.Timeout
+		}
+	}
+	return healthInterval, healthTimeout
+}
+
+func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayConfig {
 	wafEnabled := false
 	var whitelist []string
 	sslMode := ""
@@ -137,13 +170,11 @@ func (g *Generator) buildGatewayRoutes(gw *entity.InfraService, config *entity.C
 	}
 
 	httpPort := constants.DefaultHTTPPort
-	httpsPort := constants.DefaultHTTPSPort
 	if gw.GatewayPorts != nil {
 		httpPort = gw.GatewayPorts.HTTP
-		httpsPort = gw.GatewayPorts.HTTPS
 	}
 
-	gatewayConfig := &gate.GatewayConfig{
+	return &gate.GatewayConfig{
 		Port:               httpPort,
 		LogLevel:           gw.GatewayLogLevel,
 		WAFEnabled:         wafEnabled,
@@ -152,13 +183,6 @@ func (g *Generator) buildGatewayRoutes(gw *entity.InfraService, config *entity.C
 		SSLEndpoint:        sslEndpoint,
 		SSLAutoUpdate:      true,
 		SSLUpdateCheckTime: "00:00-00:59",
-	}
-
-	return &gatewayRouteResult{
-		hosts:         hosts,
-		gatewayConfig: gatewayConfig,
-		httpPort:      httpPort,
-		httpsPort:     httpsPort,
 	}
 }
 
