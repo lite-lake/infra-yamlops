@@ -101,6 +101,7 @@ func GetComposeFilePath(ch *valueobject.Change, deps DepsProvider) string {
 type DeployComposeConfig struct {
 	RemoteDir      string
 	ComposeFile    string
+	EnvFile        string
 	Env            string
 	ServiceName    string
 	RestartAfterUp bool
@@ -115,6 +116,7 @@ func DeployComposeFile(client interfaces.SSHClient, cfg *DeployComposeConfig, re
 		return true
 	}
 
+	// Upload compose file
 	content, err := os.ReadFile(cfg.ComposeFile)
 	if err != nil {
 		result.Error = fmt.Errorf("%w: compose file %s: %w", domainerr.ErrFileReadFailed, cfg.ComposeFile, err)
@@ -123,6 +125,23 @@ func DeployComposeFile(client interfaces.SSHClient, cfg *DeployComposeConfig, re
 	if err := SyncContent(client, string(content), cfg.RemoteDir+"/docker-compose.yml"); err != nil {
 		result.Error = fmt.Errorf("%w: compose file %s to %s/docker-compose.yml: %w", domainerr.ErrComposeSyncFailed, cfg.ComposeFile, cfg.RemoteDir, err)
 		return false
+	}
+
+	// Upload env file if exists
+	if cfg.EnvFile != "" {
+		if _, err := os.Stat(cfg.EnvFile); err == nil {
+			envContent, err := os.ReadFile(cfg.EnvFile)
+			if err != nil {
+				result.Error = fmt.Errorf("%w: env file %s: %w", domainerr.ErrFileReadFailed, cfg.EnvFile, err)
+				return false
+			}
+			// Extract env file name from path and upload
+			envFileName := filepath.Base(cfg.EnvFile)
+			if err := SyncContent(client, string(envContent), cfg.RemoteDir+"/"+envFileName); err != nil {
+				result.Error = fmt.Errorf("%w: env file %s to %s/%s: %w", domainerr.ErrComposeSyncFailed, cfg.EnvFile, cfg.RemoteDir, envFileName, err)
+				return false
+			}
+		}
 	}
 
 	pullCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml pull", cfg.RemoteDir)
@@ -225,9 +244,14 @@ func ExecuteServiceDeploy(change *valueobject.Change, ctx *ServiceDeployContext,
 	}
 
 	composeFile := GetComposeFilePath(change, deps)
+	envFile := ""
+	if composeFile != "" {
+		envFile = composeFile[:len(composeFile)-len(".compose.yaml")] + ".env"
+	}
 	if !DeployComposeFile(ctx.Client, &DeployComposeConfig{
 		RemoteDir:      ctx.RemoteDir,
 		ComposeFile:    composeFile,
+		EnvFile:        envFile,
 		Env:            deps.Env(),
 		ServiceName:    change.Name(),
 		RestartAfterUp: opts.RestartAfterUp,

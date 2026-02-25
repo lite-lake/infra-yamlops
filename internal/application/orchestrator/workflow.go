@@ -3,14 +3,18 @@ package orchestrator
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/litelake/yamlops/internal/application/plan"
+	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/repository"
 	"github.com/litelake/yamlops/internal/domain/service"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 	"github.com/litelake/yamlops/internal/infrastructure/secrets"
+	"github.com/litelake/yamlops/internal/infrastructure/state"
 )
 
 type Workflow struct {
@@ -108,4 +112,46 @@ func (w *Workflow) GenerateDeployments(cfg *entity.Config, outputDir string) err
 
 func (w *Workflow) FetchRemoteState(ctx context.Context, cfg *entity.Config) *repository.DeploymentState {
 	return w.stateFetcher.Fetch(ctx, cfg)
+}
+
+func (w *Workflow) SaveState(ctx context.Context, cfg *entity.Config) error {
+	stateDir := filepath.Join(w.configDir, constants.StateDir)
+	if err := os.MkdirAll(stateDir, constants.DirPermissionOwner); err != nil {
+		return fmt.Errorf("creating state directory %s: %w", stateDir, err)
+	}
+
+	statePath := filepath.Join(stateDir, fmt.Sprintf(constants.StateFileFormat, w.env))
+	store := state.NewFileStore(statePath)
+
+	state := repository.NewDeploymentState()
+
+	for i := range cfg.Services {
+		state.Services[cfg.Services[i].Name] = &cfg.Services[i]
+	}
+	for i := range cfg.InfraServices {
+		state.InfraServices[cfg.InfraServices[i].Name] = &cfg.InfraServices[i]
+	}
+	for i := range cfg.Servers {
+		state.Servers[cfg.Servers[i].Name] = &cfg.Servers[i]
+	}
+	for i := range cfg.Zones {
+		state.Zones[cfg.Zones[i].Name] = &cfg.Zones[i]
+	}
+	for i := range cfg.Domains {
+		state.Domains[cfg.Domains[i].Name] = &cfg.Domains[i]
+		for _, r := range cfg.Domains[i].FlattenRecords() {
+			record := r
+			key := fmt.Sprintf("%s:%s:%s", record.Domain, record.Type, record.Name)
+			state.Records[key] = &record
+		}
+	}
+	for i := range cfg.ISPs {
+		state.ISPs[cfg.ISPs[i].Name] = &cfg.ISPs[i]
+	}
+
+	if err := store.Save(ctx, w.env, state); err != nil {
+		return fmt.Errorf("saving state: %w", err)
+	}
+
+	return nil
 }

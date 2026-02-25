@@ -94,6 +94,25 @@ func runApply(ctx *Context, scope string, filters Filters) {
 
 	results := executor.Apply()
 	displayResults(results)
+
+	if hasErrors(results) {
+		os.Exit(1)
+	}
+
+	if err := wf.SaveState(context.Background(), cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to save state: %v\n", err)
+	} else {
+		fmt.Println("State saved successfully.")
+	}
+}
+
+func hasErrors(results []*handler.Result) bool {
+	for _, result := range results {
+		if result.Error != nil {
+			return true
+		}
+	}
+	return false
 }
 
 func displayResults(results []*handler.Result) {

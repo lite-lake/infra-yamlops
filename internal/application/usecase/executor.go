@@ -6,7 +6,6 @@ import (
 	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	infra "github.com/litelake/yamlops/internal/infrastructure/dns"
-	"github.com/litelake/yamlops/internal/providers/dns"
 )
 
 type RegistryInterface interface {
@@ -20,7 +19,7 @@ type SSHPoolInterface interface {
 }
 
 type DNSFactoryInterface interface {
-	Create(isp *entity.ISP, secrets map[string]string) (dns.Provider, error)
+	Create(isp *entity.ISP, secrets map[string]string) (infra.Provider, error)
 }
 
 type ExecutorConfig struct {

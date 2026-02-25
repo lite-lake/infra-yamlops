@@ -8,6 +8,8 @@ const (
 	TempFilePattern     = "yamlops-*.yml"
 	RemoteTempFileFmt   = "/tmp/yamlops-%d"
 	ServicePrefixFormat = "yo-%s-%s"
+	StateDir            = ".state"
+	StateFileFormat     = "%s.yaml"
 )
 
 const (

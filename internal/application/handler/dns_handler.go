@@ -8,7 +8,7 @@ import (
 	domainerr "github.com/litelake/yamlops/internal/domain"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
-	"github.com/litelake/yamlops/internal/providers/dns"
+	"github.com/litelake/yamlops/internal/infrastructure/dns"
 )
 
 type DNSHandler struct{}

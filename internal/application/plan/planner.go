@@ -8,8 +8,6 @@ import (
 	"github.com/litelake/yamlops/internal/domain/repository"
 	"github.com/litelake/yamlops/internal/domain/service"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
-	"github.com/litelake/yamlops/internal/infrastructure/logger"
-	"github.com/litelake/yamlops/internal/infrastructure/state"
 )
 
 type DeploymentState = repository.DeploymentState
@@ -23,7 +21,7 @@ type Planner struct {
 	config        *entity.Config
 	differService *service.DifferService
 	deployGen     DeploymentGenerator
-	stateStore    *state.FileStore
+	stateRepo     repository.StateRepository
 	outputDir     string
 	env           string
 }
@@ -44,6 +42,10 @@ func WithEnv(env string) PlannerOption {
 
 func WithState(st *DeploymentState) PlannerOption {
 	return func(p *Planner) { p.differService = service.NewDifferService(st) }
+}
+
+func WithStateRepo(repo repository.StateRepository) PlannerOption {
+	return func(p *Planner) { p.stateRepo = repo }
 }
 
 func WithGenerator(gen DeploymentGenerator) PlannerOption {
@@ -79,8 +81,6 @@ func (p *Planner) Plan(scope *valueobject.Scope) (*valueobject.Plan, error) {
 		scope = &valueobject.Scope{}
 	}
 
-	logger.Debug("starting plan generation", "env", p.env)
-
 	plan := valueobject.NewPlanWithScope(scope)
 
 	if !scope.HasAnyServiceSelection() {
@@ -99,23 +99,11 @@ func (p *Planner) Plan(scope *valueobject.Scope) (*valueobject.Plan, error) {
 		p.differService.PlanInfraServices(plan, p.config.GetInfraServiceMap(), p.config.GetServerMap(), scope)
 	}
 
-	logger.Info("plan generated",
-		"changes", len(plan.Changes()),
-		"env", p.env,
-	)
-
 	return plan, nil
 }
 
 func (p *Planner) GenerateDeployments() error {
-	logger.Debug("generating deployments", "env", p.env, "output_dir", p.outputDir)
-	err := p.deployGen.Generate(p.config)
-	if err != nil {
-		logger.Error("deployment generation failed", "error", err)
-	} else {
-		logger.Info("deployments generated", "output_dir", p.outputDir)
-	}
-	return err
+	return p.deployGen.Generate(p.config)
 }
 
 func (p *Planner) GetConfig() *entity.Config {
@@ -130,9 +118,11 @@ func (p *Planner) SetState(st *DeploymentState) {
 	p.differService.SetState(st)
 }
 
-func (p *Planner) LoadStateFromFile(ctx context.Context, path string) error {
-	p.stateStore = state.NewFileStore(path)
-	st, err := p.stateStore.Load(ctx, p.env)
+func (p *Planner) LoadState(ctx context.Context) error {
+	if p.stateRepo == nil {
+		return nil
+	}
+	st, err := p.stateRepo.Load(ctx, p.env)
 	if err != nil {
 		return err
 	}
@@ -140,7 +130,9 @@ func (p *Planner) LoadStateFromFile(ctx context.Context, path string) error {
 	return nil
 }
 
-func (p *Planner) SaveStateToFile(ctx context.Context, path string) error {
-	p.stateStore = state.NewFileStore(path)
-	return p.stateStore.Save(ctx, p.env, p.differService.GetState())
+func (p *Planner) SaveState(ctx context.Context) error {
+	if p.stateRepo == nil {
+		return nil
+	}
+	return p.stateRepo.Save(ctx, p.env, p.differService.GetState())
 }

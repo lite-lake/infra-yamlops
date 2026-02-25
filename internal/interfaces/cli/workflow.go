@@ -43,3 +43,7 @@ func (w *Workflow) LoadAndValidate(ctx context.Context) (*entity.Config, error) 
 func (w *Workflow) ResolveSecrets(cfg *entity.Config) error {
 	return w.Workflow.ResolveSecrets(cfg)
 }
+
+func (w *Workflow) SaveState(ctx context.Context, cfg *entity.Config) error {
+	return w.Workflow.SaveState(ctx, cfg)
+}

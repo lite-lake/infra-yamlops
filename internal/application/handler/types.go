@@ -7,9 +7,9 @@ import (
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/interfaces"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/litelake/yamlops/internal/infrastructure/dns"
 	"github.com/litelake/yamlops/internal/infrastructure/registry"
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
-	"github.com/litelake/yamlops/internal/providers/dns"
 )
 
 type DNSDeps interface {

@@ -16,7 +16,6 @@ import (
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	infradns "github.com/litelake/yamlops/internal/infrastructure/dns"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
-	"github.com/litelake/yamlops/internal/providers/dns"
 )
 
 func newDNSPullCommand(ctx *Context) *cobra.Command {
@@ -317,7 +316,7 @@ func runDNSPullRecords(ctx *Context, domainName string, autoApprove bool) {
 	}
 }
 
-func createDNSProvider(isp *entity.ISP, secrets map[string]string) (dns.Provider, error) {
+func createDNSProvider(isp *entity.ISP, secrets map[string]string) (infradns.Provider, error) {
 	factory := infradns.NewFactory()
 	return factory.Create(isp, secrets)
 }

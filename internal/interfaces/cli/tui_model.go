@@ -8,7 +8,7 @@ import (
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	serverpkg "github.com/litelake/yamlops/internal/environment"
-	"github.com/litelake/yamlops/internal/providers/dns"
+	"github.com/litelake/yamlops/internal/infrastructure/dns"
 )
 
 type LoadingState struct {
