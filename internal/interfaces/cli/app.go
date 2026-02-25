@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -95,7 +96,7 @@ func runAppPlan(ctx *Context, filters AppFilters) {
 		WithServer(filters.Server).
 		WithService(filters.Biz)
 
-	executionPlan, _, err := wf.Plan(nil, "", planScope)
+	executionPlan, _, err := wf.Plan(context.Background(), "", planScope)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -216,7 +217,7 @@ func runAppApply(ctx *Context, filters AppFilters, autoApprove bool) {
 
 func runAppList(ctx *Context, filters AppFilters, resource string) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
-	cfg, err := wf.LoadConfig(nil)
+	cfg, err := wf.LoadConfig(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)

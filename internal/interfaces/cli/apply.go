@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -44,7 +45,7 @@ func runApply(ctx *Context, scope string, filters Filters) {
 		WithServer(filters.Server).
 		WithService(filters.Service)
 
-	executionPlan, cfg, err := wf.Plan(nil, "", planScope)
+	executionPlan, cfg, err := wf.Plan(context.Background(), "", planScope)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)

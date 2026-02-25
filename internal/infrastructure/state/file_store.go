@@ -1,6 +1,7 @@
 package state
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -25,7 +26,7 @@ func NewFileStore(path string) *FileStore {
 	}
 }
 
-func (s *FileStore) Load() (*repository.DeploymentState, error) {
+func (s *FileStore) Load(ctx context.Context, env string) (*repository.DeploymentState, error) {
 	if err := s.flock.Lock(); err != nil {
 		return nil, fmt.Errorf("acquiring lock: %w", err)
 	}
@@ -70,7 +71,7 @@ func (s *FileStore) Load() (*repository.DeploymentState, error) {
 	return state, nil
 }
 
-func (s *FileStore) Save(state *repository.DeploymentState) error {
+func (s *FileStore) Save(ctx context.Context, env string, state *repository.DeploymentState) error {
 	if err := s.flock.Lock(); err != nil {
 		return fmt.Errorf("acquiring lock: %w", err)
 	}

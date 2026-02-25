@@ -27,6 +27,7 @@ type Service struct {
 	ContainerName string            `yaml:"container_name,omitempty"`
 	Ports         []string          `yaml:"ports,omitempty"`
 	Environment   map[string]string `yaml:"environment,omitempty"`
+	EnvFiles      []string          `yaml:"env_file,omitempty"`
 	Volumes       []string          `yaml:"volumes,omitempty"`
 	HealthCheck   *HealthCheck      `yaml:"healthcheck,omitempty"`
 	Deploy        *Deploy           `yaml:"deploy,omitempty"`
@@ -50,6 +51,7 @@ type ComposeService struct {
 	Image       string
 	Ports       []string
 	Environment map[string]string
+	EnvFiles    []string
 	Volumes     []string
 	HealthCheck *HealthCheck
 	Resources   *Resources

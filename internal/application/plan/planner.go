@@ -1,6 +1,8 @@
 package plan
 
 import (
+	"context"
+
 	"github.com/litelake/yamlops/internal/application/deployment"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/repository"
@@ -128,9 +130,9 @@ func (p *Planner) SetState(st *DeploymentState) {
 	p.differService.SetState(st)
 }
 
-func (p *Planner) LoadStateFromFile(path string) error {
+func (p *Planner) LoadStateFromFile(ctx context.Context, path string) error {
 	p.stateStore = state.NewFileStore(path)
-	st, err := p.stateStore.Load()
+	st, err := p.stateStore.Load(ctx, p.env)
 	if err != nil {
 		return err
 	}
@@ -138,7 +140,7 @@ func (p *Planner) LoadStateFromFile(path string) error {
 	return nil
 }
 
-func (p *Planner) SaveStateToFile(path string) error {
+func (p *Planner) SaveStateToFile(ctx context.Context, path string) error {
 	p.stateStore = state.NewFileStore(path)
-	return p.stateStore.Save(p.differService.GetState())
+	return p.stateStore.Save(ctx, p.env, p.differService.GetState())
 }

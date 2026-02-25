@@ -81,7 +81,7 @@ func (h *ServerHandler) handleCreateOrUpdate(ctx context.Context, change *valueo
 	}
 
 	if hasErrors {
-		result.Success = true
+		result.Success = false
 		result.Output = fmt.Sprintf("server %s with registry login issues:\n%s",
 			map[bool]string{true: "registered", false: "updated"}[change.Type() == valueobject.ChangeTypeCreate],
 			strings.Join(loginResults, "\n"))

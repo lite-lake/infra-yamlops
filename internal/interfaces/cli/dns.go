@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -90,7 +91,7 @@ func runDNSPlan(ctx *Context, domain, record string) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
 	planScope := valueobject.NewScope().WithDomain(domain)
 
-	executionPlan, _, err := wf.Plan(nil, "", planScope)
+	executionPlan, _, err := wf.Plan(context.Background(), "", planScope)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)
@@ -177,7 +178,7 @@ func displayChanges(changes []*valueobject.Change) {
 
 func runDNSList(ctx *Context, resource string) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
-	cfg, err := wf.LoadConfig(nil)
+	cfg, err := wf.LoadConfig(context.Background())
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)

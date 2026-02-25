@@ -79,11 +79,24 @@ func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizServ
 		}
 	}
 
+	envFileName := fmt.Sprintf("%s.env", svc.Name)
+	envFile := filepath.Join(serverDir, envFileName)
+
+	envLines := []string{}
+	for k, v := range envMap {
+		envLines = append(envLines, fmt.Sprintf("%s=%s", k, v))
+	}
+	envContent := strings.Join(envLines, "\n") + "\n"
+
+	if err := os.WriteFile(envFile, []byte(envContent), 0600); err != nil {
+		return fmt.Errorf("failed to write env file %s: %w", envFile, err)
+	}
+
 	composeSvc := &compose.ComposeService{
 		Name:        svc.Name,
 		Image:       svc.Image,
 		Ports:       ports,
-		Environment: envMap,
+		EnvFiles:    []string{envFileName},
 		Volumes:     volumes,
 		HealthCheck: healthCheck,
 		Resources:   resources,

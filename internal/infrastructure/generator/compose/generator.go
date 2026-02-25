@@ -35,6 +35,7 @@ func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 		ContainerName: serviceName,
 		Ports:         svc.Ports,
 		Environment:   svc.Environment,
+		EnvFiles:      svc.EnvFiles,
 		Volumes:       svc.Volumes,
 		HealthCheck:   svc.HealthCheck,
 		Networks:      svc.Networks,
