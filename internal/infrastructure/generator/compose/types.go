@@ -25,7 +25,6 @@ type Deploy struct {
 type Service struct {
 	Image         string            `yaml:"image"`
 	ContainerName string            `yaml:"container_name,omitempty"`
-	User          string            `yaml:"user,omitempty"`
 	Ports         []string          `yaml:"ports,omitempty"`
 	Environment   map[string]string `yaml:"environment,omitempty"`
 	EnvFiles      []string          `yaml:"env_file,omitempty"`
@@ -50,7 +49,6 @@ type ComposeFile struct {
 type ComposeService struct {
 	Name        string
 	Image       string
-	User        string
 	Ports       []string
 	Environment map[string]string
 	EnvFiles    []string

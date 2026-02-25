@@ -95,7 +95,6 @@ func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizServ
 	composeSvc := &compose.ComposeService{
 		Name:        svc.Name,
 		Image:       svc.Image,
-		User:        svc.User,
 		Ports:       ports,
 		EnvFiles:    []string{envFileName},
 		Volumes:     volumes,
