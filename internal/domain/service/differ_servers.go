@@ -7,6 +7,12 @@ import (
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
+type serviceEntity interface {
+	GetServer() string
+}
+
+type matchScopeFunc func(zoneName, serverName, serviceName string) bool
+
 func (s *DifferService) PlanServers(plan *valueobject.Plan, cfgMap map[string]*entity.Server, zoneMap map[string]*entity.Zone, scope *valueobject.Scope) {
 	for name, state := range s.state.Servers {
 		if _, exists := cfgMap[name]; !exists {
@@ -92,66 +98,111 @@ func ServerEquals(a, b *entity.Server) bool {
 	return true
 }
 
-func (s *DifferService) PlanServices(plan *valueobject.Plan, cfgMap map[string]*entity.BizService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
-	for name, state := range s.state.Services {
+func planServiceDeletions[T serviceEntity](
+	plan *valueobject.Plan,
+	stateMap map[string]T,
+	cfgMap map[string]T,
+	serverMap map[string]*entity.Server,
+	scope *valueobject.Scope,
+	matchScope matchScopeFunc,
+	entityType string,
+) {
+	for name, state := range stateMap {
 		if _, exists := cfgMap[name]; !exists {
-			serverName := state.Server
+			serverName := state.GetServer()
 			zoneName := ""
 			if srv, ok := serverMap[serverName]; ok {
 				zoneName = srv.Zone
 			}
-			if scope.Matches(zoneName, serverName, name, "") {
+			if matchScope(zoneName, serverName, name) {
 				plan.AddChange(valueobject.NewChangeFull(
 					valueobject.ChangeTypeDelete,
-					"service",
+					entityType,
 					name,
 					state,
 					nil,
-					[]string{fmt.Sprintf("delete service %s", name)},
+					[]string{fmt.Sprintf("delete %s %s", entityType, name)},
 					true,
 				))
 			}
 		}
 	}
+}
 
+func planServiceUpdatesAndCreates[T serviceEntity](
+	plan *valueobject.Plan,
+	stateMap map[string]T,
+	cfgMap map[string]T,
+	serverMap map[string]*entity.Server,
+	scope *valueobject.Scope,
+	matchScope matchScopeFunc,
+	entityType string,
+	equals func(a, b T) bool,
+) {
 	for name, cfg := range cfgMap {
-		serverName := cfg.Server
+		serverName := cfg.GetServer()
 		zoneName := ""
 		if srv, ok := serverMap[serverName]; ok {
 			zoneName = srv.Zone
 		}
-		if !scope.Matches(zoneName, serverName, name, "") {
+		if !matchScope(zoneName, serverName, name) {
 			continue
 		}
 
-		if state, exists := s.state.Services[name]; exists {
-			if scope.ForceDeploy() || !ServiceEquals(state, cfg) {
+		if state, exists := stateMap[name]; exists {
+			if scope.ForceDeploy() || !equals(state, cfg) {
 				changeType := valueobject.ChangeTypeUpdate
-				if scope.ForceDeploy() && ServiceEquals(state, cfg) {
+				if scope.ForceDeploy() && equals(state, cfg) {
 					changeType = valueobject.ChangeTypeCreate
 				}
 				plan.AddChange(valueobject.NewChangeFull(
 					changeType,
-					"service",
+					entityType,
 					name,
 					state,
 					cfg,
-					[]string{fmt.Sprintf("deploy service %s", name)},
+					[]string{fmt.Sprintf("deploy %s %s", entityType, name)},
 					true,
 				))
 			}
 		} else {
 			plan.AddChange(valueobject.NewChangeFull(
 				valueobject.ChangeTypeCreate,
-				"service",
+				entityType,
 				name,
 				nil,
 				cfg,
-				[]string{fmt.Sprintf("create service %s", name)},
+				[]string{fmt.Sprintf("create %s %s", entityType, name)},
 				false,
 			))
 		}
 	}
+}
+
+func (s *DifferService) PlanServices(plan *valueobject.Plan, cfgMap map[string]*entity.BizService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
+	planServiceDeletions(
+		plan,
+		s.state.Services,
+		cfgMap,
+		serverMap,
+		scope,
+		func(zoneName, serverName, serviceName string) bool {
+			return scope.Matches(zoneName, serverName, serviceName, "")
+		},
+		"service",
+	)
+	planServiceUpdatesAndCreates(
+		plan,
+		s.state.Services,
+		cfgMap,
+		serverMap,
+		scope,
+		func(zoneName, serverName, serviceName string) bool {
+			return scope.Matches(zoneName, serverName, serviceName, "")
+		},
+		"service",
+		ServiceEquals,
+	)
 }
 
 func ServiceEquals(a, b *entity.BizService) bool {
@@ -229,65 +280,29 @@ func healthcheckEqual(a, b *entity.ServiceHealthcheck) bool {
 }
 
 func (s *DifferService) PlanInfraServices(plan *valueobject.Plan, cfgMap map[string]*entity.InfraService, serverMap map[string]*entity.Server, scope *valueobject.Scope) {
-	for name, state := range s.state.InfraServices {
-		if _, exists := cfgMap[name]; !exists {
-			serverName := state.Server
-			zoneName := ""
-			if srv, ok := serverMap[serverName]; ok {
-				zoneName = srv.Zone
-			}
-			if scope.MatchesInfra(zoneName, serverName, name) {
-				plan.AddChange(valueobject.NewChangeFull(
-					valueobject.ChangeTypeDelete,
-					"infra_service",
-					name,
-					state,
-					nil,
-					[]string{fmt.Sprintf("delete infra service %s", name)},
-					true,
-				))
-			}
-		}
-	}
-
-	for name, cfg := range cfgMap {
-		serverName := cfg.Server
-		zoneName := ""
-		if srv, ok := serverMap[serverName]; ok {
-			zoneName = srv.Zone
-		}
-		if !scope.MatchesInfra(zoneName, serverName, name) {
-			continue
-		}
-
-		if state, exists := s.state.InfraServices[name]; exists {
-			if scope.ForceDeploy() || !InfraServiceEquals(state, cfg) {
-				changeType := valueobject.ChangeTypeUpdate
-				if scope.ForceDeploy() && InfraServiceEquals(state, cfg) {
-					changeType = valueobject.ChangeTypeCreate
-				}
-				plan.AddChange(valueobject.NewChangeFull(
-					changeType,
-					"infra_service",
-					name,
-					state,
-					cfg,
-					[]string{fmt.Sprintf("deploy infra service %s", name)},
-					true,
-				))
-			}
-		} else {
-			plan.AddChange(valueobject.NewChangeFull(
-				valueobject.ChangeTypeCreate,
-				"infra_service",
-				name,
-				nil,
-				cfg,
-				[]string{fmt.Sprintf("create infra service %s", name)},
-				false,
-			))
-		}
-	}
+	planServiceDeletions(
+		plan,
+		s.state.InfraServices,
+		cfgMap,
+		serverMap,
+		scope,
+		func(zoneName, serverName, serviceName string) bool {
+			return scope.MatchesInfra(zoneName, serverName, serviceName)
+		},
+		"infra_service",
+	)
+	planServiceUpdatesAndCreates(
+		plan,
+		s.state.InfraServices,
+		cfgMap,
+		serverMap,
+		scope,
+		func(zoneName, serverName, serviceName string) bool {
+			return scope.MatchesInfra(zoneName, serverName, serviceName)
+		},
+		"infra_service",
+		InfraServiceEquals,
+	)
 }
 
 func InfraServiceEquals(a, b *entity.InfraService) bool {

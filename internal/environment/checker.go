@@ -1,7 +1,6 @@
 package environment
 
 import (
-	"encoding/json"
 	"fmt"
 	"regexp"
 	"strings"
@@ -181,9 +180,6 @@ func (c *Checker) CheckRegistries() []CheckResult {
 		return results
 	}
 
-	dockerInfo, _, _ := c.client.Run("sudo docker info 2>/dev/null | grep -i username || true")
-	configJSON, _, _ := c.client.Run("sudo cat /root/.docker/config.json 2>/dev/null || true")
-
 	for _, regName := range c.server.Environment.Registries {
 		registry, ok := c.registries[regName]
 		if !ok {
@@ -195,7 +191,7 @@ func (c *Checker) CheckRegistries() []CheckResult {
 			continue
 		}
 
-		if c.isRegistryLoggedIn(registry, dockerInfo, configJSON) {
+		if IsRegistryLoggedIn(c.client, registry, true) {
 			results = append(results, CheckResult{
 				Name:    fmt.Sprintf("Registry: %s", regName),
 				Status:  CheckStatusOK,
@@ -211,29 +207,6 @@ func (c *Checker) CheckRegistries() []CheckResult {
 	}
 
 	return results
-}
-
-func (c *Checker) isRegistryLoggedIn(r *entity.Registry, dockerInfo, configJSON string) bool {
-	if strings.Contains(strings.ToLower(dockerInfo), strings.ToLower(r.URL)) {
-		return true
-	}
-
-	type dockerConfig struct {
-		Auths map[string]struct {
-			Auth string `json:"auth"`
-		} `json:"auths"`
-	}
-
-	var cfg dockerConfig
-	if err := json.Unmarshal([]byte(configJSON), &cfg); err == nil {
-		for host, auth := range cfg.Auths {
-			if strings.Contains(host, r.URL) && auth.Auth != "" {
-				return true
-			}
-		}
-	}
-
-	return false
 }
 
 func (c *Checker) detectAPTSource(content string) string {

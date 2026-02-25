@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/litelake/yamlops/internal/domain/entity"
 	serverpkg "github.com/litelake/yamlops/internal/environment"
 	"github.com/litelake/yamlops/internal/infrastructure/persistence"
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
@@ -52,16 +53,18 @@ func newEnvCommand(ctx *Context) *cobra.Command {
 	return envCmd
 }
 
-func runEnvCheck(ctx *Context, server, zone string) {
+type envOperation func(ctx *Context, client *ssh.Client, srv *entity.Server, cfg *entity.Config, secrets map[string]string)
+
+func loadConfigAndFilterServers(ctx *Context, server, zone string) (*entity.Config, map[string]string, error) {
 	loader := persistence.NewConfigLoader(ctx.ConfigDir)
 	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
-		os.Exit(1)
+		return nil, nil, err
 	}
+	return cfg, cfg.GetSecretsMap(), nil
+}
 
-	secrets := cfg.GetSecretsMap()
-
+func processServers(ctx *Context, cfg *entity.Config, secrets map[string]string, server, zone string, operation envOperation) {
 	for i := range cfg.Servers {
 		srv := &cfg.Servers[i]
 		if server != "" && srv.Name != server {
@@ -83,45 +86,34 @@ func runEnvCheck(ctx *Context, server, zone string) {
 			continue
 		}
 
-		checker := serverpkg.NewChecker(client, srv, cfg.Registries, secrets)
-		results := checker.CheckAll()
-		fmt.Print(serverpkg.FormatResults(srv.Name, results))
+		operation(ctx, client, srv, cfg, secrets)
 
 		client.Close()
 	}
 }
 
-func runEnvSync(ctx *Context, server, zone string) {
-	loader := persistence.NewConfigLoader(ctx.ConfigDir)
-	cfg, err := loader.Load(nil, ctx.Env)
+func runEnvCheck(ctx *Context, server, zone string) {
+	cfg, secrets, err := loadConfigAndFilterServers(ctx, server, zone)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
 		os.Exit(1)
 	}
 
-	secrets := cfg.GetSecretsMap()
+	processServers(ctx, cfg, secrets, server, zone, func(ctx *Context, client *ssh.Client, srv *entity.Server, cfg *entity.Config, secrets map[string]string) {
+		checker := serverpkg.NewChecker(client, srv, cfg.Registries, secrets)
+		results := checker.CheckAll()
+		fmt.Print(serverpkg.FormatResults(srv.Name, results))
+	})
+}
 
-	for i := range cfg.Servers {
-		srv := &cfg.Servers[i]
-		if server != "" && srv.Name != server {
-			continue
-		}
-		if zone != "" && srv.Zone != zone {
-			continue
-		}
+func runEnvSync(ctx *Context, server, zone string) {
+	cfg, secrets, err := loadConfigAndFilterServers(ctx, server, zone)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		os.Exit(1)
+	}
 
-		password, err := srv.SSH.Password.Resolve(secrets)
-		if err != nil {
-			fmt.Printf("[%s] Cannot resolve password: %v\n", srv.Name, err)
-			continue
-		}
-
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
-		if err != nil {
-			fmt.Printf("[%s] Connection failed: %v\n", srv.Name, err)
-			continue
-		}
-
+	processServers(ctx, cfg, secrets, server, zone, func(ctx *Context, client *ssh.Client, srv *entity.Server, cfg *entity.Config, secrets map[string]string) {
 		syncer := serverpkg.NewSyncer(client, srv, ctx.Env, secrets, cfg.Registries)
 		results := syncer.SyncAll()
 
@@ -133,7 +125,5 @@ func runEnvSync(ctx *Context, server, zone string) {
 				fmt.Printf("  ❌ %s: %s\n", r.Name, r.Message)
 			}
 		}
-
-		client.Close()
-	}
+	})
 }

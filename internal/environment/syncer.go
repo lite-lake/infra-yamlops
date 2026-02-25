@@ -1,7 +1,6 @@
 package environment
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -182,7 +181,7 @@ func (s *Syncer) SyncRegistries() []SyncResult {
 			continue
 		}
 
-		if s.isRegistryLoggedIn(registry) {
+		if IsRegistryLoggedIn(s.client, registry, false) {
 			results = append(results, SyncResult{
 				Name:    fmt.Sprintf("registry:%s", regName),
 				Success: true,
@@ -235,30 +234,4 @@ func (s *Syncer) SyncRegistries() []SyncResult {
 	}
 
 	return results
-}
-
-func (s *Syncer) isRegistryLoggedIn(r *entity.Registry) bool {
-	dockerInfo, _, _ := s.client.Run("sudo docker info 2>/dev/null | grep -i username || true")
-	configJSON, _, _ := s.client.Run("cat ~/.docker/config.json 2>/dev/null || true")
-
-	if strings.Contains(strings.ToLower(dockerInfo), strings.ToLower(r.URL)) {
-		return true
-	}
-
-	type dockerConfig struct {
-		Auths map[string]struct {
-			Auth string `json:"auth"`
-		} `json:"auths"`
-	}
-
-	var cfg dockerConfig
-	if err := json.Unmarshal([]byte(configJSON), &cfg); err == nil {
-		for host, auth := range cfg.Auths {
-			if strings.Contains(host, r.URL) && auth.Auth != "" {
-				return true
-			}
-		}
-	}
-
-	return false
 }

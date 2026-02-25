@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/litelake/yamlops/internal/domain"
@@ -147,7 +148,13 @@ func (s *BizService) Validate() error {
 			return fmt.Errorf("port %d: %w", i, err)
 		}
 	}
-	for key, ref := range s.Env {
+	envKeys := make([]string, 0, len(s.Env))
+	for key := range s.Env {
+		envKeys = append(envKeys, key)
+	}
+	sort.Strings(envKeys)
+	for _, key := range envKeys {
+		ref := s.Env[key]
 		if err := ref.Validate(); err != nil {
 			return fmt.Errorf("env[%s]: %w", key, err)
 		}
