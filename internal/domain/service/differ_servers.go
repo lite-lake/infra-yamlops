@@ -95,6 +95,23 @@ func ServerEquals(a, b *entity.Server) bool {
 			return false
 		}
 	}
+	if len(a.Networks) != len(b.Networks) {
+		return false
+	}
+	// 使用 map 进行顺序不敏感比较，比较所有字段
+	netMapA := make(map[string]entity.ServerNetwork)
+	for _, n := range a.Networks {
+		netMapA[n.Name] = n
+	}
+	for _, n := range b.Networks {
+		netA, ok := netMapA[n.Name]
+		if !ok {
+			return false
+		}
+		if netA.Type != n.Type || netA.Driver != n.Driver {
+			return false
+		}
+	}
 	return true
 }
 
@@ -326,6 +343,19 @@ func InfraServiceEquals(a, b *entity.InfraService) bool {
 	}
 	if !sslConfigEqual(a.SSLConfig, b.SSLConfig) {
 		return false
+	}
+	// Networks: order-insensitive comparison
+	if len(a.Networks) != len(b.Networks) {
+		return false
+	}
+	netMap := make(map[string]struct{})
+	for _, net := range a.Networks {
+		netMap[net] = struct{}{}
+	}
+	for _, net := range b.Networks {
+		if _, ok := netMap[net]; !ok {
+			return false
+		}
 	}
 	return true
 }

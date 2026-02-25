@@ -114,6 +114,7 @@ type BizService struct {
 	Name        string                           `yaml:"name"`
 	Server      string                           `yaml:"server"`
 	Image       string                           `yaml:"image"`
+	Registry    string                           `yaml:"registry,omitempty"`
 	Ports       []ServicePort                    `yaml:"ports,omitempty"`
 	Env         map[string]valueobject.SecretRef `yaml:"env,omitempty"`
 	Secrets     []string                         `yaml:"secrets,omitempty"`

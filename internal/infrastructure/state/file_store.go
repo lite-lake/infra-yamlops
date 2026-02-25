@@ -34,6 +34,9 @@ func (s *FileStore) Load(ctx context.Context, env string) (*repository.Deploymen
 
 	data, err := os.ReadFile(s.path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return repository.NewDeploymentState(), nil
+		}
 		return nil, fmt.Errorf("reading state file %s: %w", s.path, domain.WrapOp("read state file", domain.ErrStateReadFailed))
 	}
 

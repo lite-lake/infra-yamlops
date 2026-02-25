@@ -31,9 +31,10 @@ func TestServiceHandler_Apply_Deploy(t *testing.T) {
 	deps.workDir = t.TempDir()
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
-		WithNewState(map[string]interface{}{
-			"server": "server1",
-			"image":  "nginx:latest",
+		WithNewState(&entity.BizService{
+			Name:   "myapp",
+			Server: "server1",
+			Image:  "nginx:latest",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -59,8 +60,9 @@ func TestServiceHandler_Apply_Delete(t *testing.T) {
 	deps.env = "test"
 
 	change := valueobject.NewChange(valueobject.ChangeTypeDelete, "service", "myapp").
-		WithOldState(map[string]interface{}{
-			"server": "server1",
+		WithOldState(&entity.BizService{
+			Name:   "myapp",
+			Server: "server1",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -79,7 +81,9 @@ func TestServiceHandler_Apply_ServerNotDetermined(t *testing.T) {
 	deps := newMockDeps()
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
-		WithNewState(map[string]interface{}{})
+		WithNewState(&entity.BizService{
+			Name: "myapp",
+		})
 
 	result, err := h.Apply(ctx, change, deps)
 	if err != nil {
@@ -99,8 +103,9 @@ func TestServiceHandler_Apply_SSHError(t *testing.T) {
 	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
-		WithNewState(map[string]interface{}{
-			"server": "server1",
+		WithNewState(&entity.BizService{
+			Name:   "myapp",
+			Server: "server1",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -119,8 +124,9 @@ func TestServiceHandler_Apply_ServerNotRegistered(t *testing.T) {
 	deps := newMockDeps()
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
-		WithNewState(map[string]interface{}{
-			"server": "unknown-server",
+		WithNewState(&entity.BizService{
+			Name:   "myapp",
+			Server: "unknown-server",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -143,8 +149,9 @@ func TestServiceHandler_Apply_MkdirError(t *testing.T) {
 	deps.env = "test"
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
-		WithNewState(map[string]interface{}{
-			"server": "server1",
+		WithNewState(&entity.BizService{
+			Name:   "myapp",
+			Server: "server1",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -177,8 +184,9 @@ func TestServiceHandler_Apply_DockerComposeError(t *testing.T) {
 	}
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "myapp").
-		WithNewState(map[string]interface{}{
-			"server": "server1",
+		WithNewState(&entity.BizService{
+			Name:   "myapp",
+			Server: "server1",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -201,8 +209,9 @@ func TestServiceHandler_DeleteService_RemoveError(t *testing.T) {
 	deps.env = "test"
 
 	change := valueobject.NewChange(valueobject.ChangeTypeDelete, "service", "myapp").
-		WithOldState(map[string]interface{}{
-			"server": "server1",
+		WithOldState(&entity.BizService{
+			Name:   "myapp",
+			Server: "server1",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -224,8 +233,9 @@ func TestServiceHandler_GetComposeFilePath(t *testing.T) {
 		{
 			name: "valid path",
 			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "myapp").
-				WithNewState(map[string]interface{}{
-					"server": "server1",
+				WithNewState(&entity.BizService{
+					Name:   "myapp",
+					Server: "server1",
 				}),
 			workDir:  "/tmp",
 			expected: filepath.Join("/tmp", "deployments", "server1", "myapp.compose.yaml"),
@@ -233,15 +243,18 @@ func TestServiceHandler_GetComposeFilePath(t *testing.T) {
 		{
 			name: "no server in state",
 			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "myapp").
-				WithNewState(map[string]interface{}{}),
+				WithNewState(&entity.BizService{
+					Name: "myapp",
+				}),
 			workDir:  "/tmp",
 			expected: "",
 		},
 		{
 			name: "server from old state",
 			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "myapp").
-				WithOldState(map[string]interface{}{
-					"server": "server2",
+				WithOldState(&entity.BizService{
+					Name:   "myapp",
+					Server: "server2",
 				}),
 			workDir:  "/opt",
 			expected: filepath.Join("/opt", "deployments", "server2", "myapp.compose.yaml"),
@@ -286,8 +299,9 @@ services:
 	deps.workDir = tmpDir
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "testapp").
-		WithNewState(map[string]interface{}{
-			"server": "server1",
+		WithNewState(&entity.BizService{
+			Name:   "testapp",
+			Server: "server1",
 		})
 
 	deployCtx := &ServiceDeployContext{
@@ -327,8 +341,9 @@ func TestServiceHandler_DeployService_ReadFileError(t *testing.T) {
 	deps.workDir = tmpDir
 
 	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "service", "testapp").
-		WithNewState(map[string]interface{}{
-			"server": "server1",
+		WithNewState(&entity.BizService{
+			Name:   "testapp",
+			Server: "server1",
 		})
 
 	os.Remove(composeFile)
@@ -362,9 +377,10 @@ func TestServiceHandler_Apply_UpdateType(t *testing.T) {
 	deps.workDir = t.TempDir()
 
 	change := valueobject.NewChange(valueobject.ChangeTypeUpdate, "service", "myapp").
-		WithNewState(map[string]interface{}{
-			"server": "server1",
-			"image":  "nginx:latest",
+		WithNewState(&entity.BizService{
+			Name:   "myapp",
+			Server: "server1",
+			Image:  "nginx:latest",
 		})
 
 	result, err := h.Apply(ctx, change, deps)
@@ -383,29 +399,33 @@ func TestExtractServerFromChange_Service(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "server from new state map",
+			name: "server from new state",
 			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").
-				WithNewState(map[string]interface{}{
-					"server": "server1",
+				WithNewState(&entity.BizService{
+					Name:   "myapp",
+					Server: "server1",
 				}),
 			expected: "server1",
 		},
 		{
-			name: "server from old state map",
+			name: "server from old state",
 			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").
-				WithOldState(map[string]interface{}{
-					"server": "server2",
+				WithOldState(&entity.BizService{
+					Name:   "myapp",
+					Server: "server2",
 				}),
 			expected: "server2",
 		},
 		{
 			name: "prefer old state over new",
 			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").
-				WithOldState(map[string]interface{}{
-					"server": "old-server",
+				WithOldState(&entity.BizService{
+					Name:   "myapp",
+					Server: "old-server",
 				}).
-				WithNewState(map[string]interface{}{
-					"server": "new-server",
+				WithNewState(&entity.BizService{
+					Name:   "myapp",
+					Server: "new-server",
 				}),
 			expected: "old-server",
 		},
@@ -415,12 +435,12 @@ func TestExtractServerFromChange_Service(t *testing.T) {
 			expected: "",
 		},
 		{
-			name: "server not a string",
+			name: "server from map[string]interface{}",
 			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").
 				WithNewState(map[string]interface{}{
-					"server": 123,
+					"server": "server3",
 				}),
-			expected: "",
+			expected: "server3",
 		},
 	}
 

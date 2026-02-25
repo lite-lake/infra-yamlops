@@ -237,12 +237,6 @@ func ExecuteServiceDeploy(change *valueobject.Change, ctx *ServiceDeployContext,
 		return result, nil
 	}
 
-	if opts.PostDeployHook != nil {
-		if err := opts.PostDeployHook(result); err != nil {
-			return result, nil
-		}
-	}
-
 	composeFile := GetComposeFilePath(change, deps)
 	envFile := ""
 	if composeFile != "" {
@@ -257,6 +251,12 @@ func ExecuteServiceDeploy(change *valueobject.Change, ctx *ServiceDeployContext,
 		RestartAfterUp: opts.RestartAfterUp,
 	}, result) {
 		return result, nil
+	}
+
+	if opts.PostDeployHook != nil {
+		if err := opts.PostDeployHook(result); err != nil {
+			return result, nil
+		}
 	}
 
 	result.Success = true

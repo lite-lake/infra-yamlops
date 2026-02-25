@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 )
 
@@ -40,13 +41,12 @@ func (h *ServiceHandler) createRegistryLoginHook(change *valueobject.Change, dep
 			return nil
 		}
 
-		svc, ok := change.NewState().(map[string]interface{})
+		svc, ok := change.NewState().(*entity.BizService)
 		if !ok {
-			return nil
+			return fmt.Errorf("invalid state type: %T", change.NewState())
 		}
 
-		registryName, exists := svc["registry"].(string)
-		if !exists || registryName == "" {
+		if svc.Registry == "" {
 			return nil
 		}
 
@@ -56,9 +56,9 @@ func (h *ServiceHandler) createRegistryLoginHook(change *valueobject.Change, dep
 			return err
 		}
 
-		loginResult, err := registryMgr.EnsureLoggedIn(registryName)
+		loginResult, err := registryMgr.EnsureLoggedIn(svc.Registry)
 		if err != nil {
-			result.Error = fmt.Errorf("login registry %s: %w", registryName, err)
+			result.Error = fmt.Errorf("login registry %s: %w", svc.Registry, err)
 			return err
 		}
 

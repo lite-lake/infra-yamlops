@@ -231,6 +231,90 @@ func TestServerEquals(t *testing.T) {
 			b:        &entity.Server{Name: "srv1", IP: entity.ServerIP{Public: "1.2.3.5"}},
 			expected: false,
 		},
+		{
+			name: "equal servers with networks (same order)",
+			a: &entity.Server{
+				Name: "srv1", Zone: "z1",
+				Networks: []entity.ServerNetwork{
+					{Name: "net1", Type: "bridge"},
+					{Name: "net2", Type: "overlay"},
+				},
+			},
+			b: &entity.Server{
+				Name: "srv1", Zone: "z1",
+				Networks: []entity.ServerNetwork{
+					{Name: "net1", Type: "bridge"},
+					{Name: "net2", Type: "overlay"},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "equal servers with networks (different order)",
+			a: &entity.Server{
+				Name: "srv1", Zone: "z1",
+				Networks: []entity.ServerNetwork{
+					{Name: "net1", Type: "bridge"},
+					{Name: "net2", Type: "overlay"},
+				},
+			},
+			b: &entity.Server{
+				Name: "srv1", Zone: "z1",
+				Networks: []entity.ServerNetwork{
+					{Name: "net2", Type: "overlay"},
+					{Name: "net1", Type: "bridge"},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "different networks length",
+			a: &entity.Server{
+				Name: "srv1", Zone: "z1",
+				Networks: []entity.ServerNetwork{{Name: "net1"}},
+			},
+			b: &entity.Server{
+				Name: "srv1", Zone: "z1",
+				Networks: []entity.ServerNetwork{{Name: "net1"}, {Name: "net2"}},
+			},
+			expected: false,
+		},
+		{
+			name: "different network names",
+			a: &entity.Server{
+				Name: "srv1", Zone: "z1",
+				Networks: []entity.ServerNetwork{{Name: "net1"}},
+			},
+			b: &entity.Server{
+				Name: "srv1", Zone: "z1",
+				Networks: []entity.ServerNetwork{{Name: "net2"}},
+			},
+			expected: false,
+		},
+		{
+			name: "different network type",
+			a: &entity.Server{
+				Name: "srv1", Zone: "z1",
+				Networks: []entity.ServerNetwork{{Name: "net1", Type: "bridge"}},
+			},
+			b: &entity.Server{
+				Name: "srv1", Zone: "z1",
+				Networks: []entity.ServerNetwork{{Name: "net1", Type: "overlay"}},
+			},
+			expected: false,
+		},
+		{
+			name: "different network driver",
+			a: &entity.Server{
+				Name: "srv1", Zone: "z1",
+				Networks: []entity.ServerNetwork{{Name: "net1", Driver: "bridge"}},
+			},
+			b: &entity.Server{
+				Name: "srv1", Zone: "z1",
+				Networks: []entity.ServerNetwork{{Name: "net1", Driver: "macvlan"}},
+			},
+			expected: false,
+		},
 	}
 
 	for _, tt := range tests {
