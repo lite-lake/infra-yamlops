@@ -139,6 +139,77 @@ type BizService struct {
 	Internal    bool                             `yaml:"internal,omitempty"`
 }
 
+type bizServiceAlias BizService
+
+func (s *BizService) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var raw struct {
+		Name        string                           `yaml:"name"`
+		Server      string                           `yaml:"server"`
+		Networks    []string                         `yaml:"networks,omitempty"`
+		Image       string                           `yaml:"image"`
+		Registry    string                           `yaml:"registry,omitempty"`
+		Ports       []ServicePort                    `yaml:"ports,omitempty"`
+		Env         map[string]valueobject.SecretRef `yaml:"env,omitempty"`
+		Secrets     []string                         `yaml:"secrets,omitempty"`
+		Healthcheck *ServiceHealthcheck              `yaml:"healthcheck,omitempty"`
+		Resources   ServiceResources                 `yaml:"resources,omitempty"`
+		Volumes     []ServiceVolume                  `yaml:"volumes,omitempty"`
+		Gateways    []ServiceGatewayRoute            `yaml:"gateways,omitempty"`
+		Internal    bool                             `yaml:"internal,omitempty"`
+	}
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+
+	s.Name = raw.Name
+	s.ServiceBase.Server = raw.Server
+	s.ServiceBase.Networks = raw.Networks
+	s.Image = raw.Image
+	s.Registry = raw.Registry
+	s.Ports = raw.Ports
+	s.Env = raw.Env
+	s.Secrets = raw.Secrets
+	s.Healthcheck = raw.Healthcheck
+	s.Resources = raw.Resources
+	s.Volumes = raw.Volumes
+	s.Gateways = raw.Gateways
+	s.Internal = raw.Internal
+
+	return nil
+}
+
+func (s *BizService) MarshalYAML() (interface{}, error) {
+	return struct {
+		Name        string                           `yaml:"name"`
+		Server      string                           `yaml:"server"`
+		Networks    []string                         `yaml:"networks,omitempty"`
+		Image       string                           `yaml:"image"`
+		Registry    string                           `yaml:"registry,omitempty"`
+		Ports       []ServicePort                    `yaml:"ports,omitempty"`
+		Env         map[string]valueobject.SecretRef `yaml:"env,omitempty"`
+		Secrets     []string                         `yaml:"secrets,omitempty"`
+		Healthcheck *ServiceHealthcheck              `yaml:"healthcheck,omitempty"`
+		Resources   ServiceResources                 `yaml:"resources,omitempty"`
+		Volumes     []ServiceVolume                  `yaml:"volumes,omitempty"`
+		Gateways    []ServiceGatewayRoute            `yaml:"gateways,omitempty"`
+		Internal    bool                             `yaml:"internal,omitempty"`
+	}{
+		Name:        s.Name,
+		Server:      s.ServiceBase.Server,
+		Networks:    s.ServiceBase.Networks,
+		Image:       s.Image,
+		Registry:    s.Registry,
+		Ports:       s.Ports,
+		Env:         s.Env,
+		Secrets:     s.Secrets,
+		Healthcheck: s.Healthcheck,
+		Resources:   s.Resources,
+		Volumes:     s.Volumes,
+		Gateways:    s.Gateways,
+		Internal:    s.Internal,
+	}, nil
+}
+
 func (s *BizService) Validate() error {
 	if s.Name == "" {
 		return fmt.Errorf("%w: service name is required", domain.ErrInvalidName)

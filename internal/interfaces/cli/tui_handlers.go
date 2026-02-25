@@ -111,9 +111,8 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		case 0:
 			m.ViewState = ViewStateTree
 			m.TreeSource = ViewStateServiceManagement
-			m.Loading.Active = true
-			m.Loading.Message = "Fetching service status..."
-			return m, tea.Batch(tickSpinner(), m.fetchServiceStatusAsync())
+			m.ViewMode = ViewModeApp
+			return m, nil
 		case 1:
 			m.Tree.CursorIndex = 0
 			m.Loading.Active = true
