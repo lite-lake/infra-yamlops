@@ -3,9 +3,12 @@ package handler
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/litelake/yamlops/internal/domain/contract"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/domain/valueobject"
 	"github.com/litelake/yamlops/internal/infrastructure/ssh"
@@ -69,29 +72,93 @@ func (h *ServiceHandler) createPreDeployHook(change *valueobject.Change, deployC
 			}
 		}
 
-		// 2. Create volume directories with 777 permissions
+		// 2. Create volume directories and sync content if needed
 		for _, vol := range svc.Volumes {
-			// Extract source path from volume (remove ./ prefix if present)
 			volumeSource := vol.Source
-			if strings.HasPrefix(volumeSource, "./") {
-				volumeSource = volumeSource[2:]
+
+			// Handle volumes:// protocol
+			isRemoteVolume := strings.HasPrefix(volumeSource, "volumes://")
+			var localVolumePath string
+			var volumeName string
+			if isRemoteVolume {
+				volumeName = strings.TrimPrefix(volumeSource, "volumes://")
+				localVolumePath = filepath.Join(deps.WorkDir(), "userdata", deps.Env(), "volumes", volumeName)
+			} else {
+				// Extract source path from volume (remove ./ prefix if present)
+				if strings.HasPrefix(volumeSource, "./") {
+					volumeSource = volumeSource[2:]
+				}
+				if strings.HasPrefix(volumeSource, "/") {
+					volumeSource = volumeSource[1:]
+				}
 			}
-			if strings.HasPrefix(volumeSource, "/") {
-				volumeSource = volumeSource[1:]
-			}
-			volumePath := deployCtx.RemoteDir + "/" + volumeSource
 
 			// Create directory with 777 permissions recursively
+			var targetDir string
+			if isRemoteVolume {
+				targetDir = deployCtx.RemoteDir + "/" + volumeName
+			} else {
+				targetDir = deployCtx.RemoteDir + "/" + volumeSource
+			}
+
 			cmd := fmt.Sprintf("sudo mkdir -p %s && sudo chmod -R 777 %s",
-				ssh.ShellEscape(volumePath),
-				ssh.ShellEscape(volumePath))
+				ssh.ShellEscape(targetDir),
+				ssh.ShellEscape(targetDir))
 
 			_, stderr, err := deployCtx.Client.Run(cmd)
 			if err != nil {
 				result.Warnings = append(result.Warnings, fmt.Sprintf("failed to prepare volume %s: %s", vol.Source, stderr))
 			}
+
+			// Sync content if sync is enabled and it's a remote volume
+			if isRemoteVolume && vol.Sync {
+				if err := h.syncVolumeContent(deployCtx.Client, localVolumePath, targetDir); err != nil {
+					result.Warnings = append(result.Warnings, fmt.Sprintf("failed to sync volume %s: %s", vol.Source, err.Error()))
+				}
+			}
 		}
 
 		return nil
 	}
+}
+
+func (h *ServiceHandler) syncVolumeContent(client contract.SSHClient, localDir, remoteDir string) error {
+	if _, err := os.Stat(localDir); os.IsNotExist(err) {
+		return fmt.Errorf("volume directory not found: %s", localDir)
+	}
+
+	return filepath.Walk(localDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		relPath, err := filepath.Rel(localDir, path)
+		if err != nil {
+			return err
+		}
+
+		// Use forward slashes for remote Linux paths
+		remotePath := remoteDir + "/" + filepath.ToSlash(relPath)
+
+		if info.IsDir() {
+			cmd := fmt.Sprintf("sudo mkdir -p %s && sudo chmod -R 777 %s",
+				ssh.ShellEscape(remotePath),
+				ssh.ShellEscape(remotePath))
+			_, stderr, err := client.Run(cmd)
+			if err != nil {
+				return fmt.Errorf("failed to create directory %s: %s", remotePath, stderr)
+			}
+		} else {
+			content, err := os.ReadFile(path)
+			if err != nil {
+				return fmt.Errorf("failed to read file %s: %w", path, err)
+			}
+
+			if err := SyncContent(client, string(content), remotePath); err != nil {
+				return fmt.Errorf("failed to sync file %s: %w", path, err)
+			}
+		}
+
+		return nil
+	})
 }

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/litelake/yamlops/internal/constants"
 	"github.com/litelake/yamlops/internal/domain/entity"
 	"github.com/litelake/yamlops/internal/infrastructure/generator/compose"
 )
@@ -41,7 +42,12 @@ func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizServ
 
 	volumes := []string{}
 	for _, v := range svc.Volumes {
-		volumes = append(volumes, fmt.Sprintf("%s:%s", v.Source, v.Target))
+		source := v.Source
+		// Convert volumes:// protocol to ./ for local bind mount
+		if strings.HasPrefix(source, "volumes://") {
+			source = convertVolumeProtocol(source)
+		}
+		volumes = append(volumes, fmt.Sprintf("%s:%s", source, v.Target))
 	}
 
 	var healthCheck *compose.HealthCheck
@@ -101,6 +107,7 @@ func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizServ
 		HealthCheck: healthCheck,
 		Resources:   resources,
 		Internal:    svc.Internal,
+		ExtraHosts:  []string{constants.HostDockerGateway},
 	}
 
 	content, err := g.composeGen.Generate(composeSvc, g.env)
