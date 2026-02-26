@@ -73,6 +73,13 @@ func (g *Generator) generateInfraGatewayCompose(infra *entity.InfraService) (str
 		networks = []string{fmt.Sprintf("yamlops-%s", g.env)}
 	}
 
+	networkConfigs := make(map[string]interface{})
+	for _, net := range networks {
+		networkConfigs[net] = map[string]interface{}{
+			"aliases": []string{infra.Name},
+		}
+	}
+
 	compose := map[string]interface{}{
 		"services": map[string]interface{}{
 			serviceName: map[string]interface{}{
@@ -90,7 +97,7 @@ func (g *Generator) generateInfraGatewayCompose(infra *entity.InfraService) (str
 				"extra_hosts": []string{
 					"host.docker.internal:host-gateway",
 				},
-				"networks": networks,
+				"networks": networkConfigs,
 			},
 		},
 		"networks": func() map[string]interface{} {
@@ -120,6 +127,13 @@ func (g *Generator) generateInfraServiceSSL(serverDir string, infra *entity.Infr
 		networks = []string{fmt.Sprintf("yamlops-%s", g.env)}
 	}
 
+	networkConfigs := make(map[string]interface{})
+	for _, net := range networks {
+		networkConfigs[net] = map[string]interface{}{
+			"aliases": []string{infra.Name},
+		}
+	}
+
 	volumes := []string{
 		"./ssl-data:/app/data",
 		"./ssl-config:/app/configs:ro",
@@ -138,7 +152,7 @@ func (g *Generator) generateInfraServiceSSL(serverDir string, infra *entity.Infr
 				"restart":        "unless-stopped",
 				"ports":          ports,
 				"volumes":        volumes,
-				"networks":       networks,
+				"networks":       networkConfigs,
 			},
 		},
 		"networks": func() map[string]interface{} {

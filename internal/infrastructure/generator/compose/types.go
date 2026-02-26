@@ -22,18 +22,22 @@ type Deploy struct {
 	Resources *Resources `yaml:"resources,omitempty"`
 }
 
+type NetworkConfig struct {
+	Aliases []string `yaml:"aliases,omitempty"`
+}
+
 type Service struct {
-	Image         string            `yaml:"image"`
-	ContainerName string            `yaml:"container_name,omitempty"`
-	Ports         []string          `yaml:"ports,omitempty"`
-	Environment   map[string]string `yaml:"environment,omitempty"`
-	EnvFiles      []string          `yaml:"env_file,omitempty"`
-	Volumes       []string          `yaml:"volumes,omitempty"`
-	HealthCheck   *HealthCheck      `yaml:"healthcheck,omitempty"`
-	Deploy        *Deploy           `yaml:"deploy,omitempty"`
-	Networks      []string          `yaml:"networks,omitempty"`
-	Restart       string            `yaml:"restart,omitempty"`
-	ExtraHosts    []string          `yaml:"extra_hosts,omitempty"`
+	Image         string                    `yaml:"image"`
+	ContainerName string                    `yaml:"container_name,omitempty"`
+	Ports         []string                  `yaml:"ports,omitempty"`
+	Environment   map[string]string         `yaml:"environment,omitempty"`
+	EnvFiles      []string                  `yaml:"env_file,omitempty"`
+	Volumes       []string                  `yaml:"volumes,omitempty"`
+	HealthCheck   *HealthCheck              `yaml:"healthcheck,omitempty"`
+	Deploy        *Deploy                   `yaml:"deploy,omitempty"`
+	Networks      map[string]*NetworkConfig `yaml:"networks,omitempty"`
+	Restart       string                    `yaml:"restart,omitempty"`
+	ExtraHosts    []string                  `yaml:"extra_hosts,omitempty"`
 }
 
 type ExternalNetwork struct {

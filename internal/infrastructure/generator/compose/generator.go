@@ -30,6 +30,13 @@ func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 
 	serviceName := "yo-" + env + "-" + svc.Name
 
+	networkConfigs := make(map[string]*NetworkConfig)
+	for _, netName := range svc.Networks {
+		networkConfigs[netName] = &NetworkConfig{
+			Aliases: []string{svc.Name},
+		}
+	}
+
 	service := Service{
 		Image:         svc.Image,
 		ContainerName: serviceName,
@@ -38,7 +45,7 @@ func (g *Generator) Generate(svc *ComposeService, env string) (string, error) {
 		EnvFiles:      svc.EnvFiles,
 		Volumes:       svc.Volumes,
 		HealthCheck:   svc.HealthCheck,
-		Networks:      svc.Networks,
+		Networks:      networkConfigs,
 		Restart:       constants.DefaultRestartPolicy,
 		ExtraHosts:    svc.ExtraHosts,
 	}

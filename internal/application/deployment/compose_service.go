@@ -98,6 +98,11 @@ func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizServ
 		return fmt.Errorf("failed to write env file %s: %w", envFile, err)
 	}
 
+	networks := svc.Networks
+	if len(networks) == 0 {
+		networks = []string{fmt.Sprintf("yamlops-%s", g.env)}
+	}
+
 	composeSvc := &compose.ComposeService{
 		Name:        svc.Name,
 		Image:       svc.Image,
@@ -107,6 +112,7 @@ func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizServ
 		HealthCheck: healthCheck,
 		Resources:   resources,
 		Internal:    svc.Internal,
+		Networks:    networks,
 		ExtraHosts:  []string{constants.HostDockerGateway},
 	}
 
