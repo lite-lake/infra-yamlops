@@ -42,31 +42,30 @@ staticcheck ./...             # Run staticcheck (if installed)
 cmd/yamlops/                    # CLI entry point
 internal/
 ├── domain/                     # Domain layer (no external deps)
-│   ├── entity/                 # Entity definitions (server, zone, isp, secret, registry, domain, dns_record, biz_service, infra_service)
-│   ├── valueobject/            # Value objects (SecretRef, Change, Scope, Plan)
-│   ├── repository/             # Repository interfaces (ConfigLoader, StateRepository)
-│   ├── service/                # Domain services (Validator, DifferService)
-│   ├── retry/                  # Retry mechanism with Option pattern
+│   ├── entity/                 # Entity definitions
+│   ├── valueobject/            # Value objects
+│   ├── repository/             # Repository interfaces
+│   ├── service/                # Domain services
 │   └── errors.go               # Domain errors
 ├── application/
-│   ├── handler/                # Change handlers (Strategy Pattern)
+│   ├── handler/                # Change handlers
 │   ├── usecase/                # Executor, SSHPool
-│   ├── deployment/             # Deployment generators (compose, gateway)
+│   ├── deployment/             # Deployment generators
 │   ├── plan/                   # Planner coordination
 │   └── orchestrator/           # Workflow orchestration
 ├── infrastructure/
 │   ├── persistence/            # Config loader
-│   ├── ssh/                    # SSH client, SFTP, shell_escape
+│   ├── ssh/                    # SSH client, SFTP
 │   ├── state/                  # File-based state storage
 │   ├── dns/                    # DNS Factory
 │   ├── secrets/                # SecretResolver
-│   ├── logger/                 # Logging infrastructure
+│   ├── logger/                 # Logging
 │   ├── network/                # Docker network manager
 │   ├── registry/               # Docker registry manager
 │   └── generator/              # Compose and Gate config generators
 ├── interfaces/cli/             # Cobra commands, BubbleTea TUI
 ├── constants/                  # Shared constants
-├── environment/                # Environment setup with embedded templates
+├── environment/                # Environment setup
 └── providers/dns/              # Cloudflare, Aliyun, Tencent DNS providers
 userdata/{env}/                 # User configs (prod/staging/dev/demo)
 deployments/                    # Generated files (git-ignored)
@@ -98,14 +97,13 @@ import (
 - **Types**: PascalCase (exported), camelCase (internal)
 - **Interfaces**: end with `-er` (`Provider`, `Loader`, `Handler`)
 - **Constants**: PascalCase or UPPER_SNAKE_CASE
-- **Errors**: prefix with `Err` (`ErrInvalidName`, `ErrPortConflict`)
+- **Errors**: prefix with `Err` (`ErrInvalidName`, `ErrRequired`)
 
 ### Error Handling
 
 Define errors in `internal/domain/errors.go`. Use `fmt.Errorf` with `%w` for wrapping:
 
 ```go
-// In internal/domain/errors.go
 var (
     ErrInvalidName = errors.New("invalid name")
     ErrRequired    = errors.New("required field missing")
@@ -114,29 +112,6 @@ var (
 func RequiredField(field string) error {
     return fmt.Errorf("%w: %s", ErrRequired, field)
 }
-
-// In entity validation
-func (s *Server) Validate() error {
-    if s.Name == "" {
-        return fmt.Errorf("%w: server name is required", domain.ErrInvalidName)
-    }
-    return nil
-}
-```
-
-### Enums
-
-Use iota with explicit type:
-
-```go
-type ChangeType int
-
-const (
-    ChangeTypeNoop ChangeType = iota
-    ChangeTypeCreate
-    ChangeTypeUpdate
-    ChangeTypeDelete
-)
 ```
 
 ### Struct Tags
@@ -160,40 +135,6 @@ func NewLoader(env, baseDir string) *Loader {
 }
 ```
 
-### Option Pattern
-
-Use for configurable constructors:
-
-```go
-type Option func(*Config)
-
-func WithMaxAttempts(n int) Option {
-    return func(c *Config) { c.MaxAttempts = n }
-}
-
-func DefaultConfig() *Config {
-    return &Config{MaxAttempts: 3}
-}
-
-// Usage: cfg := DefaultConfig(); for _, opt := range opts { opt(cfg) }
-```
-
-### YAML Custom Deserialization
-
-Support both shorthand and full forms:
-
-```go
-func (s *SecretRef) UnmarshalYAML(unmarshal func(interface{}) error) error {
-    var plain string
-    if err := unmarshal(&plain); err == nil {
-        s.Plain = plain
-        return nil
-    }
-    type alias SecretRef
-    return unmarshal((*alias)(s))
-}
-```
-
 ## Test Guidelines
 
 Place tests next to source. Use table-driven tests with `errors.Is()` for error checking:
@@ -206,7 +147,6 @@ func TestServer_Validate(t *testing.T) {
         wantErr error
     }{
         {"missing name", Server{}, domain.ErrInvalidName},
-        {"missing zone", Server{Name: "server-1"}, domain.ErrRequired},
         {"valid", Server{Name: "s1", Zone: "z1", SSH: ServerSSH{...}}, nil},
     }
     for _, tt := range tests {
@@ -222,46 +162,6 @@ func TestServer_Validate(t *testing.T) {
         })
     }
 }
-```
-
-## Key Patterns
-
-### Handler Registry
-
-```go
-type Handler interface {
-    EntityType() string
-    Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error)
-}
-
-type Registry struct {
-    handlers map[string]Handler
-}
-
-func (r *Registry) Register(h Handler) { r.handlers[h.EntityType()] = h }
-func (r *Registry) Get(entityType string) (Handler, bool) { ... }
-```
-
-### Dependency Injection
-
-Handler dependencies use interface segregation:
-
-```go
-type DepsProvider interface {
-    DNSDeps
-    ServiceDeps
-    CommonDeps
-}
-```
-
-### Fluent Builder Pattern
-
-```go
-func (c *Change) WithOldState(state interface{}) *Change {
-    c.OldState = state
-    return c
-}
-// Usage: NewChange(ChangeTypeCreate, "server", "s1").WithOldState(old).WithActions("create")
 ```
 
 ## Architecture Layers
@@ -284,16 +184,9 @@ func (c *Change) WithOldState(state interface{}) *Change {
 
 ## Service Operations
 
-Four service operations are available via both CLI and TUI:
-
 | Operation | CLI Command | Description |
 |-----------|-------------|-------------|
 | Deploy | `yamlops service deploy` | Sync files, pull images, create/recreate containers |
 | Stop | `yamlops service stop` | Stop containers (data preserved) |
 | Restart | `yamlops service restart` | Restart containers (no file/image sync) |
 | Cleanup | `yamlops service cleanup` | Remove orphan containers and directories |
-
-Key implementation files:
-- CLI: `internal/interfaces/cli/service_cmd.go`
-- TUI: `internal/interfaces/cli/tui_stop.go`, `tui_restart.go`, `tui_cleanup.go`
-- Handler: `internal/application/handler/service_common.go`
