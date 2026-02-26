@@ -3,8 +3,8 @@ package entity
 import (
 	"fmt"
 
-	"github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 type RegistryCredentials struct {

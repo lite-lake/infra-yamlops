@@ -3,7 +3,7 @@ package handler
 import (
 	"context"
 
-	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 var NoopEntities = []string{"isp", "zone", "domain", "certificate"}

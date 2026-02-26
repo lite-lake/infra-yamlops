@@ -12,10 +12,10 @@ import (
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
-	infradns "github.com/litelake/yamlops/internal/infrastructure/dns"
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+	infradns "github.com/lite-lake/infra-yamlops/internal/infrastructure/dns"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/persistence"
 )
 
 func newDNSPullCommand(ctx *Context) *cobra.Command {

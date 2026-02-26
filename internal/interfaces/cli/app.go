@@ -8,9 +8,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/litelake/yamlops/internal/application/usecase"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/application/usecase"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 type AppFilters struct {

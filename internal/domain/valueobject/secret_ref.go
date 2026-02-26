@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log/slog"
 
-	"github.com/litelake/yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain"
 )
 
 type SecretRef struct {

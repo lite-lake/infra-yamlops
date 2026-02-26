@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/litelake/yamlops/internal/constants"
-	"github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
+	"github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 type NetworkType string

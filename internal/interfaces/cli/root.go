@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/litelake/yamlops/internal/version"
+	"github.com/lite-lake/infra-yamlops/internal/version"
 	"github.com/spf13/cobra"
 )
 

@@ -1,7 +1,7 @@
 package gate
 
 import (
-	"github.com/litelake/yamlops/internal/constants"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
 	"gopkg.in/yaml.v3"
 )
 

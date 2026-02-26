@@ -1,4 +1,4 @@
-module github.com/litelake/yamlops
+module github.com/lite-lake/infra-yamlops
 
 go 1.24.0
 

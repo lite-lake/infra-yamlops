@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 func newPlanCommand(ctx *Context) *cobra.Command {

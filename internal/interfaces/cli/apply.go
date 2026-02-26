@@ -7,9 +7,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/litelake/yamlops/internal/application/handler"
-	"github.com/litelake/yamlops/internal/application/usecase"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/application/handler"
+	"github.com/lite-lake/infra-yamlops/internal/application/usecase"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 func newApplyCommand(ctx *Context) *cobra.Command {

@@ -7,10 +7,10 @@ import (
 	"path/filepath"
 
 	"github.com/gofrs/flock"
-	"github.com/litelake/yamlops/internal/constants"
-	"github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/repository"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
+	"github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/repository"
 	"gopkg.in/yaml.v3"
 )
 

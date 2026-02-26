@@ -11,9 +11,9 @@ import (
 	"github.com/charmbracelet/bubbletea"
 	"gopkg.in/yaml.v3"
 
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
-	infradns "github.com/litelake/yamlops/internal/infrastructure/dns"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+	infradns "github.com/lite-lake/infra-yamlops/internal/infrastructure/dns"
 )
 
 func (m *Model) fetchDomainDiffs(ispName string) {

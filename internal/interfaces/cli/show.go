@@ -5,7 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
 )
 
 func newShowCommand(ctx *Context) *cobra.Command {

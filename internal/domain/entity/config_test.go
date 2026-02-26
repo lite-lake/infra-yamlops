@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/litelake/yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain"
 )
 
 func TestSecret_Validate(t *testing.T) {

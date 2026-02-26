@@ -3,8 +3,8 @@ package compose
 import (
 	"fmt"
 
-	"github.com/litelake/yamlops/internal/constants"
-	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
+	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
 	"gopkg.in/yaml.v3"
 )
 

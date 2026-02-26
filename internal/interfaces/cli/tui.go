@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
-	serverpkg "github.com/litelake/yamlops/internal/environment"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+	serverpkg "github.com/lite-lake/infra-yamlops/internal/environment"
 )
 
 func tickSpinner() tea.Cmd {

@@ -6,11 +6,11 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/litelake/yamlops/internal/constants"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/repository"
-	"github.com/litelake/yamlops/internal/infrastructure/logger"
-	"github.com/litelake/yamlops/internal/infrastructure/ssh"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/repository"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/logger"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/ssh"
 )
 
 type StateFetcher struct {

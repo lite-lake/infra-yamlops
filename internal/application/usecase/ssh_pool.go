@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/litelake/yamlops/internal/application/handler"
-	"github.com/litelake/yamlops/internal/domain/contract"
-	"github.com/litelake/yamlops/internal/infrastructure/ssh"
+	"github.com/lite-lake/infra-yamlops/internal/application/handler"
+	"github.com/lite-lake/infra-yamlops/internal/domain/contract"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/ssh"
 )
 
 type SSHClientFactory func(info *handler.ServerInfo) (contract.SSHClient, error)

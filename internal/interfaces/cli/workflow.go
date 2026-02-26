@@ -3,11 +3,11 @@ package cli
 import (
 	"context"
 
-	"github.com/litelake/yamlops/internal/application/orchestrator"
-	"github.com/litelake/yamlops/internal/application/plan"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/repository"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/application/orchestrator"
+	"github.com/lite-lake/infra-yamlops/internal/application/plan"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/repository"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 type Workflow struct {

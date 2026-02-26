@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	domainerr "github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
+	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 func TestNoopHandler_EntityType(t *testing.T) {

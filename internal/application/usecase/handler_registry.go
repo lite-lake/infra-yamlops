@@ -1,7 +1,7 @@
 package usecase
 
 import (
-	"github.com/litelake/yamlops/internal/application/handler"
+	"github.com/lite-lake/infra-yamlops/internal/application/handler"
 )
 
 type HandlerRegistry struct {

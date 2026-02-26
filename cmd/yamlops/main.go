@@ -4,8 +4,8 @@ import (
 	"log/slog"
 	"os"
 
-	"github.com/litelake/yamlops/internal/infrastructure/logger"
-	"github.com/litelake/yamlops/internal/interfaces/cli"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/logger"
+	"github.com/lite-lake/infra-yamlops/internal/interfaces/cli"
 )
 
 func main() {

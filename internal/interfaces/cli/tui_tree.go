@@ -6,12 +6,12 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
-	"github.com/litelake/yamlops/internal/application/orchestrator"
-	"github.com/litelake/yamlops/internal/application/plan"
-	"github.com/litelake/yamlops/internal/application/usecase"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
+	"github.com/lite-lake/infra-yamlops/internal/application/orchestrator"
+	"github.com/lite-lake/infra-yamlops/internal/application/plan"
+	"github.com/lite-lake/infra-yamlops/internal/application/usecase"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/persistence"
 )
 
 func (m *Model) loadConfig() {

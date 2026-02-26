@@ -5,9 +5,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	serverpkg "github.com/litelake/yamlops/internal/environment"
-	"github.com/litelake/yamlops/internal/infrastructure/ssh"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	serverpkg "github.com/lite-lake/infra-yamlops/internal/environment"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/ssh"
 )
 
 var serverEnvOperations = []string{"Check", "Sync", "Full Setup"}

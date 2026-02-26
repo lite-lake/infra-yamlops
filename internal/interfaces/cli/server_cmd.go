@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/litelake/yamlops/internal/environment"
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
-	"github.com/litelake/yamlops/internal/infrastructure/ssh"
+	"github.com/lite-lake/infra-yamlops/internal/environment"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/persistence"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/ssh"
 )
 
 func newServerCommand(ctx *Context) *cobra.Command {

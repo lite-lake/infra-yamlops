@@ -6,8 +6,8 @@ import (
 	alidns "github.com/alibabacloud-go/alidns-20150109/v4/client"
 	openapi "github.com/alibabacloud-go/darabonba-openapi/v2/client"
 	"github.com/alibabacloud-go/tea/tea"
-	"github.com/litelake/yamlops/internal/constants"
-	domainerr "github.com/litelake/yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
+	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
 )
 
 type AliyunProvider struct {

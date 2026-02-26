@@ -6,9 +6,9 @@ import (
 	"strings"
 	"sync"
 
-	domainerr "github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/domain/contract"
-	"github.com/litelake/yamlops/internal/domain/entity"
+	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain/contract"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
 )
 
 func shellEscape(s string) string {

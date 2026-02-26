@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/litelake/yamlops/internal/constants"
-	domainerr "github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/domain/retry"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
+	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain/retry"
 )
 
 var validTTLs = []int{1, 5, 10, 20, 30, 60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 18000, 43200, 86400}

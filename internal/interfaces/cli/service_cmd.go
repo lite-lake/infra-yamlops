@@ -9,11 +9,11 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/litelake/yamlops/internal/application/usecase"
-	"github.com/litelake/yamlops/internal/constants"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
-	"github.com/litelake/yamlops/internal/infrastructure/ssh"
+	"github.com/lite-lake/infra-yamlops/internal/application/usecase"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/ssh"
 )
 
 type ServiceFilters struct {

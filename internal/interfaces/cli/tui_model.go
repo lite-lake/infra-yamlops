@@ -4,11 +4,11 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
-	"github.com/litelake/yamlops/internal/application/handler"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
-	serverpkg "github.com/litelake/yamlops/internal/environment"
-	"github.com/litelake/yamlops/internal/infrastructure/dns"
+	"github.com/lite-lake/infra-yamlops/internal/application/handler"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+	serverpkg "github.com/lite-lake/infra-yamlops/internal/environment"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/dns"
 )
 
 type LoadingState struct {

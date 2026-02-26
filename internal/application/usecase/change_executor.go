@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/litelake/yamlops/internal/application/handler"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
-	infra "github.com/litelake/yamlops/internal/infrastructure/dns"
-	"github.com/litelake/yamlops/internal/infrastructure/logger"
+	"github.com/lite-lake/infra-yamlops/internal/application/handler"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+	infra "github.com/lite-lake/infra-yamlops/internal/infrastructure/dns"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/logger"
 )
 
 type ChangeExecutorConfig struct {

@@ -7,8 +7,8 @@ import (
 	"github.com/cloudflare/cloudflare-go/v2/dns"
 	"github.com/cloudflare/cloudflare-go/v2/option"
 	"github.com/cloudflare/cloudflare-go/v2/zones"
-	domainerr "github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/infrastructure/logger"
+	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/logger"
 )
 
 type CloudflareProvider struct {

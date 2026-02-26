@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/litelake/yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain"
 )
 
 type Domain struct {

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/litelake/yamlops/internal/constants"
-	domainerr "github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/domain/contract"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
+	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain/contract"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 func ExtractServerFromChange(ch *valueobject.Change) string {

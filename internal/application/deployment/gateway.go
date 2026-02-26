@@ -5,10 +5,10 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/litelake/yamlops/internal/constants"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/infrastructure/generator/compose"
-	"github.com/litelake/yamlops/internal/infrastructure/generator/gate"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/generator/compose"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/generator/gate"
 )
 
 type gatewayRouteResult struct {

@@ -6,9 +6,9 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
-	"github.com/litelake/yamlops/internal/constants"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/infrastructure/ssh"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/ssh"
 )
 
 func (m Model) renderServiceCleanup() string {

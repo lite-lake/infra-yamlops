@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/litelake/yamlops/internal/constants"
-	domainerr "github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/domain/retry"
-	"github.com/litelake/yamlops/internal/infrastructure/logger"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
+	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain/retry"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/logger"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
 )

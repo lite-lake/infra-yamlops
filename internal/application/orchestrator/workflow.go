@@ -6,15 +6,15 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/litelake/yamlops/internal/application/plan"
-	"github.com/litelake/yamlops/internal/constants"
-	"github.com/litelake/yamlops/internal/domain/entity"
-	"github.com/litelake/yamlops/internal/domain/repository"
-	"github.com/litelake/yamlops/internal/domain/service"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
-	"github.com/litelake/yamlops/internal/infrastructure/persistence"
-	"github.com/litelake/yamlops/internal/infrastructure/secrets"
-	"github.com/litelake/yamlops/internal/infrastructure/state"
+	"github.com/lite-lake/infra-yamlops/internal/application/plan"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/repository"
+	"github.com/lite-lake/infra-yamlops/internal/domain/service"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/persistence"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/secrets"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/state"
 )
 
 type Workflow struct {

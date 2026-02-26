@@ -4,8 +4,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/litelake/yamlops/internal/application/handler"
-	"github.com/litelake/yamlops/internal/domain/contract"
+	"github.com/lite-lake/infra-yamlops/internal/application/handler"
+	"github.com/lite-lake/infra-yamlops/internal/domain/contract"
 )
 
 type mockSSHClient struct {

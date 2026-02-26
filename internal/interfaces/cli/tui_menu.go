@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/litelake/yamlops/internal/version"
+	"github.com/lite-lake/infra-yamlops/internal/version"
 )
 
 func (m Model) renderMainMenu() string {

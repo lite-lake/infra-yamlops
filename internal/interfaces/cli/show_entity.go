@@ -9,7 +9,7 @@ import (
 	"golang.org/x/text/language"
 	"gopkg.in/yaml.v3"
 
-	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
 )
 
 type FindResult int

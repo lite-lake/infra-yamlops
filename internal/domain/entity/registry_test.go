@@ -4,8 +4,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/litelake/yamlops/internal/domain"
-	"github.com/litelake/yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 func TestRegistryCredentials_Validate(t *testing.T) {

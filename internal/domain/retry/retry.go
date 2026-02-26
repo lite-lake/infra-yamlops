@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/litelake/yamlops/internal/constants"
+	"github.com/lite-lake/infra-yamlops/internal/constants"
 )
 
 var (

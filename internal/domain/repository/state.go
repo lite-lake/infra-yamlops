@@ -3,7 +3,7 @@ package repository
 import (
 	"context"
 
-	"github.com/litelake/yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
 )
 
 type StateRepository interface {
