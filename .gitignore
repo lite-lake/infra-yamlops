@@ -54,5 +54,8 @@ tmp/
 temp/
 *.cache/
 
+# User environments (prod/staging/dev are tracked, demo is local)
+userdata/demo/
+
 # Deployments (generated files)
 deployments/

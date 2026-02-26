@@ -20,4 +20,5 @@ type HostRoute struct {
 	HealthCheck         string
 	HealthCheckInterval string
 	HealthCheckTimeout  string
+	PreserveHostHeader  bool
 }

@@ -237,7 +237,7 @@ func (m Model) hasSelectedServices() bool {
 }
 
 func stopServiceCommand(remoteDir string) string {
-	return fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml down 2>/dev/null || true", remoteDir)
+	return fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml stop 2>&1", remoteDir)
 }
 
 func restartServiceCommand(remoteDir string) string {

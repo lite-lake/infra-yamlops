@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/litelake/yamlops/internal/constants"
 	domainerr "github.com/litelake/yamlops/internal/domain"
@@ -116,7 +117,10 @@ func DeployComposeFile(client contract.SSHClient, cfg *DeployComposeConfig, resu
 		return true
 	}
 
-	// Upload compose file
+	checkCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml ps --quiet 2>/dev/null || true", cfg.RemoteDir)
+	existingStdout, _, _ := client.Run(checkCmd)
+	isServiceRunning := strings.TrimSpace(existingStdout) != ""
+
 	content, err := os.ReadFile(cfg.ComposeFile)
 	if err != nil {
 		result.Error = fmt.Errorf("%w: compose file %s: %w", domainerr.ErrFileReadFailed, cfg.ComposeFile, err)
@@ -127,7 +131,6 @@ func DeployComposeFile(client contract.SSHClient, cfg *DeployComposeConfig, resu
 		return false
 	}
 
-	// Upload env file if exists
 	if cfg.EnvFile != "" {
 		if _, err := os.Stat(cfg.EnvFile); err == nil {
 			envContent, err := os.ReadFile(cfg.EnvFile)
@@ -135,13 +138,30 @@ func DeployComposeFile(client contract.SSHClient, cfg *DeployComposeConfig, resu
 				result.Error = fmt.Errorf("%w: env file %s: %w", domainerr.ErrFileReadFailed, cfg.EnvFile, err)
 				return false
 			}
-			// Extract env file name from path and upload
 			envFileName := filepath.Base(cfg.EnvFile)
 			if err := SyncContent(client, string(envContent), cfg.RemoteDir+"/"+envFileName); err != nil {
-				result.Error = fmt.Errorf("%w: env file %s to %s/%s: %w", domainerr.ErrComposeSyncFailed, cfg.EnvFile, cfg.RemoteDir, envFileName, err)
+				result.Error = fmt.Errorf("%w: env file %s to %s/%s: %v", domainerr.ErrComposeSyncFailed, cfg.EnvFile, cfg.RemoteDir, envFileName, err)
 				return false
 			}
 		}
+	}
+
+	if isServiceRunning {
+		pullCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml pull", cfg.RemoteDir)
+		_, pullStderr, pullErr := client.Run(pullCmd)
+		if pullErr != nil {
+			result.Warnings = append(result.Warnings, fmt.Sprintf("image pull failed: %s", pullStderr))
+		}
+
+		cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d --pull=always", cfg.RemoteDir)
+		stdout, stderr, err := client.Run(cmd)
+		if err != nil {
+			result.Error = fmt.Errorf("%w: in %s: %w, stderr: %s", domainerr.ErrDockerComposeFailed, cfg.RemoteDir, err, stderr)
+			result.Output = stdout + "\n" + stderr
+			return false
+		}
+		result.Output = stdout
+		return true
 	}
 
 	pullCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml pull", cfg.RemoteDir)
@@ -177,41 +197,6 @@ type RestartServiceConfig struct {
 }
 
 func RestartServiceWithFileSync(client contract.SSHClient, cfg *RestartServiceConfig, result *Result) bool {
-	if cfg.ComposeFile != "" {
-		if _, err := os.Stat(cfg.ComposeFile); err == nil {
-			content, err := os.ReadFile(cfg.ComposeFile)
-			if err != nil {
-				result.Error = fmt.Errorf("%w: compose file %s: %w", domainerr.ErrFileReadFailed, cfg.ComposeFile, err)
-				return false
-			}
-			if err := SyncContent(client, string(content), cfg.RemoteDir+"/docker-compose.yml"); err != nil {
-				result.Error = fmt.Errorf("%w: compose file %s to %s/docker-compose.yml: %w", domainerr.ErrComposeSyncFailed, cfg.ComposeFile, cfg.RemoteDir, err)
-				return false
-			}
-		}
-	}
-
-	if cfg.EnvFile != "" {
-		if _, err := os.Stat(cfg.EnvFile); err == nil {
-			envContent, err := os.ReadFile(cfg.EnvFile)
-			if err != nil {
-				result.Error = fmt.Errorf("%w: env file %s: %w", domainerr.ErrFileReadFailed, cfg.EnvFile, err)
-				return false
-			}
-			envFileName := filepath.Base(cfg.EnvFile)
-			if err := SyncContent(client, string(envContent), cfg.RemoteDir+"/"+envFileName); err != nil {
-				result.Error = fmt.Errorf("%w: env file %s to %s/%s: %w", domainerr.ErrComposeSyncFailed, cfg.EnvFile, cfg.RemoteDir, envFileName, err)
-				return false
-			}
-		}
-	}
-
-	pullCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml pull", cfg.RemoteDir)
-	_, pullStderr, pullErr := client.Run(pullCmd)
-	if pullErr != nil {
-		result.Warnings = append(result.Warnings, fmt.Sprintf("image pull failed: %s", pullStderr))
-	}
-
 	cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml restart 2>&1", cfg.RemoteDir)
 	stdout, stderr, err := client.Run(cmd)
 	if err != nil {

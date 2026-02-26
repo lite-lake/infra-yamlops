@@ -142,11 +142,16 @@ yamlops
 ├── config
 │   ├── list [secrets|isps|registries]  # 列出配置项
 │   └── show <type> <name>   # 显示配置详情
-└── app
-    ├── plan                 # 应用部署计划
-    ├── apply                # 应用部署
-    ├── list [resource]      # 列出资源
-    └── show <resource> <name>
+├── app
+│   ├── plan                 # 应用部署计划
+│   ├── apply                # 应用部署
+│   ├── list [resource]      # 列出资源
+│   └── show <resource> <name>
+└── service
+    ├── deploy               # 部署服务
+    ├── stop                 # 停止服务
+    ├── restart              # 重启服务
+    └── cleanup              # 清理孤儿资源
 ```
 
 ### plan - 生成变更计划
@@ -264,6 +269,32 @@ yamlops
 # 清理孤立服务和目录
 ./yamlops clean -e prod
 ```
+
+### service - 服务运维
+
+```bash
+# 部署服务（同步最新配置）
+./yamlops service deploy -e prod --biz api-server
+./yamlops service deploy -e prod --server srv-east-01 -y
+
+# 停止服务（保留数据）
+./yamlops service stop -e prod --biz api-server
+
+# 重启服务（不更新文件和镜像）
+./yamlops service restart -e prod --biz api-server
+
+# 清理孤儿资源
+./yamlops service cleanup -e prod -y
+```
+
+**service 子命令标志：**
+
+| 标志 | 短标志 | 描述 |
+|------|--------|------|
+| `--server` | `-s` | 按服务器过滤 |
+| `--infra` | `-i` | 按基础设施服务过滤 |
+| `--biz` | `-b` | 按业务服务过滤 |
+| `--yes` | `-y` | 跳过确认提示 |
 
 ### TUI 交互模式
 

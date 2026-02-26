@@ -281,3 +281,19 @@ func (c *Change) WithOldState(state interface{}) *Change {
 - Handler pattern: each entity type has a Handler implementing `Apply(ctx, change, deps)`
 - Use generics for common patterns (e.g., `DoWithResult[T]`, `planSimpleEntity[T]`)
 - Service naming: `yo-{env}-{service-name}` (e.g., `yo-prod-api-server`)
+
+## Service Operations
+
+Four service operations are available via both CLI and TUI:
+
+| Operation | CLI Command | Description |
+|-----------|-------------|-------------|
+| Deploy | `yamlops service deploy` | Sync files, pull images, create/recreate containers |
+| Stop | `yamlops service stop` | Stop containers (data preserved) |
+| Restart | `yamlops service restart` | Restart containers (no file/image sync) |
+| Cleanup | `yamlops service cleanup` | Remove orphan containers and directories |
+
+Key implementation files:
+- CLI: `internal/interfaces/cli/service_cmd.go`
+- TUI: `internal/interfaces/cli/tui_stop.go`, `tui_restart.go`, `tui_cleanup.go`
+- Handler: `internal/application/handler/service_common.go`

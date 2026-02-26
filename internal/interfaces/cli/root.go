@@ -51,6 +51,7 @@ func Execute() {
 	rootCmd.AddCommand(newServerCommand(ctx))
 	rootCmd.AddCommand(newConfigCommand(ctx))
 	rootCmd.AddCommand(newAppCommand(ctx))
+	rootCmd.AddCommand(newServiceCommand(ctx))
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

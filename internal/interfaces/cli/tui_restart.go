@@ -82,41 +82,6 @@ func (m *Model) executeServiceRestartAsync() tea.Cmd {
 			for _, svcInfo := range services {
 				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, svcInfo.Name))
 
-				workDir, err := os.Getwd()
-				if err != nil {
-					workDir = "."
-				}
-				composeFile := filepath.Join(workDir, "deployments", srv.Name, svcInfo.Name+".compose.yaml")
-
-				if syncErr := m.syncComposeFile(client, composeFile, remoteDir); syncErr != nil {
-					result.Services = append(result.Services, RestartServiceResult{
-						Name:    svcInfo.Name,
-						Success: false,
-						Error:   fmt.Sprintf("sync compose file failed: %v", syncErr),
-					})
-					continue
-				}
-
-				if syncErr := m.syncEnvFile(client, composeFile, remoteDir); syncErr != nil {
-					result.Services = append(result.Services, RestartServiceResult{
-						Name:    svcInfo.Name,
-						Success: false,
-						Error:   fmt.Sprintf("sync env file failed: %v", syncErr),
-					})
-					continue
-				}
-
-				if svcInfo.Type == NodeTypeInfra {
-					if syncErr := m.syncInfraFiles(client, svcInfo.Name, srv.Name, remoteDir, workDir); syncErr != nil {
-						result.Services = append(result.Services, RestartServiceResult{
-							Name:    svcInfo.Name,
-							Success: false,
-							Error:   fmt.Sprintf("sync infra files failed: %v", syncErr),
-						})
-						continue
-					}
-				}
-
 				cmd := restartServiceCommand(remoteDir)
 				_, stderr, err := client.Run(cmd)
 				if err != nil {

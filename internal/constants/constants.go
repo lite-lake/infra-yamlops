@@ -15,7 +15,7 @@ const (
 const (
 	DefaultHTTPPort       = 80
 	DefaultHTTPSPort      = 443
-	DefaultHealthInterval = "30s"
+	DefaultHealthInterval = "60s"
 	DefaultHealthTimeout  = "10s"
 	DefaultCRSVersion     = "v4.19.0"
 )

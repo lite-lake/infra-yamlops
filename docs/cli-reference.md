@@ -39,11 +39,16 @@ yamlops
 ├── config
 │   ├── list [type]          # 列出配置项
 │   └── show <type> <name>   # 显示配置详情
-└── app
-    ├── plan                 # 应用部署计划
-    ├── apply                # 应用部署
-    ├── list [resource]      # 列出资源
-    └── show <resource> <name>
+├── app
+│   ├── plan                 # 应用部署计划
+│   ├── apply                # 应用部署
+│   ├── list [resource]      # 列出资源
+│   └── show <resource> <name>
+└── service
+    ├── deploy               # 部署服务
+    ├── stop                 # 停止服务
+    ├── restart              # 重启服务
+    └── cleanup              # 清理孤儿资源
 ```
 
 ---
@@ -512,6 +517,138 @@ yamlops app show biz api-server -e prod
 
 ---
 
+## 服务管理命令
+
+### yamlops service deploy
+
+部署服务。如果服务已存在，将同步最新配置并重新创建容器。
+
+```bash
+# 部署所有服务
+yamlops service deploy -e prod
+
+# 部署指定服务器的服务
+yamlops service deploy -e prod --server srv-cn1
+
+# 部署指定的业务服务
+yamlops service deploy -e prod --biz api-server
+
+# 部署指定的基础设施服务
+yamlops service deploy -e prod --infra gateway-cn1
+
+# 跳过确认直接部署
+yamlops service deploy -e prod --yes
+```
+
+**标志：**
+
+| 标志 | 短标志 | 描述 |
+|------|--------|------|
+| `--server` | `-s` | 按服务器过滤 |
+| `--infra` | `-i` | 按基础设施服务过滤 |
+| `--biz` | `-b` | 按业务服务过滤 |
+| `--yes` | `-y` | 跳过确认提示 |
+
+**部署行为：**
+
+- 新服务：创建目录、同步文件、拉取镜像、启动容器
+- 已有服务：同步最新文件、拉取镜像、重新创建容器（`up -d --pull=always`）
+
+---
+
+### yamlops service stop
+
+停止运行中的服务。数据将被保留。
+
+```bash
+# 停止所有服务
+yamlops service stop -e prod
+
+# 停止指定服务器的服务
+yamlops service stop -e prod --server srv-cn1
+
+# 停止指定的业务服务
+yamlops service stop -e prod --biz api-server
+
+# 跳过确认直接停止
+yamlops service stop -e prod --yes
+```
+
+**标志：**
+
+| 标志 | 短标志 | 描述 |
+|------|--------|------|
+| `--server` | `-s` | 按服务器过滤 |
+| `--infra` | `-i` | 按基础设施服务过滤 |
+| `--biz` | `-b` | 按业务服务过滤 |
+| `--yes` | `-y` | 跳过确认提示 |
+
+**注意：** 此命令仅停止容器，不会删除容器或数据。
+
+---
+
+### yamlops service restart
+
+重启服务。不拉取镜像、不同步文件，仅执行容器重启。
+
+```bash
+# 重启所有服务
+yamlops service restart -e prod
+
+# 重启指定服务器的服务
+yamlops service restart -e prod --server srv-cn1
+
+# 重启指定的业务服务
+yamlops service restart -e prod --biz api-server
+
+# 跳过确认直接重启
+yamlops service restart -e prod --yes
+```
+
+**标志：**
+
+| 标志 | 短标志 | 描述 |
+|------|--------|------|
+| `--server` | `-s` | 按服务器过滤 |
+| `--infra` | `-i` | 按基础设施服务过滤 |
+| `--biz` | `-b` | 按业务服务过滤 |
+| `--yes` | `-y` | 跳过确认提示 |
+
+**注意：** 此命令仅执行 `docker compose restart`，不更新任何文件或镜像。
+
+---
+
+### yamlops service cleanup
+
+扫描并清理孤儿资源（不在配置中的容器和目录）。
+
+```bash
+# 扫描并清理孤儿资源
+yamlops service cleanup -e prod
+
+# 清理指定服务器上的孤儿资源
+yamlops service cleanup -e prod --server srv-cn1
+
+# 跳过确认直接清理
+yamlops service cleanup -e prod --yes
+```
+
+**标志：**
+
+| 标志 | 短标志 | 描述 |
+|------|--------|------|
+| `--server` | `-s` | 按服务器过滤 |
+| `--yes` | `-y` | 跳过确认提示 |
+
+**清理内容：**
+
+- 孤儿容器：名称匹配 `yo-{env}-*` 但不在配置中的容器
+- 孤儿目录：`/data/yamlops/yo-{env}-*` 但不在配置中的目录
+
+**警告：** 此操作不可逆，请谨慎使用。
+
+---
+
 ## 常用工作流
 
 ### 标准部署流程
@@ -564,9 +701,28 @@ yamlops app plan -e prod --biz api-server
 yamlops app apply -e prod --biz api-server
 ```
 
+### 服务运维操作
+
+```bash
+# 停止服务（保留数据）
+yamlops service stop -e prod --biz api-server
+
+# 重启服务（不更新文件和镜像）
+yamlops service restart -e prod --biz api-server
+
+# 重新部署服务（同步最新配置）
+yamlops service deploy -e prod --biz api-server
+
+# 清理孤儿资源
+yamlops service cleanup -e prod
+```
+
 ### 清理孤立资源
 
 ```bash
 # 扫描并清理
 yamlops clean -e prod
+
+# 或使用 service cleanup
+yamlops service cleanup -e prod
 ```
