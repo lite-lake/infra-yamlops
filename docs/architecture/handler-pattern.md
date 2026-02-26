@@ -116,8 +116,12 @@ type DNSDeps interface {
 type ServiceDeps interface {
     SSHClient(server string) (SSHClient, error)
     ServerInfo(name string) (*ServerInfo, bool)
+    Server(name string) (*entity.Server, bool)
     WorkDir() string
     Env() string
+    RegistryManager(server string) (*registry.Manager, error)
+    GetAllRegistries() []*entity.Registry
+    Secrets() map[string]string
 }
 ```
 

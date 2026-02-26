@@ -94,6 +94,7 @@ internal/
 │   ├── valueobject/                # 值对象
 │   ├── repository/                 # 仓储接口
 │   ├── service/                    # 领域服务（DifferService, Validator）
+│   ├── contract/                   # 接口契约（DNS, SSH 等）
 │   ├── retry/                      # 重试机制（Config, Option, Do, DoWithResult）
 │   └── errors.go                   # 领域错误（统一定义）
 ├── application/                    # 应用层
@@ -167,6 +168,7 @@ internal/
 │       ├── dns_pull.go             # DNS Pull 命令
 │       ├── app.go                  # App 命令
 │       ├── server_cmd.go           # Server 命令
+│       ├── service_cmd.go          # Service 命令
 │       ├── config_cmd.go           # Config 命令
 │       ├── tui.go                  # TUI 主入口
 │       ├── tui_model.go            # TUI 数据模型
@@ -191,6 +193,7 @@ internal/
 │   ├── syncer.go                   # 环境同步器
 │   ├── templates.go                # 配置模板
 │   └── types.go                    # 类型定义
+├── version/                        # 版本信息
 └── providers/                      # 外部服务提供者
     └── dns/                        # DNS 提供者
         ├── provider.go             # DNS Provider 接口
@@ -505,8 +508,12 @@ type DNSDeps interface {
 type ServiceDeps interface {
     SSHClient(server string) (SSHClient, error)
     ServerInfo(name string) (*ServerInfo, bool)
+    Server(name string) (*entity.Server, bool)
     WorkDir() string
     Env() string
+    RegistryManager(server string) (*registry.Manager, error)
+    GetAllRegistries() []*entity.Registry
+    Secrets() map[string]string
 }
 
 // 通用依赖

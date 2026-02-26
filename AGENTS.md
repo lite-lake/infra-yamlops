@@ -7,7 +7,7 @@ Guidelines for AI coding agents working in the YAMLOps codebase.
 YAMLOps is a Go-based infrastructure operations tool that manages servers, services, DNS, and SSL certificates through YAML configurations. Supports multi-environment (prod/staging/dev/demo) with plan/apply workflow.
 
 - **Go version**: 1.24+
-- **Module path**: `github.com/litelake/yamlops`
+- **Module path**: `github.com/lite-lake/infra-yamlops`
 
 ## Build Commands
 
@@ -46,6 +46,7 @@ internal/
 │   ├── valueobject/            # Value objects
 │   ├── repository/             # Repository interfaces
 │   ├── service/                # Domain services
+│   ├── contract/               # Interface contracts (DNS, SSH, etc.)
 │   └── errors.go               # Domain errors
 ├── application/
 │   ├── handler/                # Change handlers
@@ -66,6 +67,7 @@ internal/
 ├── interfaces/cli/             # Cobra commands, BubbleTea TUI
 ├── constants/                  # Shared constants
 ├── environment/                # Environment setup
+├── version/                    # Version information
 └── providers/dns/              # Cloudflare, Aliyun, Tencent DNS providers
 userdata/{env}/                 # User configs (prod/staging/dev/demo)
 deployments/                    # Generated files (git-ignored)
@@ -86,8 +88,8 @@ import (
     "github.com/spf13/cobra"
     "gopkg.in/yaml.v3"
 
-    "github.com/litelake/yamlops/internal/domain"
-    "github.com/litelake/yamlops/internal/domain/entity"
+    "github.com/lite-lake/infra-yamlops/internal/domain"
+    "github.com/lite-lake/infra-yamlops/internal/domain/entity"
 )
 ```
 

@@ -464,7 +464,7 @@ domains:
 
 ---
 
-### 6. services_infra.yaml
+### 密钥引用格式
 
 YAMLOps 支持两种密钥格式：
 

@@ -14,7 +14,7 @@ go build -o yamlops ./cmd/yamlops
 go build -o yamlops.exe ./cmd/yamlops
 
 # 指定版本
-go build -ldflags "-X internal/interfaces/cli.Version=1.0.0" -o yamlops ./cmd/yamlops
+go build -ldflags "-X github.com/lite-lake/infra-yamlops/internal/version.Version=1.0.0 -o yamlops ./cmd/yamlops
 ```
 
 ### 依赖管理
@@ -127,8 +127,8 @@ import (
     "gopkg.in/yaml.v3"
 
     // 3. 内部包
-    "github.com/litelake/yamlops/internal/domain"
-    "github.com/litelake/yamlops/internal/domain/entity"
+    "github.com/lite-lake/infra-yamlops/internal/domain"
+    "github.com/lite-lake/infra-yamlops/internal/domain/entity"
 )
 ```
 
@@ -299,6 +299,7 @@ internal/
 │   │   ├── validator.go        # 验证器
 │   │   ├── differ.go           # 差异检测
 │   │   └── differ_generic.go   # 泛型差异检测
+│   ├── contract/               # 接口契约（DNS, SSH等）
 │   ├── retry/                  # 重试机制
 │   │   └── retry.go            # Option 模式重试
 │   └── errors.go               # 领域错误
@@ -363,6 +364,7 @@ internal/
 │       ├── env.go              # Env 命令
 │       ├── dns.go              # DNS 命令
 │       ├── server_cmd.go       # Server 命令
+│       ├── service_cmd.go      # Service 命令
 │       ├── config_cmd.go       # Config 命令
 │       ├── app.go              # App 命令
 │       ├── tui.go              # TUI 主入口
@@ -373,6 +375,7 @@ internal/
 │   ├── checker.go              # 环境检查
 │   ├── syncer.go               # 环境同步
 │   └── templates.go            # 配置模板
+├── version/                    # 版本信息
 └── providers/                  # 外部服务提供者
     └── dns/                    # DNS 提供者
         ├── provider.go         # 接口定义

@@ -36,7 +36,7 @@ func Execute() {
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVarP(&flagEnv, "env", "e", "dev", "Environment (prod/staging/dev)")
+	rootCmd.PersistentFlags().StringVarP(&flagEnv, "env", "e", "dev", "Environment (prod/staging/dev/demo)")
 	rootCmd.PersistentFlags().StringVarP(&flagConfigDir, "config", "c", ".", "Configuration directory")
 	rootCmd.PersistentFlags().BoolVarP(&flagShowVersion, "version", "v", false, "Show version information")
 

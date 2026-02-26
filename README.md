@@ -92,12 +92,12 @@ go build -o yamlops ./cmd/yamlops
     │   ├── zones.yaml       # 网区
     │   ├── servers.yaml     # 服务器
     │   ├── services_biz.yaml    # 业务服务
-│   ├── services_infra.yaml  # 基础设施服务 (gateway/ssl)
-│   ├── registries.yaml  # Docker Registry
-│   ├── dns.yaml         # 域名和 DNS 记录
-│   └── volumes/         # 配置文件
-│       ├── infra-gate/
-│       └── api-server/
+    │   ├── services_infra.yaml  # 基础设施服务 (gateway/ssl)
+    │   ├── registries.yaml  # Docker Registry
+    │   ├── dns.yaml         # 域名和 DNS 记录
+    │   └── volumes/         # 配置文件
+    │       ├── infra-gate/
+    │       └── api-server/
     ├── staging/             # 预发环境
     ├── dev/                 # 开发环境
     └── demo/                # 演示环境
@@ -167,6 +167,15 @@ yamlops
 ./yamlops plan -e prod --domain example.com
 ```
 
+**plan 标志:
+
+| 标志 | 描述 |
+|------|------|
+| `--domain` | 按域名过滤 |
+| `--zone` | 按网区过滤 |
+| `--server` | 按服务器过滤 |
+| `--service` | 按服务过滤 |
+
 ### apply - 应用变更
 
 ```bash
@@ -177,6 +186,15 @@ yamlops
 ./yamlops apply -e prod --zone cn-east
 ./yamlops apply -e prod --server srv-east-01
 ```
+
+**apply 标志:
+
+| 标志 | 描述 |
+|------|------|
+| `--domain` | 按域名过滤 |
+| `--zone` | 按网区过滤 |
+| `--server` | 按服务器过滤 |
+| `--service` | 按服务过滤 |
 
 ### validate - 验证配置
 
@@ -189,14 +207,48 @@ yamlops
 
 ```bash
 # 列出实体
+./yamlops list secrets -e prod
+./yamlops list isps -e prod
+./yamlops list zones -e prod
 ./yamlops list servers -e prod
 ./yamlops list services -e prod
+./yamlops list registries -e prod
 ./yamlops list domains -e prod
+./yamlops list records -e prod
+
 # 查看详情
+./yamlops show secret db_password -e prod
+./yamlops show isp aliyun -e prod
+./yamlops show zone cn-east -e prod
 ./yamlops show server srv-east-01 -e prod
 ./yamlops show service api-server -e prod
+./yamlops show registry registry-aliyun -e prod
 ./yamlops show domain example.com -e prod
 ```
+
+**list 有效实体类型**: secrets, isps, zones, servers, services, registries, domains, records
+
+**show 有效实体类型**: secret, isp, zone, infra_service, server, service, registry, domain
+
+### env - 环境管理
+
+```bash
+# 检查环境状态
+./yamlops env check -e prod
+./yamlops env check -e prod --server srv-east-01
+./yamlops env check -e prod --zone cn-east
+
+# 同步环境配置
+./yamlops env sync -e prod
+./yamlops env sync -e prod --server srv-east-01
+```
+
+**env 子命令标志:
+
+| 标志 | 描述 |
+|------|------|
+| `--server` | 按服务器过滤 |
+| `--zone` | 按网区过滤 |
 
 ### server - 服务器管理
 
@@ -210,9 +262,21 @@ yamlops
 # 仅同步
 ./yamlops server sync -e prod --server srv-east-01
 
-# 组合使用
+# 仅检查不同步
 ./yamlops server setup -e prod --check-only --zone cn-east
+
+# 仅同步不检查
+./yamlops server setup -e prod --sync-only --server srv-east-01
 ```
+
+**server 子命令标志**:
+
+| 标志 | 描述 |
+|------|------|
+| `--server` | 按服务器过滤 |
+| `--zone` | 按网区过滤 |
+| `--check-only` | setup 子命令专用：仅检查，不同步 |
+| `--sync-only` | setup 子命令专用：仅同步，不检查 |
 
 ### dns - DNS 管理
 
@@ -224,32 +288,77 @@ yamlops
 ./yamlops dns apply -e prod -d example.com --auto-approve
 
 # 列出 DNS 资源
+./yamlops dns list -e prod
 ./yamlops dns list domains -e prod
 ./yamlops dns list records -e prod
 
 # 查看资源详情
 ./yamlops dns show domain example.com -e prod
+./yamlops dns show record www.example.com -e prod
 
 # 从 ISP 拉取域名
 ./yamlops dns pull domains -e prod -i aliyun
+./yamlops dns pull domains -e prod -i aliyun --auto-approve
 
 # 从域名拉取 DNS 记录
 ./yamlops dns pull records -e prod -d example.com
+./yamlops dns pull records -e prod -d example.com --auto-approve
 ```
+
+**dns 子命令标志:
+
+| 标志 | 短标志 | 描述 |
+|------|--------|------|
+| `--domain` | `-d` | 按域名过滤 |
+| `--record` | `-r` | 按记录过滤（格式：name.domain) |
+| `--isp` | `-i` | pull domains 专用：ISP 名称 |
+| `--auto-approve` | | 跳过确认提示 |
 
 ### app - 应用部署
 
 ```bash
 # 生成部署计划
+./yamlops app plan -e prod
+./yamlops app plan -e prod -z cn-east
 ./yamlops app plan -e prod -s srv-east-01
+./yamlops app plan -e prod -i infra-gate
+./yamlops app plan -e prod -b api-server
 
 # 应用部署
 ./yamlops app apply -e prod --auto-approve
 
 # 列出资源
 ./yamlops app list -e prod
+./yamlops app list zones -e prod
+./yamlops app list servers -e prod
+./yamlops app list infra -e prod
 ./yamlops app list biz -e prod -s srv-east-01
+
+# 查看资源详情
+./yamlops app show zone cn-east -e prod
+./yamlops app show server srv-east-01 -e prod
+./yamlops app show infra infra-gate -e prod
+./yamlops app show biz api-server -e prod
 ```
+
+**app 持久标志** (所有子命令通用):
+
+| 标志 | 短标志 | 描述 |
+|------|--------|------|
+| `--zone` | `-z` | 按网区过滤 |
+| `--server` | `-s` | 按服务器过滤 |
+| `--infra` | `-i` | 按基础设施服务过滤 |
+| `--biz` | `-b` | 按业务服务过滤 |
+
+**app apply 标志**:
+
+| 标志 | 描述 |
+|------|------|
+| `--auto-approve` | 自动确认变更 |
+
+**app list 有效资源类型**: zones, servers, infra, biz
+
+**app show 有效资源类型**: zone, server, infra, biz
 
 ### config - 配置管理
 
@@ -257,11 +366,16 @@ yamlops
 # 列出配置项
 ./yamlops config list -e prod
 ./yamlops config list secrets -e prod
+./yamlops config list isps -e prod
+./yamlops config list registries -e prod
 
 # 查看配置详情
 ./yamlops config show secret db_password -e prod
 ./yamlops config show isp aliyun -e prod
+./yamlops config show registry registry-aliyun -e prod
 ```
+
+**config show 有效类型**: secret, isp, registry
 
 ### clean - 清理资源
 
@@ -279,6 +393,8 @@ yamlops
 
 # 停止服务（保留数据）
 ./yamlops service stop -e prod --biz api-server
+./yamlops service stop -e prod --infra infra-gate
+./yamlops service stop -e prod --server srv-east-01 -y
 
 # 重启服务（不更新文件和镜像）
 ./yamlops service restart -e prod --biz api-server
@@ -287,13 +403,18 @@ yamlops
 ./yamlops service cleanup -e prod -y
 ```
 
-**service 子命令标志：**
+**service 持久标志** (所有子命令通用):
 
 | 标志 | 短标志 | 描述 |
 |------|--------|------|
 | `--server` | `-s` | 按服务器过滤 |
 | `--infra` | `-i` | 按基础设施服务过滤 |
 | `--biz` | `-b` | 按业务服务过滤 |
+
+**service 子命令标志**:
+
+| 标志 | 短标志 | 描述 |
+|------|--------|------|
 | `--yes` | `-y` | 跳过确认提示 |
 
 ### TUI 交互模式
@@ -303,7 +424,7 @@ yamlops
 ./yamlops -e prod
 ```
 
-**TUI 快捷键**：
+**TUI 快捷键**:
 
 | 按键 | 功能 |
 |------|------|
@@ -391,6 +512,7 @@ services:
   - name: api-server
     server: srv-east-01
     image: myapp/api:v1.0.0
+    registry: registry-aliyun          # 可选，指定 Registry
     ports:
       - container: 3000
         host: 13000
@@ -438,21 +560,22 @@ infra_services:
     type: gateway                  # gateway | ssl
     server: srv-east-01
     image: infra-gate:latest
-    gatewayPorts:
+    ports:
       http: 80
       https: 443
-    gatewayConfig:
+    config:
       source: volumes://infra-gate
       sync: true
-    gatewaySSL:
+    ssl:
       mode: remote                  # local | remote
       endpoint: http://infra-ssl:38567
-    gatewayWAF:
+      api_key: {secret: ssl_api_key}
+    waf:
       enabled: true
       whitelist:
         - 10.0.0.0/8
         - 192.168.0.0/16
-    gatewayLogLevel: 1
+    log_level: 1
     networks:
       - yamlops-prod
 
@@ -460,18 +583,13 @@ infra_services:
     type: ssl
     server: srv-east-01
     image: infra-ssl:latest
-    gatewayPorts:
+    ports:
       api: 38567
-    gatewayConfig:
-      auth:
-        enabled: true
-        apikey: {secret: ssl_api_key}
-      storage:
-        type: local
-        path: /data/certs
-      defaults:
-        issue_provider: letsencrypt_prod
-        storage_provider: local_default
+    config:
+      source: volumes://infra-ssl
+      sync: true
+    networks:
+      - yamlops-prod
 ```
 
 ### registries.yaml - Docker Registry
