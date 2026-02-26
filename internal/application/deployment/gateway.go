@@ -55,23 +55,7 @@ func (g *Generator) buildGatewayRoutes(gw *entity.InfraService, config *entity.C
 	}
 }
 
-func (g *Generator) buildContainerPortMap(config *entity.Config, serverName string) map[string]int {
-	containerPortToHostPort := make(map[string]int)
-	for _, svc := range config.Services {
-		if svc.Server == serverName {
-			for _, port := range svc.Ports {
-				key := fmt.Sprintf("%s:%d", svc.Name, port.Container)
-				containerPortToHostPort[key] = port.Host
-			}
-		}
-	}
-	return containerPortToHostPort
-}
-
 func (g *Generator) collectHostRoutes(gw *entity.InfraService, config *entity.Config) []gate.HostRoute {
-	serverMap := config.GetServerMap()
-	containerPortToHostPort := g.buildContainerPortMap(config, gw.Server)
-
 	var hosts []gate.HostRoute
 	for _, svc := range config.Services {
 		if svc.Server != gw.Server {
@@ -81,16 +65,14 @@ func (g *Generator) collectHostRoutes(gw *entity.InfraService, config *entity.Co
 			if !route.HasGateway() {
 				continue
 			}
-			hosts = append(hosts, g.buildHostRoute(&svc, &route, serverMap, containerPortToHostPort, gw))
+			hosts = append(hosts, g.buildHostRoute(&svc, &route, gw))
 		}
 	}
 	return hosts
 }
 
-func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.ServiceGatewayRoute, serverMap map[string]*entity.Server, containerPortToHostPort map[string]int, gw *entity.InfraService) gate.HostRoute {
-	backendIP := g.resolveBackendIP(svc.Server, serverMap)
-	hostPort := g.resolveHostPort(svc.Name, route.ContainerPort, containerPortToHostPort)
-	backend := fmt.Sprintf("http://%s:%d", backendIP, hostPort)
+func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.ServiceGatewayRoute, gw *entity.InfraService) gate.HostRoute {
+	backend := fmt.Sprintf("http://%s:%d", svc.Name, route.ContainerPort)
 
 	hostname := route.Hostname
 	if hostname == "" {
@@ -123,21 +105,6 @@ func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.Service
 		HealthCheckInterval: healthInterval,
 		HealthCheckTimeout:  healthTimeout,
 	}
-}
-
-func (g *Generator) resolveBackendIP(serverName string, serverMap map[string]*entity.Server) string {
-	if server, ok := serverMap[serverName]; ok && server.IP.Private != "" {
-		return server.IP.Private
-	}
-	return constants.HostDockerInternal
-}
-
-func (g *Generator) resolveHostPort(svcName string, containerPort int, containerPortToHostPort map[string]int) int {
-	key := fmt.Sprintf("%s:%d", svcName, containerPort)
-	if hostPort := containerPortToHostPort[key]; hostPort > 0 {
-		return hostPort
-	}
-	return containerPort
 }
 
 func (g *Generator) buildHealthCheckConfig(svc *entity.BizService) (string, string) {

@@ -37,7 +37,7 @@ func (h *ServiceHandler) Apply(ctx context.Context, change *valueobject.Change, 
 	return ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{
 		PreDeployHook:  h.createPreDeployHook(change, deployCtx, deps),
 		PostDeployHook: nil,
-		RestartAfterUp: false,
+		RestartAfterUp: true,
 	})
 }
 
