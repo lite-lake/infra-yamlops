@@ -192,3 +192,7 @@ func TestServer_Validate(t *testing.T) {
 | Stop | `yamlops service stop` | Stop containers (data preserved) |
 | Restart | `yamlops service restart` | Restart containers (no file/image sync) |
 | Cleanup | `yamlops service cleanup` | Remove orphan containers and directories |
+
+## 注意事项
+
+- **Mac 系统**: 在调用任何 skill 之前记得先 `source ~/.zshrc`
