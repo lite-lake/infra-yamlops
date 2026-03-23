@@ -388,7 +388,7 @@ services:
 | 字段 | 类型 | 必填 | 描述 |
 |------|------|------|------|
 | `hostname` | string | 是 | 域名 |
-| `container_port` | int | 是 | 容器端口 |
+| `container_port` | int | 否 | 容器端口（默认 80） |
 | `path` | string | 否 | 路径前缀 |
 | `http` | bool | 否 | 启用 HTTP |
 | `https` | bool | 否 | 启用 HTTPS |

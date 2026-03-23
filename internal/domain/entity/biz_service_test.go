@@ -6,6 +6,7 @@ import (
 
 	"github.com/lite-lake/infra-yamlops/internal/domain"
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+	"gopkg.in/yaml.v3"
 )
 
 func TestServiceHealthcheck_Validate(t *testing.T) {
@@ -191,6 +192,43 @@ func TestServiceGatewayRoute_Validate(t *testing.T) {
 				}
 			} else if err != nil {
 				t.Errorf("Validate() unexpected error = %v", err)
+			}
+		})
+	}
+}
+
+func TestServiceGatewayRoute_UnmarshalYAML_DefaultPort(t *testing.T) {
+	tests := []struct {
+		name     string
+		yamlData string
+		wantPort int
+	}{
+		{
+			name:     "container_port specified",
+			yamlData: "hostname: example.com\ncontainer_port: 8080\n",
+			wantPort: 8080,
+		},
+		{
+			name:     "container_port not specified, uses default 80",
+			yamlData: "hostname: example.com\n",
+			wantPort: 80,
+		},
+		{
+			name:     "container_port with other fields",
+			yamlData: "hostname: example.com\npath: /api\nhttp: true\n",
+			wantPort: 80,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var route ServiceGatewayRoute
+			err := yaml.Unmarshal([]byte(tt.yamlData), &route)
+			if err != nil {
+				t.Fatalf("Unmarshal() error = %v", err)
+			}
+			if route.ContainerPort != tt.wantPort {
+				t.Errorf("ContainerPort = %v, want %v", route.ContainerPort, tt.wantPort)
 			}
 		})
 	}

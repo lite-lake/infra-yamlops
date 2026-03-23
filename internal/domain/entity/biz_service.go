@@ -104,10 +104,37 @@ func (p *ServicePort) Validate() error {
 
 type ServiceGatewayRoute struct {
 	Hostname      string `yaml:"hostname"`
-	ContainerPort int    `yaml:"container_port"`
+	ContainerPort int    `yaml:"container_port,omitempty"`
 	Path          string `yaml:"path,omitempty"`
 	HTTP          bool   `yaml:"http,omitempty"`
 	HTTPS         bool   `yaml:"https,omitempty"`
+}
+
+type serviceGatewayRouteAlias ServiceGatewayRoute
+
+func (r *ServiceGatewayRoute) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var raw struct {
+		Hostname      string `yaml:"hostname"`
+		ContainerPort *int   `yaml:"container_port"`
+		Path          string `yaml:"path,omitempty"`
+		HTTP          bool   `yaml:"http,omitempty"`
+		HTTPS         bool   `yaml:"https,omitempty"`
+	}
+	if err := unmarshal(&raw); err != nil {
+		return err
+	}
+
+	r.Hostname = raw.Hostname
+	if raw.ContainerPort != nil {
+		r.ContainerPort = *raw.ContainerPort
+	} else {
+		r.ContainerPort = 80
+	}
+	r.Path = raw.Path
+	r.HTTP = raw.HTTP
+	r.HTTPS = raw.HTTPS
+
+	return nil
 }
 
 func (r *ServiceGatewayRoute) Validate() error {
