@@ -21,4 +21,5 @@ type HostRoute struct {
 	HealthCheckInterval string
 	HealthCheckTimeout  string
 	PreserveHostHeader  bool
+	GZipEnabled         *bool // 使用指针以支持"未设置"状态
 }
