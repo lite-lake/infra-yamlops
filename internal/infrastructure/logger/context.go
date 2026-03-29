@@ -38,6 +38,10 @@ func WithTraceID(ctx context.Context, traceID string) context.Context {
 
 func generateShortID() string {
 	b := make([]byte, 4)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		for i := range b {
+			b[i] = byte(i * 31 % 256)
+		}
+	}
 	return hex.EncodeToString(b)
 }

@@ -32,29 +32,46 @@ func (p *AliyunProvider) Name() string {
 }
 
 func (p *AliyunProvider) ListRecords(ctx context.Context, domainName string) ([]DNSRecord, error) {
-	req := &alidns.DescribeDomainRecordsRequest{
-		DomainName: tea.String(domainName),
-	}
-	resp, err := p.client.DescribeDomainRecords(req)
-	if err != nil {
-		return nil, domainerr.WrapOp("list records", err)
-	}
-
 	var records []DNSRecord
-	if resp.Body != nil && resp.Body.DomainRecords != nil {
-		for _, r := range resp.Body.DomainRecords.Record {
-			ttl := constants.DefaultDNSRecordTTL
-			if r.TTL != nil {
-				ttl = int(*r.TTL)
-			}
-			records = append(records, DNSRecord{
-				ID:    tea.StringValue(r.RecordId),
-				Name:  tea.StringValue(r.RR),
-				Type:  tea.StringValue(r.Type),
-				Value: tea.StringValue(r.Value),
-				TTL:   ttl,
-			})
+	pageNumber := int64(1)
+	pageSize := int64(100)
+
+	for {
+		req := &alidns.DescribeDomainRecordsRequest{
+			DomainName: tea.String(domainName),
+			PageNumber: tea.Int64(pageNumber),
+			PageSize:   tea.Int64(pageSize),
 		}
+		resp, err := p.client.DescribeDomainRecords(req)
+		if err != nil {
+			return nil, domainerr.WrapOp("list records", err)
+		}
+
+		if resp.Body != nil && resp.Body.DomainRecords != nil {
+			for _, r := range resp.Body.DomainRecords.Record {
+				ttl := constants.DefaultDNSRecordTTL
+				if r.TTL != nil {
+					ttl = int(*r.TTL)
+				}
+				records = append(records, DNSRecord{
+					ID:    tea.StringValue(r.RecordId),
+					Name:  tea.StringValue(r.RR),
+					Type:  tea.StringValue(r.Type),
+					Value: tea.StringValue(r.Value),
+					TTL:   ttl,
+				})
+			}
+		}
+
+		totalCount := int64(0)
+		if resp.Body != nil && resp.Body.TotalCount != nil {
+			totalCount = *resp.Body.TotalCount
+		}
+
+		if int64(len(records)) >= totalCount {
+			break
+		}
+		pageNumber++
 	}
 	return records, nil
 }
@@ -130,59 +147,93 @@ func (p *AliyunProvider) ListDomains(ctx context.Context) ([]string, error) {
 }
 
 func (p *AliyunProvider) GetRecordsByTypes(ctx context.Context, domainName string, recordType string) ([]DNSRecord, error) {
-	req := &alidns.DescribeDomainRecordsRequest{
-		DomainName: tea.String(domainName),
-		Type:       tea.String(recordType),
-	}
-	resp, err := p.client.DescribeDomainRecords(req)
-	if err != nil {
-		return nil, domainerr.WrapOp("list records", err)
-	}
-
 	var records []DNSRecord
-	if resp.Body != nil && resp.Body.DomainRecords != nil {
-		for _, r := range resp.Body.DomainRecords.Record {
-			ttl := constants.DefaultDNSRecordTTL
-			if r.TTL != nil {
-				ttl = int(*r.TTL)
-			}
-			records = append(records, DNSRecord{
-				ID:    tea.StringValue(r.RecordId),
-				Name:  tea.StringValue(r.RR),
-				Type:  tea.StringValue(r.Type),
-				Value: tea.StringValue(r.Value),
-				TTL:   ttl,
-			})
+	pageNumber := int64(1)
+	pageSize := int64(100)
+
+	for {
+		req := &alidns.DescribeDomainRecordsRequest{
+			DomainName: tea.String(domainName),
+			Type:       tea.String(recordType),
+			PageNumber: tea.Int64(pageNumber),
+			PageSize:   tea.Int64(pageSize),
 		}
+		resp, err := p.client.DescribeDomainRecords(req)
+		if err != nil {
+			return nil, domainerr.WrapOp("list records", err)
+		}
+
+		if resp.Body != nil && resp.Body.DomainRecords != nil {
+			for _, r := range resp.Body.DomainRecords.Record {
+				ttl := constants.DefaultDNSRecordTTL
+				if r.TTL != nil {
+					ttl = int(*r.TTL)
+				}
+				records = append(records, DNSRecord{
+					ID:    tea.StringValue(r.RecordId),
+					Name:  tea.StringValue(r.RR),
+					Type:  tea.StringValue(r.Type),
+					Value: tea.StringValue(r.Value),
+					TTL:   ttl,
+				})
+			}
+		}
+
+		totalCount := int64(0)
+		if resp.Body != nil && resp.Body.TotalCount != nil {
+			totalCount = *resp.Body.TotalCount
+		}
+
+		if int64(len(records)) >= totalCount {
+			break
+		}
+		pageNumber++
 	}
 	return records, nil
 }
 
 func (p *AliyunProvider) GetRecordsByName(domainName string, name string) ([]DNSRecord, error) {
-	req := &alidns.DescribeDomainRecordsRequest{
-		DomainName: tea.String(domainName),
-		RRKeyWord:  tea.String(name),
-	}
-	resp, err := p.client.DescribeDomainRecords(req)
-	if err != nil {
-		return nil, domainerr.WrapOp("list records", err)
-	}
-
 	var records []DNSRecord
-	if resp.Body != nil && resp.Body.DomainRecords != nil {
-		for _, r := range resp.Body.DomainRecords.Record {
-			ttl := constants.DefaultDNSRecordTTL
-			if r.TTL != nil {
-				ttl = int(*r.TTL)
-			}
-			records = append(records, DNSRecord{
-				ID:    tea.StringValue(r.RecordId),
-				Name:  tea.StringValue(r.RR),
-				Type:  tea.StringValue(r.Type),
-				Value: tea.StringValue(r.Value),
-				TTL:   ttl,
-			})
+	pageNumber := int64(1)
+	pageSize := int64(100)
+
+	for {
+		req := &alidns.DescribeDomainRecordsRequest{
+			DomainName: tea.String(domainName),
+			RRKeyWord:  tea.String(name),
+			PageNumber: tea.Int64(pageNumber),
+			PageSize:   tea.Int64(pageSize),
 		}
+		resp, err := p.client.DescribeDomainRecords(req)
+		if err != nil {
+			return nil, domainerr.WrapOp("list records", err)
+		}
+
+		if resp.Body != nil && resp.Body.DomainRecords != nil {
+			for _, r := range resp.Body.DomainRecords.Record {
+				ttl := constants.DefaultDNSRecordTTL
+				if r.TTL != nil {
+					ttl = int(*r.TTL)
+				}
+				records = append(records, DNSRecord{
+					ID:    tea.StringValue(r.RecordId),
+					Name:  tea.StringValue(r.RR),
+					Type:  tea.StringValue(r.Type),
+					Value: tea.StringValue(r.Value),
+					TTL:   ttl,
+				})
+			}
+		}
+
+		totalCount := int64(0)
+		if resp.Body != nil && resp.Body.TotalCount != nil {
+			totalCount = *resp.Body.TotalCount
+		}
+
+		if int64(len(records)) >= totalCount {
+			break
+		}
+		pageNumber++
 	}
 	return records, nil
 }

@@ -70,22 +70,22 @@ func loadEntity[T any](filePath, yamlKey string) ([]T, error) {
 	if err != nil {
 		return nil, fmt.Errorf("reading config file %s: %w", filePath, err)
 	}
-	var raw map[string]interface{}
+
+	var raw map[string]yaml.Node
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parsing YAML in %s: %w", filePath, err)
 	}
-	itemsRaw, ok := raw[yamlKey]
+
+	node, ok := raw[yamlKey]
 	if !ok {
 		return nil, nil
 	}
-	itemsData, err := yaml.Marshal(itemsRaw)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling %s items in %s: %w", yamlKey, filePath, err)
-	}
+
 	var items []T
-	if err := yaml.Unmarshal(itemsData, &items); err != nil {
+	if err := node.Decode(&items); err != nil {
 		return nil, fmt.Errorf("parsing %s items in %s: %w", yamlKey, filePath, err)
 	}
+
 	return items, nil
 }
 

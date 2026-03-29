@@ -100,20 +100,3 @@ func WrapEntity(entity, name string, err error) error {
 	}
 	return fmt.Errorf("%s[%s]: %w", entity, name, err)
 }
-
-type OpError struct {
-	Op    string
-	Cause error
-}
-
-func (e *OpError) Error() string {
-	return fmt.Sprintf("%s: %v", e.Op, e.Cause)
-}
-
-func (e *OpError) Unwrap() error {
-	return e.Cause
-}
-
-func NewOpError(op string, cause error) error {
-	return &OpError{Op: op, Cause: cause}
-}
