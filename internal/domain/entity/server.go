@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/lite-lake/infra-yamlops/internal/constants"
 	"github.com/lite-lake/infra-yamlops/internal/domain"
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
@@ -73,8 +72,8 @@ func (s *ServerSSH) Validate() error {
 	if s.Host == "" {
 		return domain.RequiredField("ssh host")
 	}
-	if s.Port <= 0 || s.Port > constants.MaxPortNumber {
-		return fmt.Errorf("%w: ssh port must be between 1 and %d", domain.ErrInvalidPort, constants.MaxPortNumber)
+	if err := ValidatePort(s.Port); err != nil {
+		return fmt.Errorf("ssh %w", err)
 	}
 	if s.User == "" {
 		return domain.RequiredField("ssh user")

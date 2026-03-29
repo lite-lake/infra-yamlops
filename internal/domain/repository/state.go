@@ -12,23 +12,27 @@ type StateRepository interface {
 }
 
 type DeploymentState struct {
-	Services      map[string]*entity.BizService
-	InfraServices map[string]*entity.InfraService
-	Servers       map[string]*entity.Server
+	Secrets       map[string]string
+	Registries    map[string]*entity.Registry
+	ISPs          map[string]*entity.ISP
 	Zones         map[string]*entity.Zone
+	Servers       map[string]*entity.Server
+	InfraServices map[string]*entity.InfraService
+	Services      map[string]*entity.BizService
 	Domains       map[string]*entity.Domain
 	Records       map[string]*entity.DNSRecord
-	ISPs          map[string]*entity.ISP
 }
 
 func NewDeploymentState() *DeploymentState {
 	return &DeploymentState{
-		Services:      make(map[string]*entity.BizService),
-		InfraServices: make(map[string]*entity.InfraService),
-		Servers:       make(map[string]*entity.Server),
+		Secrets:       make(map[string]string),
+		Registries:    make(map[string]*entity.Registry),
+		ISPs:          make(map[string]*entity.ISP),
 		Zones:         make(map[string]*entity.Zone),
+		Servers:       make(map[string]*entity.Server),
+		InfraServices: make(map[string]*entity.InfraService),
+		Services:      make(map[string]*entity.BizService),
 		Domains:       make(map[string]*entity.Domain),
 		Records:       make(map[string]*entity.DNSRecord),
-		ISPs:          make(map[string]*entity.ISP),
 	}
 }

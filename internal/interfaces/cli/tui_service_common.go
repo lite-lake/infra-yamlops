@@ -67,8 +67,8 @@ func fetchServiceStatus(servers []serverWithSSH, infraServices []serviceWithServ
 			if infra.serverName != srv.name {
 				continue
 			}
-			remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, env, infra.name))
-			key := fmt.Sprintf(constants.ServicePrefixFormat, env, infra.name)
+			remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceNameFormat, env, infra.name))
+			key := fmt.Sprintf(constants.ServiceNameFormat, env, infra.name)
 			if _, exists := statusMap[key]; !exists {
 				stdout, _, err := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
 				if err != nil {
@@ -83,8 +83,8 @@ func fetchServiceStatus(servers []serverWithSSH, infraServices []serviceWithServ
 			if svc.serverName != srv.name {
 				continue
 			}
-			remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, env, svc.name))
-			key := fmt.Sprintf(constants.ServicePrefixFormat, env, svc.name)
+			remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceNameFormat, env, svc.name))
+			key := fmt.Sprintf(constants.ServiceNameFormat, env, svc.name)
 			if _, exists := statusMap[key]; !exists {
 				stdout, _, err := client.Run(fmt.Sprintf("sudo test -d %s && echo exists || echo notfound", remoteDir))
 				if err != nil {
@@ -125,7 +125,7 @@ func applyStatusToNodes(nodes []*TreeNode, statusMap map[string]NodeStatus, env 
 
 func applyStatusToNode(node *TreeNode, statusMap map[string]NodeStatus, env string) {
 	if node.Type == NodeTypeInfra || node.Type == NodeTypeBiz {
-		key := fmt.Sprintf(constants.ServicePrefixFormat, env, node.Name)
+		key := fmt.Sprintf(constants.ServiceNameFormat, env, node.Name)
 		if status, exists := statusMap[key]; exists {
 			node.Status = status
 		}

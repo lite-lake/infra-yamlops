@@ -8,11 +8,19 @@ import (
 	"strings"
 	"syscall"
 	"time"
+)
 
-	"github.com/lite-lake/infra-yamlops/internal/constants"
+const (
+	DefaultRetryMaxAttempts    = 3
+	DefaultRetryInitialDelayMs = 100
+	DefaultRetryMaxDelaySec    = 30
+	DefaultRetryMultiplier     = 2.0
 )
 
 var (
+	DefaultRetryInitialDelay = DefaultRetryInitialDelayMs * time.Millisecond
+	DefaultRetryMaxDelay     = DefaultRetryMaxDelaySec * time.Second
+
 	ErrMaxAttemptsExceeded = errors.New("max retry attempts exceeded")
 	ErrContextCanceled     = errors.New("context canceled")
 )
@@ -76,10 +84,10 @@ func WithLogger(log LogFunc) Option {
 
 func DefaultConfig() *Config {
 	return &Config{
-		MaxAttempts:  constants.DefaultRetryMaxAttempts,
-		InitialDelay: constants.DefaultRetryInitialDelay,
-		MaxDelay:     constants.DefaultRetryMaxDelay,
-		Multiplier:   constants.DefaultRetryMultiplier,
+		MaxAttempts:  DefaultRetryMaxAttempts,
+		InitialDelay: DefaultRetryInitialDelay,
+		MaxDelay:     DefaultRetryMaxDelay,
+		Multiplier:   DefaultRetryMultiplier,
 		IsRetryable:  DefaultIsRetryable,
 		OnRetry:      nil,
 	}

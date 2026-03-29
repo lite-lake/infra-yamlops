@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/lite-lake/infra-yamlops/internal/constants"
 	"github.com/lite-lake/infra-yamlops/internal/domain"
 )
 
@@ -21,11 +20,11 @@ type GatewayPorts struct {
 }
 
 func (p *GatewayPorts) Validate() error {
-	if p.HTTP <= 0 || p.HTTP > constants.MaxPortNumber {
-		return fmt.Errorf("%w: http port must be between 1 and %d", domain.ErrInvalidPort, constants.MaxPortNumber)
+	if err := ValidatePort(p.HTTP); err != nil {
+		return fmt.Errorf("http %w", err)
 	}
-	if p.HTTPS <= 0 || p.HTTPS > constants.MaxPortNumber {
-		return fmt.Errorf("%w: https port must be between 1 and %d", domain.ErrInvalidPort, constants.MaxPortNumber)
+	if err := ValidatePort(p.HTTPS); err != nil {
+		return fmt.Errorf("https %w", err)
 	}
 	return nil
 }
@@ -246,8 +245,8 @@ type SSLPorts struct {
 }
 
 func (p *SSLPorts) Validate() error {
-	if p.API <= 0 || p.API > constants.MaxPortNumber {
-		return fmt.Errorf("%w: api port must be between 1 and %d", domain.ErrInvalidPort, constants.MaxPortNumber)
+	if err := ValidatePort(p.API); err != nil {
+		return fmt.Errorf("api %w", err)
 	}
 	return nil
 }

@@ -395,7 +395,7 @@ func executeServiceOperation(ctx *Context, cfg *entity.Config, services []target
 			continue
 		}
 
-		remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, ctx.Env, svc.Name))
+		remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceNameFormat, ctx.Env, svc.Name))
 		stderr, err := opFunc(client, remoteDir)
 
 		client.Close()

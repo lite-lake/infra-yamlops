@@ -11,6 +11,7 @@ import (
 )
 
 type AliyunProvider struct {
+	BaseProvider
 	client *alidns.Client
 }
 
@@ -24,7 +25,10 @@ func NewAliyunProvider(accessKeyID, accessKeySecret string) (Provider, error) {
 	if err != nil {
 		return nil, domainerr.WrapOp("create aliyun dns client", err)
 	}
-	return &AliyunProvider{client: client}, nil
+	return &AliyunProvider{
+		BaseProvider: *NewBaseProvider(),
+		client:       client,
+	}, nil
 }
 
 func (p *AliyunProvider) Name() string {
@@ -77,10 +81,7 @@ func (p *AliyunProvider) ListRecords(ctx context.Context, domainName string) ([]
 }
 
 func (p *AliyunProvider) CreateRecord(ctx context.Context, domainName string, record *DNSRecord) error {
-	ttl := int64(record.TTL)
-	if ttl == 0 {
-		ttl = constants.DefaultDNSRecordTTL
-	}
+	ttl := int64(p.NormalizeTTL(record.TTL))
 
 	req := &alidns.AddDomainRecordRequest{
 		DomainName: tea.String(domainName),
@@ -110,10 +111,7 @@ func (p *AliyunProvider) DeleteRecord(ctx context.Context, domainName string, re
 }
 
 func (p *AliyunProvider) UpdateRecord(ctx context.Context, domainName string, recordID string, record *DNSRecord) error {
-	ttl := int64(record.TTL)
-	if ttl == 0 {
-		ttl = constants.DefaultDNSRecordTTL
-	}
+	ttl := int64(p.NormalizeTTL(record.TTL))
 
 	req := &alidns.UpdateDomainRecordRequest{
 		RecordId: tea.String(recordID),

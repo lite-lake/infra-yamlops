@@ -24,9 +24,9 @@ func (h *DNSHandler) EntityType() string {
 func (h *DNSHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
-	record, err := h.extractDNSRecordFromChange(change)
-	if err != nil {
-		result.Error = err
+	record, ok := ExtractFromChange[entity.DNSRecord](change)
+	if !ok {
+		result.Error = fmt.Errorf("cannot extract DNS record from change")
 		return result, nil
 	}
 
@@ -50,20 +50,6 @@ func (h *DNSHandler) Apply(ctx context.Context, change *valueobject.Change, deps
 	default:
 		return h.createRecord(ctx, change, record, provider)
 	}
-}
-
-func (h *DNSHandler) extractDNSRecordFromChange(ch *valueobject.Change) (*entity.DNSRecord, error) {
-	if ch.NewState() != nil {
-		if record, ok := ch.NewState().(*entity.DNSRecord); ok {
-			return record, nil
-		}
-	}
-	if ch.OldState() != nil {
-		if record, ok := ch.OldState().(*entity.DNSRecord); ok {
-			return record, nil
-		}
-	}
-	return nil, fmt.Errorf("cannot extract DNS record from change")
 }
 
 func (h *DNSHandler) createRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider contract.DNSProvider) (*Result, error) {

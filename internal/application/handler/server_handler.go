@@ -41,8 +41,8 @@ func (h *ServerHandler) Apply(ctx context.Context, change *valueobject.Change, d
 func (h *ServerHandler) handleCreateOrUpdate(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
 	result := &Result{Change: change, Success: false}
 
-	server := h.getServerFromChange(change)
-	if server == nil {
+	server, ok := ExtractFromChange[entity.Server](change)
+	if !ok {
 		result.Error = fmt.Errorf("%w: %s", domainerr.ErrServerNotRegistered, change.Name())
 		return result, nil
 	}
@@ -94,18 +94,4 @@ func (h *ServerHandler) handleCreateOrUpdate(ctx context.Context, change *valueo
 	}
 
 	return result, nil
-}
-
-func (h *ServerHandler) getServerFromChange(change *valueobject.Change) *entity.Server {
-	if change.NewState() != nil {
-		if server, ok := change.NewState().(*entity.Server); ok {
-			return server
-		}
-	}
-	if change.OldState() != nil {
-		if server, ok := change.OldState().(*entity.Server); ok {
-			return server
-		}
-	}
-	return nil
 }

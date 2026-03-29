@@ -56,13 +56,25 @@ func GetSubDomain(fullDomain, domain string) string {
 	return fullDomain
 }
 
-func ParseSRVValue(value string) (priority, weight, port float64, target string) {
+func ParseSRVValue(value string) (priority, weight, port float64, target string, err error) {
 	parts := strings.Fields(value)
 	if len(parts) >= 4 {
-		priority, _ = strconv.ParseFloat(parts[0], 64)
-		weight, _ = strconv.ParseFloat(parts[1], 64)
-		port, _ = strconv.ParseFloat(parts[2], 64)
+		var parseErr error
+		priority, parseErr = strconv.ParseFloat(parts[0], 64)
+		if parseErr != nil {
+			err = fmt.Errorf("parse priority: %w", parseErr)
+		}
+		weight, parseErr = strconv.ParseFloat(parts[1], 64)
+		if parseErr != nil {
+			err = fmt.Errorf("parse weight: %w", parseErr)
+		}
+		port, parseErr = strconv.ParseFloat(parts[2], 64)
+		if parseErr != nil {
+			err = fmt.Errorf("parse port: %w", parseErr)
+		}
 		target = parts[3]
+	} else {
+		err = fmt.Errorf("invalid SRV value format: expected at least 4 parts")
 	}
 	return
 }

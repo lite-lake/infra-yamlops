@@ -52,6 +52,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleServiceStopCompleteMsg(msg)
 	case serviceRestartCompleteMsg:
 		return m.handleServiceRestartCompleteMsg(msg)
+	case serviceOpCompleteMsg:
+		return m.handleServiceOpCompleteMsg(msg)
 	case applyProgressMsg:
 		return m.handleApplyProgressMsg(msg, &cmds)
 	case applyCompleteAsyncMsg:
@@ -282,6 +284,43 @@ func (m Model) handleServiceRestartCompleteMsg(msg serviceRestartCompleteMsg) (t
 	}
 	m.Restart.RestartResults = msg.results
 	m.ViewState = ViewStateServiceRestartComplete
+	return m, nil
+}
+
+func (m Model) handleServiceOpCompleteMsg(msg serviceOpCompleteMsg) (tea.Model, tea.Cmd) {
+	m.Loading.Active = false
+	switch msg.config.OpType {
+	case ServiceOpStop:
+		var results []StopResult
+		for _, opResult := range msg.results {
+			result := StopResult{ServerName: opResult.ServerName}
+			for _, svc := range opResult.Services {
+				result.Services = append(result.Services, StopServiceResult{
+					Name:    svc.Name,
+					Success: svc.Success,
+					Error:   svc.Error,
+				})
+			}
+			results = append(results, result)
+		}
+		m.Stop.StopResults = results
+		m.ViewState = ViewStateServiceStopComplete
+	case ServiceOpRestart:
+		var results []RestartResult
+		for _, opResult := range msg.results {
+			result := RestartResult{ServerName: opResult.ServerName}
+			for _, svc := range opResult.Services {
+				result.Services = append(result.Services, RestartServiceResult{
+					Name:    svc.Name,
+					Success: svc.Success,
+					Error:   svc.Error,
+				})
+			}
+			results = append(results, result)
+		}
+		m.Restart.RestartResults = results
+		m.ViewState = ViewStateServiceRestartComplete
+	}
 	return m, nil
 }
 

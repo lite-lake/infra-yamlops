@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/lite-lake/infra-yamlops/internal/constants"
 	"github.com/lite-lake/infra-yamlops/internal/domain"
 )
+
+const MaxPortNumber = 65535
 
 type Config struct {
 	Secrets       []Secret       `yaml:"secrets,omitempty"`
@@ -121,7 +122,7 @@ func ParsePort(s string) (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("%w: %s", domain.ErrInvalidPort, s)
 	}
-	if port <= 0 || port > constants.MaxPortNumber {
+	if port <= 0 || port > MaxPortNumber {
 		return 0, fmt.Errorf("%w: %d", domain.ErrInvalidPort, port)
 	}
 	return port, nil

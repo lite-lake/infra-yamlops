@@ -12,6 +12,7 @@ import (
 )
 
 type CloudflareProvider struct {
+	BaseProvider
 	client    *cloudflare.Client
 	accountID string
 }
@@ -20,7 +21,11 @@ func NewCloudflareProvider(apiToken string, accountID string) (Provider, error) 
 	client := cloudflare.NewClient(
 		option.WithAPIToken(apiToken),
 	)
-	return &CloudflareProvider{client: client, accountID: accountID}, nil
+	return &CloudflareProvider{
+		BaseProvider: *NewBaseProvider(),
+		client:       client,
+		accountID:    accountID,
+	}, nil
 }
 
 func (p *CloudflareProvider) Name() string {
@@ -84,12 +89,11 @@ func (p *CloudflareProvider) CreateRecord(ctx context.Context, domainName string
 		return err
 	}
 
-	ttl := record.TTL
-	if ttl == 0 {
-		ttl = 1
+	ttl := p.NormalizeTTL(record.TTL)
+	recordParam, err := p.buildRecordParam(record, ttl)
+	if err != nil {
+		return domainerr.WrapOp("build record param", err)
 	}
-
-	recordParam := p.buildRecordParam(record, ttl)
 	params := dns.RecordNewParams{
 		ZoneID: cloudflare.F(zoneID),
 		Record: recordParam,
@@ -105,7 +109,7 @@ func (p *CloudflareProvider) CreateRecord(ctx context.Context, domainName string
 	return nil
 }
 
-func (p *CloudflareProvider) buildRecordParam(record *DNSRecord, ttl int) dns.RecordUnionParam {
+func (p *CloudflareProvider) buildRecordParam(record *DNSRecord, ttl int) (dns.RecordUnionParam, error) {
 	switch record.Type {
 	case "A":
 		return dns.ARecordParam{
@@ -113,28 +117,28 @@ func (p *CloudflareProvider) buildRecordParam(record *DNSRecord, ttl int) dns.Re
 			Type:    cloudflare.F(dns.ARecordTypeA),
 			Content: cloudflare.F(record.Value),
 			TTL:     cloudflare.F(dns.TTL(ttl)),
-		}
+		}, nil
 	case "AAAA":
 		return dns.AAAARecordParam{
 			Name:    cloudflare.F(record.Name),
 			Type:    cloudflare.F(dns.AAAARecordTypeAAAA),
 			Content: cloudflare.F(record.Value),
 			TTL:     cloudflare.F(dns.TTL(ttl)),
-		}
+		}, nil
 	case "CNAME":
 		return dns.CNAMERecordParam{
 			Name:    cloudflare.F(record.Name),
 			Type:    cloudflare.F(dns.CNAMERecordTypeCNAME),
 			Content: cloudflare.F[interface{}](record.Value),
 			TTL:     cloudflare.F(dns.TTL(ttl)),
-		}
+		}, nil
 	case "TXT":
 		return dns.TXTRecordParam{
 			Name:    cloudflare.F(record.Name),
 			Type:    cloudflare.F(dns.TXTRecordTypeTXT),
 			Content: cloudflare.F(record.Value),
 			TTL:     cloudflare.F(dns.TTL(ttl)),
-		}
+		}, nil
 	case "MX":
 		return dns.MXRecordParam{
 			Name:     cloudflare.F(record.Name),
@@ -142,16 +146,19 @@ func (p *CloudflareProvider) buildRecordParam(record *DNSRecord, ttl int) dns.Re
 			Content:  cloudflare.F(record.Value),
 			TTL:      cloudflare.F(dns.TTL(ttl)),
 			Priority: cloudflare.F(10.0),
-		}
+		}, nil
 	case "NS":
 		return dns.NSRecordParam{
 			Name:    cloudflare.F(record.Name),
 			Type:    cloudflare.F(dns.NSRecordTypeNS),
 			Content: cloudflare.F(record.Value),
 			TTL:     cloudflare.F(dns.TTL(ttl)),
-		}
+		}, nil
 	case "SRV":
-		priority, weight, port, target := ParseSRVValue(record.Value)
+		priority, weight, port, target, err := ParseSRVValue(record.Value)
+		if err != nil {
+			return nil, domainerr.WrapOp("parse SRV value", err)
+		}
 		return dns.SRVRecordParam{
 			Name: cloudflare.F(record.Name),
 			Type: cloudflare.F(dns.SRVRecordTypeSRV),
@@ -162,14 +169,14 @@ func (p *CloudflareProvider) buildRecordParam(record *DNSRecord, ttl int) dns.Re
 				Target:   cloudflare.F(target),
 			}),
 			TTL: cloudflare.F(dns.TTL(ttl)),
-		}
+		}, nil
 	default:
 		return dns.ARecordParam{
 			Name:    cloudflare.F(record.Name),
 			Type:    cloudflare.F(dns.ARecordType(record.Type)),
 			Content: cloudflare.F(record.Value),
 			TTL:     cloudflare.F(dns.TTL(ttl)),
-		}
+		}, nil
 	}
 }
 
@@ -201,12 +208,11 @@ func (p *CloudflareProvider) UpdateRecord(ctx context.Context, domainName string
 		return err
 	}
 
-	ttl := record.TTL
-	if ttl == 0 {
-		ttl = 1
+	ttl := p.NormalizeTTL(record.TTL)
+	recordParam, err := p.buildRecordParam(record, ttl)
+	if err != nil {
+		return domainerr.WrapOp("build record param", err)
 	}
-
-	recordParam := p.buildRecordParam(record, ttl)
 	params := dns.RecordEditParams{
 		ZoneID: cloudflare.F(zoneID),
 		Record: recordParam,

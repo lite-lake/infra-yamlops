@@ -172,7 +172,7 @@ func DeployComposeFile(client contract.SSHClient, cfg *DeployComposeConfig, resu
 
 	var cmd string
 	if cfg.RestartAfterUp {
-		containerName := fmt.Sprintf(constants.ServicePrefixFormat, cfg.Env, cfg.ServiceName)
+		containerName := fmt.Sprintf(constants.ServiceNameFormat, cfg.Env, cfg.ServiceName)
 		cmd = fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d && sudo docker restart %s", cfg.RemoteDir, containerName)
 	} else {
 		cmd = fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d", cfg.RemoteDir)
@@ -209,7 +209,7 @@ func RestartServiceWithFileSync(client contract.SSHClient, cfg *RestartServiceCo
 }
 
 func GetRemoteDir(deps DepsProvider, serviceName string) string {
-	return fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, deps.Env(), serviceName))
+	return fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceNameFormat, deps.Env(), serviceName))
 }
 
 func EnsureRemoteDir(client contract.SSHClient, remoteDir string) error {

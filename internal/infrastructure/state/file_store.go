@@ -47,6 +47,12 @@ func (s *FileStore) Load(ctx context.Context, env string) (*repository.Deploymen
 
 	state := repository.NewDeploymentState()
 
+	for _, s := range cfg.Secrets {
+		state.Secrets[s.Name] = s.Value
+	}
+	for i := range cfg.Registries {
+		state.Registries[cfg.Registries[i].Name] = &cfg.Registries[i]
+	}
 	for i := range cfg.Services {
 		state.Services[cfg.Services[i].Name] = &cfg.Services[i]
 	}
@@ -81,31 +87,39 @@ func (s *FileStore) Save(ctx context.Context, env string, state *repository.Depl
 	defer s.flock.Unlock()
 
 	cfg := &entity.Config{
-		Services:      make([]entity.BizService, 0, len(state.Services)),
-		InfraServices: make([]entity.InfraService, 0, len(state.InfraServices)),
-		Servers:       make([]entity.Server, 0, len(state.Servers)),
-		Zones:         make([]entity.Zone, 0, len(state.Zones)),
-		Domains:       make([]entity.Domain, 0, len(state.Domains)),
+		Secrets:       make([]entity.Secret, 0, len(state.Secrets)),
+		Registries:    make([]entity.Registry, 0, len(state.Registries)),
 		ISPs:          make([]entity.ISP, 0, len(state.ISPs)),
+		Zones:         make([]entity.Zone, 0, len(state.Zones)),
+		Servers:       make([]entity.Server, 0, len(state.Servers)),
+		InfraServices: make([]entity.InfraService, 0, len(state.InfraServices)),
+		Services:      make([]entity.BizService, 0, len(state.Services)),
+		Domains:       make([]entity.Domain, 0, len(state.Domains)),
 	}
 
-	for _, svc := range state.Services {
-		cfg.Services = append(cfg.Services, *svc)
+	for name, value := range state.Secrets {
+		cfg.Secrets = append(cfg.Secrets, entity.Secret{Name: name, Value: value})
 	}
-	for _, infra := range state.InfraServices {
-		cfg.InfraServices = append(cfg.InfraServices, *infra)
+	for _, reg := range state.Registries {
+		cfg.Registries = append(cfg.Registries, *reg)
 	}
-	for _, srv := range state.Servers {
-		cfg.Servers = append(cfg.Servers, *srv)
+	for _, isp := range state.ISPs {
+		cfg.ISPs = append(cfg.ISPs, *isp)
 	}
 	for _, z := range state.Zones {
 		cfg.Zones = append(cfg.Zones, *z)
 	}
+	for _, srv := range state.Servers {
+		cfg.Servers = append(cfg.Servers, *srv)
+	}
+	for _, infra := range state.InfraServices {
+		cfg.InfraServices = append(cfg.InfraServices, *infra)
+	}
+	for _, svc := range state.Services {
+		cfg.Services = append(cfg.Services, *svc)
+	}
 	for _, d := range state.Domains {
 		cfg.Domains = append(cfg.Domains, *d)
-	}
-	for _, isp := range state.ISPs {
-		cfg.ISPs = append(cfg.ISPs, *isp)
 	}
 
 	data, err := yaml.Marshal(cfg)

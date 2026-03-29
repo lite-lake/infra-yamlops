@@ -12,6 +12,7 @@ import (
 )
 
 type TencentProvider struct {
+	BaseProvider
 	client *dnspod.Client
 }
 
@@ -23,7 +24,10 @@ func NewTencentProvider(secretID, secretKey string) (Provider, error) {
 	if err != nil {
 		return nil, domainerr.WrapOp("create tencent dns client", err)
 	}
-	return &TencentProvider{client: client}, nil
+	return &TencentProvider{
+		BaseProvider: *NewBaseProvider(),
+		client:       client,
+	}, nil
 }
 
 func (p *TencentProvider) Name() string {
@@ -76,10 +80,7 @@ func (p *TencentProvider) ListRecords(ctx context.Context, domain string) ([]DNS
 }
 
 func (p *TencentProvider) CreateRecord(ctx context.Context, domain string, record *DNSRecord) error {
-	ttl := uint64(record.TTL)
-	if ttl == 0 {
-		ttl = constants.DefaultDNSRecordTTL
-	}
+	ttl := uint64(p.NormalizeTTL(record.TTL))
 
 	req := dnspod.NewCreateRecordRequest()
 	req.Domain = common.StringPtr(domain)
@@ -118,10 +119,7 @@ func (p *TencentProvider) UpdateRecord(ctx context.Context, domain string, recor
 		return domainerr.WrapOp("parse record ID", err)
 	}
 
-	ttl := uint64(record.TTL)
-	if ttl == 0 {
-		ttl = constants.DefaultDNSRecordTTL
-	}
+	ttl := uint64(p.NormalizeTTL(record.TTL))
 
 	req := dnspod.NewModifyRecordRequest()
 	req.Domain = common.StringPtr(domain)

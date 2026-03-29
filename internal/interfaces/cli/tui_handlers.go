@@ -258,7 +258,11 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		if m.Action.ConfirmSelected == 0 {
 			m.Loading.Active = true
 			m.Loading.Message = "Stopping services..."
-			return m, tea.Batch(tickSpinner(), m.executeServiceStopAsync())
+			return m, tea.Batch(tickSpinner(), m.executeServiceOperationAsync(ServiceOperationConfig{
+				OpType:      ServiceOpStop,
+				ExecuteFunc: executeStop,
+				SuccessVerb: "stopped",
+			}))
 		}
 		m.ViewState = ViewStateServiceStop
 		return m, nil
@@ -278,7 +282,11 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 		if m.Action.ConfirmSelected == 0 {
 			m.Loading.Active = true
 			m.Loading.Message = "Restarting services..."
-			return m, tea.Batch(tickSpinner(), m.executeServiceRestartAsync())
+			return m, tea.Batch(tickSpinner(), m.executeServiceOperationAsync(ServiceOperationConfig{
+				OpType:      ServiceOpRestart,
+				ExecuteFunc: executeRestart,
+				SuccessVerb: "restarted",
+			}))
 		}
 		m.ViewState = ViewStateServiceRestart
 		return m, nil

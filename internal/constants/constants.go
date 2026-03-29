@@ -3,13 +3,12 @@ package constants
 import "time"
 
 const (
-	RemoteBaseDir       = "/data/yamlops"
-	ServiceDirPattern   = "yo-%s-%s"
-	TempFilePattern     = "yamlops-*.yml"
-	RemoteTempFileFmt   = "/tmp/yamlops-%d"
-	ServicePrefixFormat = "yo-%s-%s"
-	StateDir            = ".state"
-	StateFileFormat     = "%s.yaml"
+	RemoteBaseDir     = "/data/yamlops"
+	ServiceNameFormat = "yo-%s-%s"
+	TempFilePattern   = "yamlops-*.yml"
+	RemoteTempFileFmt = "/tmp/yamlops-%d"
+	StateDir          = ".state"
+	StateFileFormat   = "%s.yaml"
 )
 
 const (

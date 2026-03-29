@@ -451,57 +451,55 @@ func TestDNSHandler_Apply_CreateError(t *testing.T) {
 	}
 }
 
-func TestDNSHandler_ExtractDNSRecordFromChange(t *testing.T) {
-	h := &DNSHandler{}
-
+func TestExtractFromChange(t *testing.T) {
 	tests := []struct {
 		name      string
 		change    *valueobject.Change
-		wantErr   bool
+		wantOk    bool
 		wantName  string
 		wantValue string
 	}{
 		{
 			name:      "from new state",
 			change:    valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").WithNewState(&entity.DNSRecord{Name: "www", Value: "1.2.3.4"}),
-			wantErr:   false,
+			wantOk:    true,
 			wantName:  "www",
 			wantValue: "1.2.3.4",
 		},
 		{
 			name:      "from old state",
 			change:    valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").WithOldState(&entity.DNSRecord{Name: "api", Value: "5.6.7.8"}),
-			wantErr:   false,
+			wantOk:    true,
 			wantName:  "api",
 			wantValue: "5.6.7.8",
 		},
 		{
 			name:      "prefer new state",
 			change:    valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").WithOldState(&entity.DNSRecord{Name: "old", Value: "old"}).WithNewState(&entity.DNSRecord{Name: "new", Value: "new"}),
-			wantErr:   false,
+			wantOk:    true,
 			wantName:  "new",
 			wantValue: "new",
 		},
 		{
-			name:    "no state",
-			change:  valueobject.NewChange(valueobject.ChangeTypeNoop, "", ""),
-			wantErr: true,
+			name:   "no state",
+			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", ""),
+			wantOk: false,
 		},
 		{
-			name:    "invalid type",
-			change:  valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").WithNewState("not a record"),
-			wantErr: true,
+			name:   "invalid type",
+			change: valueobject.NewChange(valueobject.ChangeTypeNoop, "", "").WithNewState("not a record"),
+			wantOk: false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			record, err := h.extractDNSRecordFromChange(tt.change)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("wantErr %v, got err %v", tt.wantErr, err)
+			record, ok := ExtractFromChange[entity.DNSRecord](tt.change)
+			if ok != tt.wantOk {
+				t.Errorf("wantOk %v, got ok %v", tt.wantOk, ok)
 				return
 			}
-			if !tt.wantErr {
+			if tt.wantOk {
 				if record.Name != tt.wantName {
 					t.Errorf("expected name %s, got %s", tt.wantName, record.Name)
 				}

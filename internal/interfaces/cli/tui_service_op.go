@@ -105,7 +105,7 @@ func (m *Model) executeServiceOperationAsync(config ServiceOperationConfig) tea.
 			}
 
 			for _, svcName := range services {
-				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceDirPattern, m.Environment, svcName))
+				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceNameFormat, m.Environment, svcName))
 				stderr, err := config.ExecuteFunc(client, svcName, remoteDir)
 				if err != nil {
 					result.Services = append(result.Services, ServiceOpDetail{
@@ -249,4 +249,14 @@ func stopServiceCommand(remoteDir string) string {
 
 func restartServiceCommand(remoteDir string) string {
 	return fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml restart 2>&1", remoteDir)
+}
+
+func executeStop(client *ssh.Client, svcName, remoteDir string) (string, error) {
+	_, stderr, err := client.Run(stopServiceCommand(remoteDir))
+	return stderr, err
+}
+
+func executeRestart(client *ssh.Client, svcName, remoteDir string) (string, error) {
+	_, stderr, err := client.Run(restartServiceCommand(remoteDir))
+	return stderr, err
 }
