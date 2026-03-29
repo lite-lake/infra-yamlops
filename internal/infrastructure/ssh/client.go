@@ -30,8 +30,11 @@ func closeWithLog(closer io.Closer, name string) {
 var knownHostsMu sync.Mutex
 
 type Client struct {
-	client *ssh.Client
-	user   string
+	client      *ssh.Client
+	user        string
+	sftp        sftpClient
+	sftpMu      sync.Mutex
+	sftpCreated bool
 }
 
 type SSHConfig struct {
@@ -207,10 +210,24 @@ func createHostKeyCallback(knownHostsPath string, strict bool) (ssh.HostKeyCallb
 }
 
 func (c *Client) Close() error {
+	c.sftpMu.Lock()
+	if c.sftp != nil {
+		closeWithLog(c.sftp, "sftp client")
+		c.sftp = nil
+	}
+	c.sftpMu.Unlock()
 	if c.client != nil {
 		return c.client.Close()
 	}
 	return nil
+}
+
+func (c *Client) Healthy() bool {
+	if c.client == nil {
+		return false
+	}
+	_, _, err := c.Run("echo healthcheck")
+	return err == nil
 }
 
 func (c *Client) Run(cmd string) (stdout, stderr string, err error) {
@@ -270,7 +287,6 @@ func (c *Client) UploadFile(localPath, remotePath string) error {
 	if err != nil {
 		return err
 	}
-	defer closeWithLog(sftpClient, "sftp client")
 
 	localFile, err := os.Open(localPath)
 	if err != nil {
@@ -297,7 +313,6 @@ func (c *Client) MkdirAll(path string) error {
 	if err != nil {
 		return err
 	}
-	defer closeWithLog(sftpClient, "sftp client")
 
 	return sftpClient.MkdirAll(path)
 }
@@ -330,7 +345,6 @@ func (c *Client) UploadFileSudoWithPerm(localPath, remotePath, perm string) erro
 	if err != nil {
 		return err
 	}
-	defer closeWithLog(sftpClient, "sftp client")
 
 	localFile, err := os.Open(localPath)
 	if err != nil {
@@ -363,7 +377,6 @@ func (c *Client) FileExists(path string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer closeWithLog(sftpClient, "sftp client")
 
 	_, err = sftpClient.Stat(path)
 	if err != nil {
@@ -476,7 +489,19 @@ func streamReader(ctx context.Context, reader io.Reader, ch chan string) {
 }
 
 func (c *Client) newSFTPClient() (sftpClient, error) {
-	return newSFTP(c.client)
+	c.sftpMu.Lock()
+	defer c.sftpMu.Unlock()
+
+	if c.sftp != nil {
+		return c.sftp, nil
+	}
+
+	sftp, err := newSFTP(c.client)
+	if err != nil {
+		return nil, err
+	}
+	c.sftp = sftp
+	return sftp, nil
 }
 
 type sftpClient interface {

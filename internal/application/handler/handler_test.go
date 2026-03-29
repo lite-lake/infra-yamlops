@@ -95,6 +95,10 @@ type mockSSHClient struct {
 	commandsRun []string
 }
 
+func (m *mockSSHClient) Healthy() bool {
+	return !m.closed
+}
+
 func (m *mockSSHClient) Run(cmd string) (stdout, stderr string, err error) {
 	m.commandsRun = append(m.commandsRun, cmd)
 	return m.runStdout, m.runStderr, m.runErr

@@ -12,6 +12,10 @@ type mockSSHClient struct {
 	closed bool
 }
 
+func (m *mockSSHClient) Healthy() bool {
+	return !m.closed
+}
+
 func (m *mockSSHClient) Run(cmd string) (stdout, stderr string, err error) {
 	return "", "", nil
 }
