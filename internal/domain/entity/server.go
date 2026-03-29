@@ -62,10 +62,11 @@ func (i *ServerIP) Validate() error {
 }
 
 type ServerSSH struct {
-	Host     string                `yaml:"host"`
-	Port     int                   `yaml:"port"`
-	User     string                `yaml:"user"`
-	Password valueobject.SecretRef `yaml:"password"`
+	Host                  string                `yaml:"host"`
+	Port                  int                   `yaml:"port"`
+	User                  string                `yaml:"user"`
+	Password              valueobject.SecretRef `yaml:"password"`
+	StrictHostKeyChecking bool                  `yaml:"strict_host_key_checking,omitempty"`
 }
 
 func (s *ServerSSH) Validate() error {

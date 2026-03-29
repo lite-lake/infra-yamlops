@@ -159,7 +159,11 @@ func runServiceDeploy(ctx *Context, filters ServiceFilters, autoApprove bool) {
 			fmt.Fprintf(os.Stderr, "Error resolving password for server %s: %v\n", srv.Name, err)
 			continue
 		}
-		executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		strictHostKeyChecking := true
+		if !srv.SSH.StrictHostKeyChecking {
+			strictHostKeyChecking = false
+		}
+		executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, strictHostKeyChecking)
 	}
 
 	results := executor.Apply()
@@ -377,7 +381,14 @@ func executeServiceOperation(ctx *Context, cfg *entity.Config, services []target
 			continue
 		}
 
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		strictHostKeyChecking := true
+		if !srv.SSH.StrictHostKeyChecking {
+			strictHostKeyChecking = false
+		}
+		sshCfg := &ssh.SSHConfig{
+			StrictHostKeyChecking: strictHostKeyChecking,
+		}
+		client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 		if err != nil {
 			fmt.Printf("✗ %s: connection failed: %v\n", svc.Name, err)
 			hasError = true
@@ -421,21 +432,28 @@ func scanOrphanResourcesCLI(ctx *Context, cfg *entity.Config) ([]orphanResource,
 			return nil, fmt.Errorf("[%s] cannot resolve password: %w", srv.Name, err)
 		}
 
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		strictHostKeyChecking := true
+		if !srv.SSH.StrictHostKeyChecking {
+			strictHostKeyChecking = false
+		}
+		sshCfg := &ssh.SSHConfig{
+			StrictHostKeyChecking: strictHostKeyChecking,
+		}
+		client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 		if err != nil {
 			return nil, fmt.Errorf("[%s] connection failed: %w", srv.Name, err)
 		}
 
-		containerStdout, _, err := client.Run("sudo docker ps -a --format '{{json .}}'")
+		containerStdout, containerStderr, err := client.Run("sudo docker ps -a --format '{{json .}}'")
 		if err != nil {
 			client.Close()
-			return nil, fmt.Errorf("[%s] failed to list containers: %w", srv.Name, err)
+			return nil, fmt.Errorf("[%s] failed to list containers: %w, stderr: %s", srv.Name, err, containerStderr)
 		}
 
-		dirStdout, _, err := client.Run("sudo ls -1 " + constants.RemoteBaseDir + " 2>/dev/null || true")
+		dirStdout, dirStderr, err := client.Run("sudo ls -1 " + constants.RemoteBaseDir + " 2>/dev/null || true")
 		if err != nil {
 			client.Close()
-			return nil, fmt.Errorf("[%s] failed to list directories: %w", srv.Name, err)
+			return nil, fmt.Errorf("[%s] failed to list directories: %w, stderr: %s", srv.Name, err, dirStderr)
 		}
 
 		client.Close()
@@ -509,7 +527,14 @@ func executeServiceCleanup(ctx *Context, cfg *entity.Config, resources []orphanR
 			continue
 		}
 
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		strictHostKeyChecking := true
+		if !srv.SSH.StrictHostKeyChecking {
+			strictHostKeyChecking = false
+		}
+		sshCfg := &ssh.SSHConfig{
+			StrictHostKeyChecking: strictHostKeyChecking,
+		}
+		client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 		if err != nil {
 			for _, c := range r.Containers {
 				fmt.Printf("✗ %s: connection failed: %v\n", c, err)
@@ -525,7 +550,7 @@ func executeServiceCleanup(ctx *Context, cfg *entity.Config, resources []orphanR
 			cmd := fmt.Sprintf("sudo docker rm -f %s", c)
 			_, stderr, err := client.Run(cmd)
 			if err != nil {
-				fmt.Printf("✗ %s: %s\n", c, stderr)
+				fmt.Printf("✗ %s: %s (stderr: %s)\n", c, err, stderr)
 				hasError = true
 			} else {
 				fmt.Printf("✓ removed container: %s\n", c)
@@ -537,7 +562,7 @@ func executeServiceCleanup(ctx *Context, cfg *entity.Config, resources []orphanR
 			cmd := fmt.Sprintf("sudo rm -rf %s", remoteDir)
 			_, stderr, err := client.Run(cmd)
 			if err != nil {
-				fmt.Printf("✗ %s: %s\n", d, stderr)
+				fmt.Printf("✗ %s: %s (stderr: %s)\n", d, err, stderr)
 				hasError = true
 			} else {
 				fmt.Printf("✓ removed directory: %s\n", d)

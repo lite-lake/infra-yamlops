@@ -29,7 +29,9 @@ func fetchServiceStatus(servers []serverWithSSH, infraServices []serviceWithServ
 			continue
 		}
 
-		client, err := ssh.NewClient(srv.sshHost, srv.sshPort, srv.sshUser, password)
+		client, err := ssh.NewClientWithConfig(srv.sshHost, srv.sshPort, srv.sshUser, password, &ssh.SSHConfig{
+			StrictHostKeyChecking: srv.strictHostKeyChecking,
+		})
 		if err != nil {
 			continue
 		}
@@ -107,6 +109,7 @@ type serverWithSSH struct {
 	sshPassword interface {
 		Resolve(map[string]string) (string, error)
 	}
+	strictHostKeyChecking bool
 }
 
 type serviceWithServer struct {
@@ -171,12 +174,17 @@ func (m *Model) buildServerWithSSHList() []serverWithSSH {
 	}
 	for i := range m.Config.Servers {
 		srv := &m.Config.Servers[i]
+		strictHostKeyChecking := true
+		if !srv.SSH.StrictHostKeyChecking {
+			strictHostKeyChecking = false
+		}
 		result = append(result, serverWithSSH{
-			name:        srv.Name,
-			sshHost:     srv.SSH.Host,
-			sshPort:     srv.SSH.Port,
-			sshUser:     srv.SSH.User,
-			sshPassword: &srv.SSH.Password,
+			name:                  srv.Name,
+			sshHost:               srv.SSH.Host,
+			sshPort:               srv.SSH.Port,
+			sshUser:               srv.SSH.User,
+			sshPassword:           &srv.SSH.Password,
+			strictHostKeyChecking: strictHostKeyChecking,
 		})
 	}
 	return result

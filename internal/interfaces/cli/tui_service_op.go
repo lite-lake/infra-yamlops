@@ -84,7 +84,14 @@ func (m *Model) executeServiceOperationAsync(config ServiceOperationConfig) tea.
 				continue
 			}
 
-			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			strictHostKeyChecking := true
+			if !srv.SSH.StrictHostKeyChecking {
+				strictHostKeyChecking = false
+			}
+			sshCfg := &ssh.SSHConfig{
+				StrictHostKeyChecking: strictHostKeyChecking,
+			}
+			client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 			if err != nil {
 				for _, svcName := range services {
 					result.Services = append(result.Services, ServiceOpDetail{

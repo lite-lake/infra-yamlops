@@ -314,7 +314,14 @@ func (m *Model) executeServerEnvCheckAsync() tea.Cmd {
 				continue
 			}
 
-			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			strictHostKeyChecking := true
+			if !srv.SSH.StrictHostKeyChecking {
+				strictHostKeyChecking = false
+			}
+			sshCfg := &ssh.SSHConfig{
+				StrictHostKeyChecking: strictHostKeyChecking,
+			}
+			client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 			if err != nil {
 				results[srv.Name] = []serverpkg.CheckResult{{
 					Name:    "Connection",
@@ -359,7 +366,14 @@ func (m *Model) executeServerEnvSyncAsync() tea.Cmd {
 				continue
 			}
 
-			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			strictHostKeyChecking := true
+			if !srv.SSH.StrictHostKeyChecking {
+				strictHostKeyChecking = false
+			}
+			sshCfg := &ssh.SSHConfig{
+				StrictHostKeyChecking: strictHostKeyChecking,
+			}
+			client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 			if err != nil {
 				results[srv.Name] = []serverpkg.SyncResult{{
 					Name:    "Connection",
@@ -405,7 +419,14 @@ func (m *Model) executeServerEnvFullSetupAsync() tea.Cmd {
 				continue
 			}
 
-			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			strictHostKeyChecking := true
+			if !srv.SSH.StrictHostKeyChecking {
+				strictHostKeyChecking = false
+			}
+			sshCfg := &ssh.SSHConfig{
+				StrictHostKeyChecking: strictHostKeyChecking,
+			}
+			client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 			if err != nil {
 				checkResults[srv.Name] = []serverpkg.CheckResult{{
 					Name:    "Connection",

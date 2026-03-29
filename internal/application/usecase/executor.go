@@ -97,8 +97,8 @@ func (e *Executor) SetServerEntities(s map[string]*entity.Server) {
 	e.changeExecutor.SetServerEntities(s)
 }
 
-func (e *Executor) RegisterServer(name, host string, port int, user, password string) {
-	e.changeExecutor.RegisterServer(name, host, port, user, password)
+func (e *Executor) RegisterServer(name, host string, port int, user, password string, strictHostKeyChecking bool) {
+	e.changeExecutor.RegisterServer(name, host, port, user, password, strictHostKeyChecking)
 }
 
 func (e *Executor) Apply() []*handler.Result {

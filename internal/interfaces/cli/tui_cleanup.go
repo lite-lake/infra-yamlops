@@ -167,22 +167,29 @@ func (m *Model) scanOrphanServices() {
 			return
 		}
 
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		strictHostKeyChecking := true
+		if !srv.SSH.StrictHostKeyChecking {
+			strictHostKeyChecking = false
+		}
+		sshCfg := &ssh.SSHConfig{
+			StrictHostKeyChecking: strictHostKeyChecking,
+		}
+		client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 		if err != nil {
 			m.UI.ErrorMessage = fmt.Sprintf("[%s] Connection failed: %v", srv.Name, err)
 			return
 		}
 
-		containerStdout, _, err := client.Run("sudo docker ps -a --format '{{json .}}'")
+		containerStdout, containerStderr, err := client.Run("sudo docker ps -a --format '{{json .}}'")
 		if err != nil {
-			m.UI.ErrorMessage = fmt.Sprintf("[%s] Failed to list containers: %v", srv.Name, err)
+			m.UI.ErrorMessage = fmt.Sprintf("[%s] Failed to list containers: %v, stderr: %s", srv.Name, err, containerStderr)
 			client.Close()
 			return
 		}
 
-		dirStdout, _, err := client.Run("sudo ls -1 " + constants.RemoteBaseDir + " 2>/dev/null || true")
+		dirStdout, dirStderr, err := client.Run("sudo ls -1 " + constants.RemoteBaseDir + " 2>/dev/null || true")
 		if err != nil {
-			m.UI.ErrorMessage = fmt.Sprintf("[%s] Failed to list directories: %v", srv.Name, err)
+			m.UI.ErrorMessage = fmt.Sprintf("[%s] Failed to list directories: %v, stderr: %s", srv.Name, err, dirStderr)
 			client.Close()
 			return
 		}
@@ -248,21 +255,28 @@ func (m *Model) scanOrphanServicesAsync() tea.Cmd {
 				return orphanServicesScannedMsg{err: fmt.Errorf("[%s] Cannot resolve password: %v", srv.Name, err)}
 			}
 
-			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			strictHostKeyChecking := true
+			if !srv.SSH.StrictHostKeyChecking {
+				strictHostKeyChecking = false
+			}
+			sshCfg := &ssh.SSHConfig{
+				StrictHostKeyChecking: strictHostKeyChecking,
+			}
+			client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 			if err != nil {
 				return orphanServicesScannedMsg{err: fmt.Errorf("[%s] Connection failed: %v", srv.Name, err)}
 			}
 
-			containerStdout, _, err := client.Run("sudo docker ps -a --format '{{json .}}'")
+			containerStdout, containerStderr, err := client.Run("sudo docker ps -a --format '{{json .}}'")
 			if err != nil {
 				client.Close()
-				return orphanServicesScannedMsg{err: fmt.Errorf("[%s] Failed to list containers: %v", srv.Name, err)}
+				return orphanServicesScannedMsg{err: fmt.Errorf("[%s] Failed to list containers: %v, stderr: %s", srv.Name, err, containerStderr)}
 			}
 
-			dirStdout, _, err := client.Run("sudo ls -1 " + constants.RemoteBaseDir + " 2>/dev/null || true")
+			dirStdout, dirStderr, err := client.Run("sudo ls -1 " + constants.RemoteBaseDir + " 2>/dev/null || true")
 			if err != nil {
 				client.Close()
-				return orphanServicesScannedMsg{err: fmt.Errorf("[%s] Failed to list directories: %v", srv.Name, err)}
+				return orphanServicesScannedMsg{err: fmt.Errorf("[%s] Failed to list directories: %v, stderr: %s", srv.Name, err, dirStderr)}
 			}
 
 			client.Close()
@@ -335,7 +349,14 @@ func (m *Model) executeServiceCleanup() {
 			continue
 		}
 
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		strictHostKeyChecking := true
+		if !srv.SSH.StrictHostKeyChecking {
+			strictHostKeyChecking = false
+		}
+		sshCfg := &ssh.SSHConfig{
+			StrictHostKeyChecking: strictHostKeyChecking,
+		}
+		client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 		if err != nil {
 			for _, c := range result.OrphanContainers {
 				m.Cleanup.CleanupResults[i].FailedContainers = append(m.Cleanup.CleanupResults[i].FailedContainers, c)
@@ -398,7 +419,14 @@ func (m *Model) executeServiceCleanupAsync() tea.Cmd {
 				continue
 			}
 
-			client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			strictHostKeyChecking := true
+			if !srv.SSH.StrictHostKeyChecking {
+				strictHostKeyChecking = false
+			}
+			sshCfg := &ssh.SSHConfig{
+				StrictHostKeyChecking: strictHostKeyChecking,
+			}
+			client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 			if err != nil {
 				for _, c := range result.OrphanContainers {
 					results[i].FailedContainers = append(results[i].FailedContainers, c)

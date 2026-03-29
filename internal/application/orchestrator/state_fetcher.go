@@ -42,7 +42,14 @@ func (f *StateFetcher) Fetch(ctx context.Context, cfg *entity.Config) *repositor
 			continue
 		}
 
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		strictHostKeyChecking := true
+		if !srv.SSH.StrictHostKeyChecking {
+			strictHostKeyChecking = false
+		}
+		sshCfg := &ssh.SSHConfig{
+			StrictHostKeyChecking: strictHostKeyChecking,
+		}
+		client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 		if err != nil {
 			logger.Warn("failed to create SSH client", "server", srv.Name, "error", err)
 			continue

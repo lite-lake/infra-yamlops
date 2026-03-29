@@ -65,8 +65,8 @@ func (e *ChangeExecutor) SetISPs(i map[string]*entity.ISP)              { e.isps
 func (e *ChangeExecutor) SetWorkDir(w string)                           { e.workDir = w }
 func (e *ChangeExecutor) SetServerEntities(s map[string]*entity.Server) { e.serverEntities = s }
 
-func (e *ChangeExecutor) RegisterServer(name, host string, port int, user, password string) {
-	e.servers[name] = &handler.ServerInfo{Host: host, Port: port, User: user, Password: password}
+func (e *ChangeExecutor) RegisterServer(name, host string, port int, user, password string, strictHostKeyChecking bool) {
+	e.servers[name] = &handler.ServerInfo{Host: host, Port: port, User: user, Password: password, StrictHostKeyChecking: strictHostKeyChecking}
 }
 
 func (e *ChangeExecutor) Apply(registry handlerRegistry) []*handler.Result {

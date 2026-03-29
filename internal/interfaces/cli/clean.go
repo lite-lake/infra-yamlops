@@ -46,7 +46,14 @@ func runClean(ctx *Context) {
 			continue
 		}
 
-		client, err := ssh.NewClient(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		strictHostKeyChecking := true
+		if !srv.SSH.StrictHostKeyChecking {
+			strictHostKeyChecking = false
+		}
+		sshCfg := &ssh.SSHConfig{
+			StrictHostKeyChecking: strictHostKeyChecking,
+		}
+		client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
 		if err != nil {
 			fmt.Printf("[%s] Connection failed: %v\n", srv.Name, err)
 			continue

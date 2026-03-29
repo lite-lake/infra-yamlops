@@ -454,7 +454,11 @@ func (m *Model) executeApplyAsync() tea.Cmd {
 			if err != nil {
 				continue
 			}
-			executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+			strictHostKeyChecking := true
+			if !srv.SSH.StrictHostKeyChecking {
+				strictHostKeyChecking = false
+			}
+			executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, strictHostKeyChecking)
 		}
 		results := executor.Apply()
 		return applyCompleteAsyncMsg{results: results}

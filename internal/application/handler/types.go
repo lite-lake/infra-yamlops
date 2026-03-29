@@ -230,10 +230,11 @@ func (d *BaseDeps) RawSSHError() error               { return d.sshError }
 func (d *BaseDeps) Secrets() map[string]string       { return d.secrets }
 
 type ServerInfo struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
+	Host                  string
+	Port                  int
+	User                  string
+	Password              string
+	StrictHostKeyChecking bool
 }
 
 type Result = contract.Result

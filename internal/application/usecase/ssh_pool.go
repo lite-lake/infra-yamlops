@@ -21,7 +21,10 @@ func NewSSHPool() *SSHPool {
 	return &SSHPool{
 		clients: make(map[string]contract.SSHClient),
 		factory: func(info *handler.ServerInfo) (contract.SSHClient, error) {
-			return ssh.NewClient(info.Host, info.Port, info.User, info.Password)
+			cfg := &ssh.SSHConfig{
+				StrictHostKeyChecking: info.StrictHostKeyChecking,
+			}
+			return ssh.NewClientWithConfig(info.Host, info.Port, info.User, info.Password, cfg)
 		},
 	}
 }

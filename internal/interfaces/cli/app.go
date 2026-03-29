@@ -186,7 +186,11 @@ func runAppApply(ctx *Context, filters AppFilters, autoApprove bool) {
 			fmt.Fprintf(os.Stderr, "Error resolving password for server %s: %v\n", srv.Name, err)
 			continue
 		}
-		executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password)
+		strictHostKeyChecking := true
+		if !srv.SSH.StrictHostKeyChecking {
+			strictHostKeyChecking = false
+		}
+		executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, strictHostKeyChecking)
 	}
 
 	results := executor.Apply()
