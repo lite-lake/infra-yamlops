@@ -34,14 +34,29 @@ func (p *TencentProvider) Name() string {
 	return "tencent"
 }
 
-func (p *TencentProvider) ListRecords(ctx context.Context, domain string) ([]DNSRecord, error) {
+type tencentRecordMapper struct{}
+
+func (m *tencentRecordMapper) mapRecord(r *dnspod.RecordListItem) DNSRecord {
+	ttl := constants.DefaultDNSRecordTTL
+	if r.TTL != nil {
+		ttl = int(*r.TTL)
+	}
+	return DNSRecord{
+		ID:    strconv.FormatUint(*r.RecordId, 10),
+		Name:  *r.Name,
+		Type:  *r.Type,
+		Value: *r.Value,
+		TTL:   ttl,
+	}
+}
+
+func (p *TencentProvider) listRecordsInternal(ctx context.Context, domain string, req *dnspod.DescribeRecordListRequest) ([]DNSRecord, error) {
 	var records []DNSRecord
 	offset := uint64(0)
 	limit := uint64(100)
+	mapper := &tencentRecordMapper{}
 
 	for {
-		req := dnspod.NewDescribeRecordListRequest()
-		req.Domain = common.StringPtr(domain)
 		req.Offset = common.Uint64Ptr(offset)
 		req.Limit = common.Uint64Ptr(limit)
 
@@ -52,17 +67,7 @@ func (p *TencentProvider) ListRecords(ctx context.Context, domain string) ([]DNS
 
 		if resp.Response != nil && resp.Response.RecordList != nil {
 			for _, r := range resp.Response.RecordList {
-				ttl := constants.DefaultDNSRecordTTL
-				if r.TTL != nil {
-					ttl = int(*r.TTL)
-				}
-				records = append(records, DNSRecord{
-					ID:    strconv.FormatUint(*r.RecordId, 10),
-					Name:  *r.Name,
-					Type:  *r.Type,
-					Value: *r.Value,
-					TTL:   ttl,
-				})
+				records = append(records, mapper.mapRecord(r))
 			}
 		}
 
@@ -77,6 +82,26 @@ func (p *TencentProvider) ListRecords(ctx context.Context, domain string) ([]DNS
 		offset += limit
 	}
 	return records, nil
+}
+
+func (p *TencentProvider) ListRecords(ctx context.Context, domain string) ([]DNSRecord, error) {
+	req := dnspod.NewDescribeRecordListRequest()
+	req.Domain = common.StringPtr(domain)
+	return p.listRecordsInternal(ctx, domain, req)
+}
+
+func (p *TencentProvider) GetRecordsByTypes(ctx context.Context, domain string, recordType string) ([]DNSRecord, error) {
+	req := dnspod.NewDescribeRecordListRequest()
+	req.Domain = common.StringPtr(domain)
+	req.RecordType = common.StringPtr(recordType)
+	return p.listRecordsInternal(ctx, domain, req)
+}
+
+func (p *TencentProvider) GetRecordsBySubDomain(domain string, subDomain string) ([]DNSRecord, error) {
+	req := dnspod.NewDescribeRecordListRequest()
+	req.Domain = common.StringPtr(domain)
+	req.Subdomain = common.StringPtr(subDomain)
+	return p.listRecordsInternal(context.Background(), domain, req)
 }
 
 func (p *TencentProvider) CreateRecord(ctx context.Context, domain string, record *DNSRecord) error {
@@ -150,98 +175,6 @@ func (p *TencentProvider) ListDomains(ctx context.Context) ([]string, error) {
 		}
 	}
 	return domains, nil
-}
-
-func (p *TencentProvider) GetRecordsByTypes(ctx context.Context, domain string, recordType string) ([]DNSRecord, error) {
-	var records []DNSRecord
-	offset := uint64(0)
-	limit := uint64(100)
-
-	for {
-		req := dnspod.NewDescribeRecordListRequest()
-		req.Domain = common.StringPtr(domain)
-		req.RecordType = common.StringPtr(recordType)
-		req.Offset = common.Uint64Ptr(offset)
-		req.Limit = common.Uint64Ptr(limit)
-
-		resp, err := p.client.DescribeRecordList(req)
-		if err != nil {
-			return nil, domainerr.WrapOp("list records", err)
-		}
-
-		if resp.Response != nil && resp.Response.RecordList != nil {
-			for _, r := range resp.Response.RecordList {
-				ttl := constants.DefaultDNSRecordTTL
-				if r.TTL != nil {
-					ttl = int(*r.TTL)
-				}
-				records = append(records, DNSRecord{
-					ID:    strconv.FormatUint(*r.RecordId, 10),
-					Name:  *r.Name,
-					Type:  *r.Type,
-					Value: *r.Value,
-					TTL:   ttl,
-				})
-			}
-		}
-
-		totalCount := uint64(0)
-		if resp.Response != nil && resp.Response.RecordCountInfo != nil && resp.Response.RecordCountInfo.TotalCount != nil {
-			totalCount = *resp.Response.RecordCountInfo.TotalCount
-		}
-
-		if uint64(len(records)) >= totalCount {
-			break
-		}
-		offset += limit
-	}
-	return records, nil
-}
-
-func (p *TencentProvider) GetRecordsBySubDomain(domain string, subDomain string) ([]DNSRecord, error) {
-	var records []DNSRecord
-	offset := uint64(0)
-	limit := uint64(100)
-
-	for {
-		req := dnspod.NewDescribeRecordListRequest()
-		req.Domain = common.StringPtr(domain)
-		req.Subdomain = common.StringPtr(subDomain)
-		req.Offset = common.Uint64Ptr(offset)
-		req.Limit = common.Uint64Ptr(limit)
-
-		resp, err := p.client.DescribeRecordList(req)
-		if err != nil {
-			return nil, domainerr.WrapOp("list records", err)
-		}
-
-		if resp.Response != nil && resp.Response.RecordList != nil {
-			for _, r := range resp.Response.RecordList {
-				ttl := constants.DefaultDNSRecordTTL
-				if r.TTL != nil {
-					ttl = int(*r.TTL)
-				}
-				records = append(records, DNSRecord{
-					ID:    strconv.FormatUint(*r.RecordId, 10),
-					Name:  *r.Name,
-					Type:  *r.Type,
-					Value: *r.Value,
-					TTL:   ttl,
-				})
-			}
-		}
-
-		totalCount := uint64(0)
-		if resp.Response != nil && resp.Response.RecordCountInfo != nil && resp.Response.RecordCountInfo.TotalCount != nil {
-			totalCount = *resp.Response.RecordCountInfo.TotalCount
-		}
-
-		if uint64(len(records)) >= totalCount {
-			break
-		}
-		offset += limit
-	}
-	return records, nil
 }
 
 func (p *TencentProvider) BatchCreateRecords(ctx context.Context, domain string, records []*DNSRecord) error {

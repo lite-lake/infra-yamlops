@@ -7,8 +7,10 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/domain"
 )
 
+// MaxPortNumber 最大端口号
 const MaxPortNumber = 65535
 
+// Config 配置实体，包含所有基础设施配置
 type Config struct {
 	Secrets       []Secret       `yaml:"secrets,omitempty"`
 	ISPs          []ISP          `yaml:"isps,omitempty"`
@@ -20,6 +22,7 @@ type Config struct {
 	Domains       []Domain       `yaml:"domains,omitempty"`
 }
 
+// Validate 验证配置的完整性
 func (c *Config) Validate() error {
 	for i, s := range c.Secrets {
 		if err := s.Validate(); err != nil {
@@ -65,6 +68,7 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// toMapPtr 将切片转换为以名称为键的指针映射（内部工具函数）
 func toMapPtr[T any](items []T, getName func(T) string) map[string]*T {
 	m := make(map[string]*T)
 	for i := range items {
@@ -73,6 +77,7 @@ func toMapPtr[T any](items []T, getName func(T) string) map[string]*T {
 	return m
 }
 
+// GetSecretsMap 获取密钥映射
 func (c *Config) GetSecretsMap() map[string]string {
 	m := make(map[string]string)
 	for _, s := range c.Secrets {
@@ -81,34 +86,42 @@ func (c *Config) GetSecretsMap() map[string]string {
 	return m
 }
 
+// GetISPMap 获取 ISP 映射
 func (c *Config) GetISPMap() map[string]*ISP {
 	return toMapPtr(c.ISPs, func(isp ISP) string { return isp.Name })
 }
 
+// GetZoneMap 获取区域映射
 func (c *Config) GetZoneMap() map[string]*Zone {
 	return toMapPtr(c.Zones, func(z Zone) string { return z.Name })
 }
 
+// GetInfraServiceMap 获取基础设施服务映射
 func (c *Config) GetInfraServiceMap() map[string]*InfraService {
 	return toMapPtr(c.InfraServices, func(s InfraService) string { return s.Name })
 }
 
+// GetServerMap 获取服务器映射
 func (c *Config) GetServerMap() map[string]*Server {
 	return toMapPtr(c.Servers, func(s Server) string { return s.Name })
 }
 
+// GetServiceMap 获取业务服务映射
 func (c *Config) GetServiceMap() map[string]*BizService {
 	return toMapPtr(c.Services, func(s BizService) string { return s.Name })
 }
 
+// GetRegistryMap 获取注册表映射
 func (c *Config) GetRegistryMap() map[string]*Registry {
 	return toMapPtr(c.Registries, func(r Registry) string { return r.Name })
 }
 
+// GetDomainMap 获取域名映射
 func (c *Config) GetDomainMap() map[string]*Domain {
 	return toMapPtr(c.Domains, func(d Domain) string { return d.Name })
 }
 
+// GetAllDNSRecords 获取所有 DNS 记录
 func (c *Config) GetAllDNSRecords() []DNSRecord {
 	var records []DNSRecord
 	for _, d := range c.Domains {
@@ -117,6 +130,7 @@ func (c *Config) GetAllDNSRecords() []DNSRecord {
 	return records
 }
 
+// ParsePort 解析端口号字符串
 func ParsePort(s string) (int, error) {
 	port, err := strconv.Atoi(s)
 	if err != nil {

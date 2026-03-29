@@ -7,7 +7,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/lite-lake/infra-yamlops/internal/application/handler"
 	"github.com/lite-lake/infra-yamlops/internal/application/usecase"
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
@@ -112,7 +111,7 @@ func runApply(ctx *Context, scope string, filters Filters) {
 	}
 }
 
-func hasErrors(results []*handler.Result) bool {
+func hasErrors(results []*usecase.Result) bool {
 	for _, result := range results {
 		if result.Error != nil {
 			return true
@@ -121,7 +120,7 @@ func hasErrors(results []*handler.Result) bool {
 	return false
 }
 
-func displayResults(results []*handler.Result) {
+func displayResults(results []*usecase.Result) {
 	hasError := false
 	for _, result := range results {
 		if result.Success {

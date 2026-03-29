@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
-	"github.com/lite-lake/infra-yamlops/internal/application/handler"
 	"github.com/lite-lake/infra-yamlops/internal/application/usecase"
 	"github.com/lite-lake/infra-yamlops/internal/constants"
 	"github.com/lite-lake/infra-yamlops/internal/domain/contract"
@@ -15,16 +15,19 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/logger"
 )
 
+// StateFetcher 负责从远程服务器获取部署状态
 type StateFetcher struct {
 	env       string
 	configDir string
 	sshPool   *usecase.SSHPool
 }
 
+// NewStateFetcher 创建状态获取器
 func NewStateFetcher(env, configDir string) *StateFetcher {
 	return NewStateFetcherWithPool(env, configDir, usecase.NewSSHPool())
 }
 
+// NewStateFetcherWithPool 使用指定的 SSH 池创建状态获取器
 func NewStateFetcherWithPool(env, configDir string, pool *usecase.SSHPool) *StateFetcher {
 	return &StateFetcher{
 		env:       env,
@@ -33,6 +36,7 @@ func NewStateFetcherWithPool(env, configDir string, pool *usecase.SSHPool) *Stat
 	}
 }
 
+// Fetch 从所有服务器并发获取部署状态
 func (f *StateFetcher) Fetch(ctx context.Context, cfg *entity.Config) *repository.DeploymentState {
 	state := repository.NewDeploymentState()
 
@@ -41,8 +45,13 @@ func (f *StateFetcher) Fetch(ctx context.Context, cfg *entity.Config) *repositor
 	}
 
 	secrets := cfg.GetSecretsMap()
+	var wg sync.WaitGroup
+	var mu sync.Mutex
+
 	for _, srv := range cfg.Servers {
+		mu.Lock()
 		state.Servers[srv.Name] = &srv
+		mu.Unlock()
 
 		password, err := srv.SSH.Password.Resolve(secrets)
 		if err != nil {
@@ -55,7 +64,7 @@ func (f *StateFetcher) Fetch(ctx context.Context, cfg *entity.Config) *repositor
 			strictHostKeyChecking = false
 		}
 
-		info := &handler.ServerInfo{
+		info := &usecase.ServerInfo{
 			Host:                  srv.SSH.Host,
 			Port:                  srv.SSH.Port,
 			User:                  srv.SSH.User,
@@ -69,14 +78,20 @@ func (f *StateFetcher) Fetch(ctx context.Context, cfg *entity.Config) *repositor
 			continue
 		}
 
-		f.fetchServerServicesState(client, srv.Name, cfg, state)
+		wg.Add(1)
+		go func(serverName string, sshClient contract.SSHClient, config *entity.Config) {
+			defer wg.Done()
+			f.fetchServerServicesState(sshClient, serverName, config, state, &mu)
+		}(srv.Name, client, cfg)
 	}
 
+	wg.Wait()
 	f.sshPool.CloseAll()
 	return state
 }
 
-func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serverName string, cfg *entity.Config, state *repository.DeploymentState) {
+// fetchServerServicesState 获取单个服务器上的服务状态
+func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serverName string, cfg *entity.Config, state *repository.DeploymentState, mu *sync.Mutex) {
 	stdout, _, err := client.Run("sudo docker compose ls -a --format json 2>/dev/null || sudo docker compose ls -a --format json")
 	if err != nil {
 		logger.Warn("failed to list docker compose projects", "server", serverName, "error", err)
@@ -119,6 +134,7 @@ func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serve
 		}
 		f.processService(client, serverName, svc.Name, deployedServices, func(exists bool, remoteHash, localHash string) {
 			if exists {
+				mu.Lock()
 				if remoteHash != "" && localHash != "" && remoteHash == localHash {
 					state.Services[svc.Name] = &entity.BizService{
 						ServiceBase: entity.ServiceBase{
@@ -138,6 +154,7 @@ func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serve
 						Name: svc.Name,
 					}
 				}
+				mu.Unlock()
 			}
 		})
 	}
@@ -148,6 +165,7 @@ func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serve
 		}
 		f.processService(client, serverName, infra.Name, deployedServices, func(exists bool, remoteHash, localHash string) {
 			if exists {
+				mu.Lock()
 				if remoteHash != "" && localHash != "" && remoteHash == localHash {
 					state.InfraServices[infra.Name] = &entity.InfraService{
 						ServiceBase: entity.ServiceBase{
@@ -171,13 +189,16 @@ func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serve
 						Name: infra.Name,
 					}
 				}
+				mu.Unlock()
 			}
 		})
 	}
 }
 
+// serviceProcessor 服务状态处理函数类型
 type serviceProcessor func(exists bool, remoteHash, localHash string)
 
+// processService 处理单个服务的状态
 func (f *StateFetcher) processService(client contract.SSHClient, serverName, serviceName string, deployedServices map[string]bool, processor serviceProcessor) {
 	remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceNameFormat, f.env, serviceName))
 	key := fmt.Sprintf(constants.ServiceNameFormat, f.env, serviceName)

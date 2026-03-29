@@ -7,6 +7,38 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
+func stringSlicesEqualUnordered(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	mapA := make(map[string]struct{}, len(a))
+	for _, s := range a {
+		mapA[s] = struct{}{}
+	}
+	for _, s := range b {
+		if _, ok := mapA[s]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
+func comparableSlicesEqualUnordered[T comparable](a, b []T) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	mapA := make(map[T]struct{}, len(a))
+	for _, item := range a {
+		mapA[item] = struct{}{}
+	}
+	for _, item := range b {
+		if _, ok := mapA[item]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 type serviceEntity interface {
 	GetServer() string
 }
@@ -87,13 +119,8 @@ func ServerEquals(a, b *entity.Server) bool {
 	if a.Environment.APTSource != b.Environment.APTSource {
 		return false
 	}
-	if len(a.Environment.Registries) != len(b.Environment.Registries) {
+	if !stringSlicesEqualUnordered(a.Environment.Registries, b.Environment.Registries) {
 		return false
-	}
-	for i, reg := range a.Environment.Registries {
-		if i >= len(b.Environment.Registries) || reg != b.Environment.Registries[i] {
-			return false
-		}
 	}
 	if len(a.Networks) != len(b.Networks) {
 		return false
@@ -226,13 +253,8 @@ func ServiceEquals(a, b *entity.BizService) bool {
 	if a.Name != b.Name || a.Server != b.Server || a.Image != b.Image {
 		return false
 	}
-	if len(a.Ports) != len(b.Ports) {
+	if !comparableSlicesEqualUnordered(a.Ports, b.Ports) {
 		return false
-	}
-	for i, port := range a.Ports {
-		if i >= len(b.Ports) || port != b.Ports[i] {
-			return false
-		}
 	}
 	if len(a.Env) != len(b.Env) {
 		return false
@@ -242,13 +264,8 @@ func ServiceEquals(a, b *entity.BizService) bool {
 			return false
 		}
 	}
-	if len(a.Secrets) != len(b.Secrets) {
+	if !comparableSlicesEqualUnordered(a.Secrets, b.Secrets) {
 		return false
-	}
-	for i, sec := range a.Secrets {
-		if i >= len(b.Secrets) || sec != b.Secrets[i] {
-			return false
-		}
 	}
 	if !healthcheckEqual(a.Healthcheck, b.Healthcheck) {
 		return false
@@ -256,32 +273,17 @@ func ServiceEquals(a, b *entity.BizService) bool {
 	if a.Resources != b.Resources {
 		return false
 	}
-	if len(a.Volumes) != len(b.Volumes) {
+	if !comparableSlicesEqualUnordered(a.Volumes, b.Volumes) {
 		return false
 	}
-	for i, vol := range a.Volumes {
-		if i >= len(b.Volumes) || vol != b.Volumes[i] {
-			return false
-		}
-	}
-	if len(a.Gateways) != len(b.Gateways) {
+	if !comparableSlicesEqualUnordered(a.Gateways, b.Gateways) {
 		return false
-	}
-	for i, gw := range a.Gateways {
-		if i >= len(b.Gateways) || gw != b.Gateways[i] {
-			return false
-		}
 	}
 	if a.Internal != b.Internal {
 		return false
 	}
-	if len(a.Networks) != len(b.Networks) {
+	if !stringSlicesEqualUnordered(a.Networks, b.Networks) {
 		return false
-	}
-	for i, net := range a.Networks {
-		if i >= len(b.Networks) || net != b.Networks[i] {
-			return false
-		}
 	}
 	return true
 }
@@ -379,13 +381,8 @@ func gatewayWAFConfigEqual(a, b *entity.GatewayWAFConfig) bool {
 		if x.Enabled != y.Enabled {
 			return false
 		}
-		if len(x.Whitelist) != len(y.Whitelist) {
+		if !stringSlicesEqualUnordered(x.Whitelist, y.Whitelist) {
 			return false
-		}
-		for i, w := range x.Whitelist {
-			if i >= len(y.Whitelist) || w != y.Whitelist[i] {
-				return false
-			}
 		}
 		return true
 	})

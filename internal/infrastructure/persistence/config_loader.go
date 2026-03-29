@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
+	"time"
 
 	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
@@ -14,15 +16,65 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type ConfigLoader struct{ baseDir string }
+// ConfigLoader 负责加载和缓存 YAML 配置
+type ConfigLoader struct {
+	baseDir string
+	cache   map[string]*cacheEntry
+	mu      sync.RWMutex
+}
 
-func NewConfigLoader(baseDir string) *ConfigLoader { return &ConfigLoader{baseDir: baseDir} }
+// cacheEntry 配置缓存条目
+type cacheEntry struct {
+	config    *entity.Config
+	timestamp time.Time
+}
 
+const cacheTTL = 30 * time.Second
+
+// NewConfigLoader 创建配置加载器
+func NewConfigLoader(baseDir string) *ConfigLoader {
+	return &ConfigLoader{
+		baseDir: baseDir,
+		cache:   make(map[string]*cacheEntry),
+	}
+}
+
+// Load 加载配置（带缓存）
 func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, error) {
 	log := logger.FromContext(ctx)
 
+	// 检查缓存
+	l.mu.RLock()
+	if entry, ok := l.cache[env]; ok && time.Since(entry.timestamp) < cacheTTL {
+		l.mu.RUnlock()
+		log.Debug("using cached config", "env", env)
+		return entry.config, nil
+	}
+	l.mu.RUnlock()
+
+	// 缓存未命中或已过期，重新加载
+	cfg, err := l.loadFromDisk(ctx, env)
+	if err != nil {
+		return nil, err
+	}
+
+	// 更新缓存
+	l.mu.Lock()
+	l.cache[env] = &cacheEntry{
+		config:    cfg,
+		timestamp: time.Now(),
+	}
+	l.mu.Unlock()
+
+	return cfg, nil
+}
+
+// loadFromDisk 从磁盘加载配置
+func (l *ConfigLoader) loadFromDisk(ctx context.Context, env string) (*entity.Config, error) {
+	log := logger.FromContext(ctx)
+
 	configDir := filepath.Join(l.baseDir, "userdata", env)
-	log.Debug("loading config", "env", env, "dir", configDir)
+	log.Debug("loading config from disk", "env", env, "dir", configDir)
 
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		log.Error("config directory not found", "dir", configDir)
@@ -57,20 +109,37 @@ func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, er
 		}
 	}
 
-	log.Info("config loaded", "env", env)
+	log.Info("config loaded from disk", "env", env)
 	return cfg, nil
 }
 
+// Validate 验证配置
 func (l *ConfigLoader) Validate(cfg *entity.Config) error {
 	return service.NewValidator(cfg).Validate()
 }
 
+// ClearCache 清除配置缓存
+func (l *ConfigLoader) ClearCache() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.cache = make(map[string]*cacheEntry)
+}
+
+// ClearEnvCache 清除特定环境的配置缓存
+func (l *ConfigLoader) ClearEnvCache(env string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.cache, env)
+}
+
+// loadEntity 从 YAML 文件加载实体列表
 func loadEntity[T any](filePath, yamlKey string) ([]T, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("reading config file %s: %w", filePath, err)
 	}
 
+	// 简单的 YAML 结构验证
 	var raw map[string]yaml.Node
 	if err := yaml.Unmarshal(data, &raw); err != nil {
 		return nil, fmt.Errorf("parsing YAML in %s: %w", filePath, err)

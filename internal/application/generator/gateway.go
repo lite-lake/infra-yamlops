@@ -1,14 +1,14 @@
-package deployment
+package generator
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 
+	"github.com/lite-lake/infra-yamlops/internal/application/generator/compose"
+	"github.com/lite-lake/infra-yamlops/internal/application/generator/gate"
 	"github.com/lite-lake/infra-yamlops/internal/constants"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
-	"github.com/lite-lake/infra-yamlops/internal/infrastructure/generator/compose"
-	"github.com/lite-lake/infra-yamlops/internal/infrastructure/generator/gate"
 )
 
 type gatewayRouteResult struct {

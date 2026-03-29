@@ -5,13 +5,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lite-lake/infra-yamlops/internal/application/handler"
 	"github.com/lite-lake/infra-yamlops/internal/domain/contract"
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/logger"
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/ssh"
 )
 
-type SSHClientFactory func(info *handler.ServerInfo) (contract.SSHClient, error)
+type SSHClientFactory func(info *ServerInfo) (contract.SSHClient, error)
 
 type poolEntry struct {
 	client     contract.SSHClient
@@ -38,7 +37,7 @@ func NewSSHPoolWithTTL(ttl time.Duration) *SSHPool {
 	return &SSHPool{
 		clients: make(map[string]*poolEntry),
 		connTTL: ttl,
-		factory: func(info *handler.ServerInfo) (contract.SSHClient, error) {
+		factory: func(info *ServerInfo) (contract.SSHClient, error) {
 			cfg := &ssh.SSHConfig{
 				StrictHostKeyChecking: info.StrictHostKeyChecking,
 			}
@@ -55,7 +54,7 @@ func NewSSHPoolWithFactory(factory SSHClientFactory) *SSHPool {
 	}
 }
 
-func (p *SSHPool) Get(info *handler.ServerInfo) (contract.SSHClient, error) {
+func (p *SSHPool) Get(info *ServerInfo) (contract.SSHClient, error) {
 	key := fmt.Sprintf("%s:%d:%s:%s:%t", info.Host, info.Port, info.User, info.Password, info.StrictHostKeyChecking)
 
 	p.mu.RLock()

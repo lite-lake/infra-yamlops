@@ -4,42 +4,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/lite-lake/infra-yamlops/internal/application/handler"
 	"github.com/lite-lake/infra-yamlops/internal/domain/contract"
 )
-
-type mockSSHClient struct {
-	closed bool
-}
-
-func (m *mockSSHClient) Healthy() bool {
-	return !m.closed
-}
-
-func (m *mockSSHClient) Run(cmd string) (stdout, stderr string, err error) {
-	return "", "", nil
-}
-
-func (m *mockSSHClient) RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error) {
-	return "", "", nil
-}
-
-func (m *mockSSHClient) MkdirAllSudoWithPerm(path, perm string) error {
-	return nil
-}
-
-func (m *mockSSHClient) UploadFileSudo(localPath, remotePath string) error {
-	return nil
-}
-
-func (m *mockSSHClient) UploadFileSudoWithPerm(localPath, remotePath, perm string) error {
-	return nil
-}
-
-func (m *mockSSHClient) Close() error {
-	m.closed = true
-	return nil
-}
 
 func TestSSHPool_Get(t *testing.T) {
 	pool := NewSSHPool()
@@ -76,11 +42,11 @@ func TestSSHPool_Concurrency(t *testing.T) {
 }
 
 func TestSSHPool_GetWithFactory(t *testing.T) {
-	pool := NewSSHPoolWithFactory(func(info *handler.ServerInfo) (contract.SSHClient, error) {
-		return &mockSSHClient{}, nil
+	pool := NewSSHPoolWithFactory(func(info *ServerInfo) (contract.SSHClient, error) {
+		return &testMockSSHClient{}, nil
 	})
 
-	info := &handler.ServerInfo{Host: "test.example.com", Port: 22, User: "test", Password: "test"}
+	info := &ServerInfo{Host: "test.example.com", Port: 22, User: "test", Password: "test"}
 
 	client1, err := pool.Get(info)
 	if err != nil {
@@ -99,4 +65,37 @@ func TestSSHPool_GetWithFactory(t *testing.T) {
 	if pool.Size() != 1 {
 		t.Errorf("expected pool size 1, got %d", pool.Size())
 	}
+}
+
+type testMockSSHClient struct {
+	closed bool
+}
+
+func (m *testMockSSHClient) Healthy() bool {
+	return !m.closed
+}
+
+func (m *testMockSSHClient) Run(cmd string) (stdout, stderr string, err error) {
+	return "", "", nil
+}
+
+func (m *testMockSSHClient) RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error) {
+	return "", "", nil
+}
+
+func (m *testMockSSHClient) MkdirAllSudoWithPerm(path, perm string) error {
+	return nil
+}
+
+func (m *testMockSSHClient) UploadFileSudo(localPath, remotePath string) error {
+	return nil
+}
+
+func (m *testMockSSHClient) UploadFileSudoWithPerm(localPath, remotePath, perm string) error {
+	return nil
+}
+
+func (m *testMockSSHClient) Close() error {
+	m.closed = true
+	return nil
 }

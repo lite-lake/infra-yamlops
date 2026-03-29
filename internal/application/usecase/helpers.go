@@ -1,4 +1,4 @@
-package handler
+package usecase
 
 import (
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"

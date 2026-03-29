@@ -3,7 +3,7 @@ package plan
 import (
 	"context"
 
-	"github.com/lite-lake/infra-yamlops/internal/application/deployment"
+	"github.com/lite-lake/infra-yamlops/internal/application/generator"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
 	"github.com/lite-lake/infra-yamlops/internal/domain/repository"
 	"github.com/lite-lake/infra-yamlops/internal/domain/service"
@@ -66,7 +66,7 @@ func NewPlanner(opts ...PlannerOption) *Planner {
 		opt(p)
 	}
 	if p.deployGen == nil {
-		p.deployGen = deployment.NewGenerator(p.env, p.outputDir)
+		p.deployGen = generator.NewGenerator(p.env, p.outputDir)
 	}
 	return p
 }

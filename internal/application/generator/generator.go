@@ -1,12 +1,12 @@
-package deployment
+package generator
 
 import (
 	"fmt"
 	"os"
 
+	"github.com/lite-lake/infra-yamlops/internal/application/generator/compose"
+	"github.com/lite-lake/infra-yamlops/internal/application/generator/gate"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
-	"github.com/lite-lake/infra-yamlops/internal/infrastructure/generator/compose"
-	"github.com/lite-lake/infra-yamlops/internal/infrastructure/generator/gate"
 )
 
 type Generator struct {

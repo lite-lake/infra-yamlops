@@ -30,11 +30,14 @@ func closeWithLog(closer io.Closer, name string) {
 var knownHostsMu sync.Mutex
 
 type Client struct {
-	client      *ssh.Client
-	user        string
-	sftp        sftpClient
-	sftpMu      sync.Mutex
-	sftpCreated bool
+	client           *ssh.Client
+	user             string
+	sftp             sftpClient
+	sftpMu           sync.Mutex
+	sftpCreated      bool
+	lastHealthCheck  time.Time
+	healthCheckCache bool
+	healthCheckMu    sync.Mutex
 }
 
 type SSHConfig struct {
@@ -68,7 +71,7 @@ func NewClientWithConfig(host string, port int, user, password string, cfg *SSHC
 	hostKeyCallback, err := createHostKeyCallback(knownHosts, cfg.StrictHostKeyChecking)
 	if err != nil {
 		logger.Error("failed to create host key callback", "error", err)
-		return nil, domainerr.WrapOp("create host key callback", domainerr.ErrSSHConnectFailed)
+		return nil, domainerr.WrapOp("create host key callback", fmt.Errorf("%w: %w", domainerr.ErrSSHConnectFailed, err))
 	}
 
 	config := &ssh.ClientConfig{
@@ -82,7 +85,7 @@ func NewClientWithConfig(host string, port int, user, password string, cfg *SSHC
 	client, err := ssh.Dial("tcp", addr, config)
 	if err != nil {
 		logger.Error("SSH connection failed", "host", host, "port", port, "error", err)
-		return nil, domainerr.WrapOp("dial", domainerr.ErrSSHConnectFailed)
+		return nil, domainerr.WrapOp("dial", fmt.Errorf("%w: %w", domainerr.ErrSSHConnectFailed, err))
 	}
 
 	logger.Info("SSH connection established", "host", host, "port", port)
@@ -196,14 +199,14 @@ func createHostKeyCallback(knownHostsPath string, strict bool) (ssh.HostKeyCallb
 		f, err := os.OpenFile(knownHostsPath, os.O_APPEND|os.O_WRONLY, constants.FilePermissionOwnerRW)
 		if err != nil {
 			knownHostsMu.Unlock()
-			return domainerr.WrapOp("open known_hosts", domainerr.ErrSSHConnectFailed)
+			return domainerr.WrapOp("open known_hosts", fmt.Errorf("%w: %w", domainerr.ErrSSHConnectFailed, err))
 		}
 		defer func() {
 			closeWithLog(f, "known_hosts file")
 			knownHostsMu.Unlock()
 		}()
 		if _, err := fmt.Fprintln(f, line); err != nil {
-			return domainerr.WrapOp("write known_hosts", domainerr.ErrSSHConnectFailed)
+			return domainerr.WrapOp("write known_hosts", fmt.Errorf("%w: %w", domainerr.ErrSSHConnectFailed, err))
 		}
 		return nil
 	}, nil
@@ -226,8 +229,18 @@ func (c *Client) Healthy() bool {
 	if c.client == nil {
 		return false
 	}
+
+	c.healthCheckMu.Lock()
+	defer c.healthCheckMu.Unlock()
+
+	if time.Since(c.lastHealthCheck) < 30*time.Second {
+		return c.healthCheckCache
+	}
+
 	_, _, err := c.Run("echo healthcheck")
-	return err == nil
+	c.lastHealthCheck = time.Now()
+	c.healthCheckCache = err == nil
+	return c.healthCheckCache
 }
 
 func (c *Client) Run(cmd string) (stdout, stderr string, err error) {
@@ -236,7 +249,7 @@ func (c *Client) Run(cmd string) (stdout, stderr string, err error) {
 	session, err := c.client.NewSession()
 	if err != nil {
 		logger.Error("failed to create SSH session", "error", err)
-		return "", "", domainerr.WrapOp("create session", domainerr.ErrSSHSessionFailed)
+		return "", "", domainerr.WrapOp("create session", fmt.Errorf("%w: %w", domainerr.ErrSSHSessionFailed, err))
 	}
 	defer closeWithLog(session, "ssh session")
 
@@ -254,7 +267,7 @@ func (c *Client) Run(cmd string) (stdout, stderr string, err error) {
 func (c *Client) RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error) {
 	session, err := c.client.NewSession()
 	if err != nil {
-		return "", "", domainerr.WrapOp("create session", domainerr.ErrSSHSessionFailed)
+		return "", "", domainerr.WrapOp("create session", fmt.Errorf("%w: %w", domainerr.ErrSSHSessionFailed, err))
 	}
 	defer closeWithLog(session, "ssh session")
 
@@ -264,17 +277,17 @@ func (c *Client) RunWithStdin(stdin string, cmd string) (stdout, stderr string, 
 
 	stdinPipe, err := session.StdinPipe()
 	if err != nil {
-		return "", "", domainerr.WrapOp("get stdin pipe", domainerr.ErrSSHSessionFailed)
+		return "", "", domainerr.WrapOp("get stdin pipe", fmt.Errorf("%w: %w", domainerr.ErrSSHSessionFailed, err))
 	}
 
 	if err := session.Start(cmd); err != nil {
-		return "", "", domainerr.WrapOp("start command", domainerr.ErrSSHCommandFailed)
+		return "", "", domainerr.WrapOp("start command", fmt.Errorf("%w: %w", domainerr.ErrSSHCommandFailed, err))
 	}
 
 	_, err = io.WriteString(stdinPipe, stdin)
 	if err != nil {
 		stdinPipe.Close()
-		return "", "", domainerr.WrapOp("write to stdin", domainerr.ErrSSHCommandFailed)
+		return "", "", domainerr.WrapOp("write to stdin", fmt.Errorf("%w: %w", domainerr.ErrSSHCommandFailed, err))
 	}
 	stdinPipe.Close()
 
@@ -290,19 +303,19 @@ func (c *Client) UploadFile(localPath, remotePath string) error {
 
 	localFile, err := os.Open(localPath)
 	if err != nil {
-		return domainerr.WrapOp("open local file", domainerr.ErrSSHFileTransfer)
+		return domainerr.WrapOp("open local file", fmt.Errorf("%w: %w", domainerr.ErrSSHFileTransfer, err))
 	}
 	defer closeWithLog(localFile, "local file")
 
 	remoteFile, err := sftpClient.Create(remotePath)
 	if err != nil {
-		return domainerr.WrapOp("create remote file", domainerr.ErrSSHFileTransfer)
+		return domainerr.WrapOp("create remote file", fmt.Errorf("%w: %w", domainerr.ErrSSHFileTransfer, err))
 	}
 	defer closeWithLog(remoteFile, "remote file")
 
 	_, err = io.Copy(remoteFile, localFile)
 	if err != nil {
-		return domainerr.WrapOp("copy file", domainerr.ErrSSHFileTransfer)
+		return domainerr.WrapOp("copy file", fmt.Errorf("%w: %w", domainerr.ErrSSHFileTransfer, err))
 	}
 
 	return nil
@@ -348,20 +361,20 @@ func (c *Client) UploadFileSudoWithPerm(localPath, remotePath, perm string) erro
 
 	localFile, err := os.Open(localPath)
 	if err != nil {
-		return domainerr.WrapOp("open local file", domainerr.ErrSSHFileTransfer)
+		return domainerr.WrapOp("open local file", fmt.Errorf("%w: %w", domainerr.ErrSSHFileTransfer, err))
 	}
 	defer closeWithLog(localFile, "local file")
 
 	tmpPath := fmt.Sprintf(constants.RemoteTempFileFmt, os.Getpid())
 	tmpFile, err := sftpClient.Create(tmpPath)
 	if err != nil {
-		return domainerr.WrapOp("create temp file", domainerr.ErrSSHFileTransfer)
+		return domainerr.WrapOp("create temp file", fmt.Errorf("%w: %w", domainerr.ErrSSHFileTransfer, err))
 	}
 	defer closeWithLog(tmpFile, "temp file")
 
 	_, err = io.Copy(tmpFile, localFile)
 	if err != nil {
-		return domainerr.WrapOp("copy file", domainerr.ErrSSHFileTransfer)
+		return domainerr.WrapOp("copy file", fmt.Errorf("%w: %w", domainerr.ErrSSHFileTransfer, err))
 	}
 
 	cmd := fmt.Sprintf("sudo mv %s %s && sudo chown %s:%s %s && sudo chmod %s %s", ShellEscape(tmpPath), ShellEscape(remotePath), ShellEscape(c.user), ShellEscape(c.user), ShellEscape(remotePath), ShellEscape(perm), ShellEscape(remotePath))

@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
-	"github.com/lite-lake/infra-yamlops/internal/application/handler"
+	"github.com/lite-lake/infra-yamlops/internal/application/usecase"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 	serverpkg "github.com/lite-lake/infra-yamlops/internal/environment"
@@ -33,7 +33,7 @@ type planGeneratedMsg struct {
 }
 
 type applyCompleteMsg struct {
-	results []*handler.Result
+	results []*usecase.Result
 	err     error
 }
 
@@ -105,7 +105,7 @@ type dnsProviderCreatedMsg struct {
 }
 
 type applyCompleteAsyncMsg struct {
-	results []*handler.Result
+	results []*usecase.Result
 	err     error
 }
 
@@ -418,7 +418,7 @@ type ActionState struct {
 	ApplyProgress   int
 	ApplyTotal      int
 	ApplyComplete   bool
-	ApplyResults    []*handler.Result
+	ApplyResults    []*usecase.Result
 	ApplyInProgress bool
 	ConfirmSelected int
 	PlanScope       *valueobject.Scope

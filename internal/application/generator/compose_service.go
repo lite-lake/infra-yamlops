@@ -1,4 +1,4 @@
-package deployment
+package generator
 
 import (
 	"fmt"
@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/lite-lake/infra-yamlops/internal/application/generator/compose"
 	"github.com/lite-lake/infra-yamlops/internal/constants"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
-	"github.com/lite-lake/infra-yamlops/internal/infrastructure/generator/compose"
 )
 
 func (g *Generator) generateServiceComposes(config *entity.Config) error {

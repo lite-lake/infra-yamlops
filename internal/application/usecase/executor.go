@@ -1,7 +1,6 @@
 package usecase
 
 import (
-	"github.com/lite-lake/infra-yamlops/internal/application/handler"
 	"github.com/lite-lake/infra-yamlops/internal/domain/contract"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
@@ -9,12 +8,12 @@ import (
 )
 
 type RegistryInterface interface {
-	Register(h handler.Handler)
-	Get(entityType string) (handler.Handler, bool)
+	Register(h Handler)
+	Get(entityType string) (Handler, bool)
 }
 
 type SSHPoolInterface interface {
-	Get(info *handler.ServerInfo) (contract.SSHClient, error)
+	Get(info *ServerInfo) (contract.SSHClient, error)
 	CloseAll()
 }
 
@@ -31,7 +30,7 @@ type ExecutorConfig struct {
 }
 
 type Executor struct {
-	handlerRegistry *HandlerRegistry
+	handlerRegistry *Registry
 	changeExecutor  *ChangeExecutor
 	plan            *valueobject.Plan
 	env             string
@@ -45,11 +44,11 @@ func NewExecutor(cfg *ExecutorConfig) *Executor {
 		cfg.Env = "dev"
 	}
 
-	var hr *HandlerRegistry
+	var hr *Registry
 	if cfg.Registry != nil {
-		hr = NewHandlerRegistryWithRegistry(cfg.Registry)
+		hr = NewRegistry()
 	} else {
-		hr = NewHandlerRegistry()
+		hr = NewRegistry()
 	}
 
 	sshPool := cfg.SSHPool
@@ -101,9 +100,9 @@ func (e *Executor) RegisterServer(name, host string, port int, user, password st
 	e.changeExecutor.RegisterServer(name, host, port, user, password, strictHostKeyChecking)
 }
 
-func (e *Executor) Apply() []*handler.Result {
-	e.handlerRegistry.RegisterDefaults()
-	return e.changeExecutor.Apply(e.handlerRegistry.Registry())
+func (e *Executor) Apply() []*Result {
+	e.RegisterDefaults()
+	return e.changeExecutor.Apply(e.handlerRegistry)
 }
 
 func (e *Executor) FilterPlanByServer(serverName string) *valueobject.Plan {
@@ -111,13 +110,28 @@ func (e *Executor) FilterPlanByServer(serverName string) *valueobject.Plan {
 }
 
 func (e *Executor) GetRegistry() RegistryInterface {
-	return e.handlerRegistry.Registry()
+	return e.handlerRegistry
 }
 
-func (e *Executor) GetHandlerRegistry() *HandlerRegistry {
+func (e *Executor) GetHandlerRegistry() *Registry {
 	return e.handlerRegistry
 }
 
 func (e *Executor) GetChangeExecutor() *ChangeExecutor {
 	return e.changeExecutor
+}
+
+func (e *Executor) RegisterDefaults() {
+	defaultHandlers := []Handler{
+		NewDNSHandler(),
+		NewServiceHandler(),
+		NewInfraServiceHandler(),
+		NewServerHandler(),
+	}
+	for _, h := range defaultHandlers {
+		if _, ok := e.handlerRegistry.Get(h.EntityType()); !ok {
+			e.handlerRegistry.Register(h)
+		}
+	}
+	RegisterNoopHandlers(e.handlerRegistry)
 }
