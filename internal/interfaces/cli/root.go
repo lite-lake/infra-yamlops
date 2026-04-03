@@ -15,20 +15,9 @@ var (
 
 var Version = version.Version
 
-// validEnvironments 有效的环境列表
-var validEnvironments = map[string]bool{
-	"prod":    true,
-	"staging": true,
-	"dev":     true,
-	"demo":    true,
-}
-
 // validateFlags 验证命令行标志
 func validateFlags(cmd *cobra.Command, args []string) error {
-	// 验证环境标志
-	if flagEnv != "" && !validEnvironments[flagEnv] {
-		return fmt.Errorf("invalid environment: %s. Must be one of: prod, staging, dev, demo", flagEnv)
-	}
+	// 验证环境标志（只要不为空即可）
 
 	// 验证配置目录标志
 	if flagConfigDir != "" {
@@ -65,7 +54,7 @@ func Execute() {
 		},
 	}
 
-	rootCmd.PersistentFlags().StringVarP(&flagEnv, "env", "e", "dev", "Environment (prod/staging/dev/demo)")
+	rootCmd.PersistentFlags().StringVarP(&flagEnv, "env", "e", "dev", "Environment")
 	rootCmd.PersistentFlags().StringVarP(&flagConfigDir, "config", "c", ".", "Configuration directory")
 
 	rootCmd.AddCommand(newPlanCommand(ctx))
