@@ -146,15 +146,13 @@ func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayCon
 	}
 
 	return &gate.GatewayConfig{
-		Port:               httpPort,
-		LogLevel:           gw.GatewayLogLevel,
-		WAFEnabled:         wafEnabled,
-		Whitelist:          whitelist,
-		SSLMode:            sslMode,
-		SSLEndpoint:        sslEndpoint,
-		SSLAPIKey:          sslAPIKey,
-		SSLAutoUpdate:      true,
-		SSLUpdateCheckTime: "00:00-00:59",
+		Port:        httpPort,
+		LogLevel:    gw.GatewayLogLevel,
+		WAFEnabled:  wafEnabled,
+		Whitelist:   whitelist,
+		SSLMode:     sslMode,
+		SSLEndpoint: sslEndpoint,
+		SSLAPIKey:   sslAPIKey,
 	}
 }
 

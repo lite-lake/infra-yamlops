@@ -343,7 +343,6 @@ func TestInfraServiceHandler_DeploySSLType_WithFile(t *testing.T) {
 		SSLConfig: &entity.SSLConfig{
 			Config: &entity.SSLVolumeConfig{
 				Source: "volumes://infra-ssl-config-cn",
-				Sync:   true,
 			},
 		},
 	}
@@ -403,7 +402,6 @@ func TestInfraServiceHandler_GetSSLConfigFilePath(t *testing.T) {
 		SSLConfig: &entity.SSLConfig{
 			Config: &entity.SSLVolumeConfig{
 				Source: "volumes://infra-ssl-config-cn",
-				Sync:   true,
 			},
 		},
 	}

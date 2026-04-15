@@ -330,9 +330,6 @@ func InfraServiceEquals(a, b *entity.InfraService) bool {
 	if !gatewayPortsEqual(a.GatewayPorts, b.GatewayPorts) {
 		return false
 	}
-	if !gatewayConfigEqual(a.GatewayConfig, b.GatewayConfig) {
-		return false
-	}
 	if !gatewaySSLConfigEqual(a.GatewaySSL, b.GatewaySSL) {
 		return false
 	}
@@ -361,12 +358,6 @@ func InfraServiceEquals(a, b *entity.InfraService) bool {
 func gatewayPortsEqual(a, b *entity.GatewayPorts) bool {
 	return ptrEqual(a, b, func(x, y *entity.GatewayPorts) bool {
 		return x.HTTP == y.HTTP && x.HTTPS == y.HTTPS
-	})
-}
-
-func gatewayConfigEqual(a, b *entity.GatewayConfig) bool {
-	return ptrEqual(a, b, func(x, y *entity.GatewayConfig) bool {
-		return x.Source == y.Source && x.Sync == y.Sync
 	})
 }
 
@@ -399,7 +390,7 @@ func sslConfigEqual(a, b *entity.SSLConfig) bool {
 		if x.Config == nil || y.Config == nil {
 			return false
 		}
-		return x.Config.Source == y.Config.Source && x.Config.Sync == y.Config.Sync
+		return x.Config.Source == y.Config.Source
 	})
 }
 

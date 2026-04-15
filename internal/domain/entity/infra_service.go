@@ -59,11 +59,6 @@ func (w *GatewayWAFConfig) Validate() error {
 	return nil
 }
 
-type GatewayConfig struct {
-	Source string `yaml:"source"`
-	Sync   bool   `yaml:"sync"`
-}
-
 type InfraService struct {
 	ServiceBase
 	Name  string           `yaml:"name"`
@@ -71,7 +66,6 @@ type InfraService struct {
 	Image string           `yaml:"image"`
 
 	GatewayPorts    *GatewayPorts     `yaml:"ports,omitempty"`
-	GatewayConfig   *GatewayConfig    `yaml:"config,omitempty"`
 	GatewaySSL      *GatewaySSLConfig `yaml:"ssl,omitempty"`
 	GatewayWAF      *GatewayWAFConfig `yaml:"waf,omitempty"`
 	GatewayLogLevel int               `yaml:"log_level,omitempty"`
@@ -103,7 +97,6 @@ func (s *InfraService) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	case InfraServiceTypeGateway:
 		var gw struct {
 			Ports    *GatewayPorts     `yaml:"ports"`
-			Config   *GatewayConfig    `yaml:"config"`
 			SSL      *GatewaySSLConfig `yaml:"ssl"`
 			WAF      *GatewayWAFConfig `yaml:"waf"`
 			LogLevel int               `yaml:"log_level"`
@@ -112,7 +105,6 @@ func (s *InfraService) UnmarshalYAML(unmarshal func(interface{}) error) error {
 			return err
 		}
 		s.GatewayPorts = gw.Ports
-		s.GatewayConfig = gw.Config
 		s.GatewaySSL = gw.SSL
 		s.GatewayWAF = gw.WAF
 		s.GatewayLogLevel = gw.LogLevel
@@ -144,7 +136,6 @@ func (s *InfraService) MarshalYAML() (interface{}, error) {
 			Server   string            `yaml:"server"`
 			Image    string            `yaml:"image"`
 			Ports    *GatewayPorts     `yaml:"ports,omitempty"`
-			Config   *GatewayConfig    `yaml:"config,omitempty"`
 			SSL      *GatewaySSLConfig `yaml:"ssl,omitempty"`
 			WAF      *GatewayWAFConfig `yaml:"waf,omitempty"`
 			LogLevel int               `yaml:"log_level,omitempty"`
@@ -155,7 +146,6 @@ func (s *InfraService) MarshalYAML() (interface{}, error) {
 			Server:   s.ServiceBase.Server,
 			Image:    s.Image,
 			Ports:    s.GatewayPorts,
-			Config:   s.GatewayConfig,
 			SSL:      s.GatewaySSL,
 			WAF:      s.GatewayWAF,
 			LogLevel: s.GatewayLogLevel,
@@ -198,9 +188,6 @@ func (s *InfraService) Validate() error {
 	}
 	switch s.Type {
 	case InfraServiceTypeGateway:
-		if s.GatewayConfig == nil {
-			return domain.RequiredField("gateway config for gateway type")
-		}
 		if s.GatewayPorts != nil {
 			if err := s.GatewayPorts.Validate(); err != nil {
 				return err
@@ -219,7 +206,6 @@ func (s *InfraService) Validate() error {
 
 type SSLVolumeConfig struct {
 	Source string `yaml:"source"`
-	Sync   bool   `yaml:"sync"`
 }
 
 type SSLConfig struct {

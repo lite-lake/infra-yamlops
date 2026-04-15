@@ -105,8 +105,8 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 			}{
 				Enabled:           sslEnabled,
 				Endpoint:          cfg.SSLEndpoint,
-				AutoUpdate:        cfg.SSLAutoUpdate,
-				UpdateCheckWindow: cfg.SSLUpdateCheckTime,
+				AutoUpdate:        true,
+				UpdateCheckWindow: "00:00-00:59",
 				APIKey:            cfg.SSLAPIKey,
 			},
 		},

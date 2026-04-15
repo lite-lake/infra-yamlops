@@ -1,15 +1,13 @@
 package gate
 
 type GatewayConfig struct {
-	Port               int
-	LogLevel           int
-	WAFEnabled         bool
-	Whitelist          []string
-	SSLMode            string
-	SSLEndpoint        string
-	SSLAPIKey          string
-	SSLAutoUpdate      bool
-	SSLUpdateCheckTime string
+	Port        int
+	LogLevel    int
+	WAFEnabled  bool
+	Whitelist   []string
+	SSLMode     string
+	SSLEndpoint string
+	SSLAPIKey   string
 }
 
 type HostRoute struct {

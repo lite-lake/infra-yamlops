@@ -190,7 +190,7 @@ func TestSSLConfig_Validate(t *testing.T) {
 			name: "invalid ports",
 			config: SSLConfig{
 				Ports:  SSLPorts{API: 0},
-				Config: &SSLVolumeConfig{Source: "volumes://ssl-config", Sync: true},
+				Config: &SSLVolumeConfig{Source: "volumes://ssl-config"},
 			},
 			wantErr: domain.ErrInvalidPort,
 		},
@@ -206,7 +206,7 @@ func TestSSLConfig_Validate(t *testing.T) {
 			name: "missing config source",
 			config: SSLConfig{
 				Ports:  SSLPorts{API: 8080},
-				Config: &SSLVolumeConfig{Source: "", Sync: true},
+				Config: &SSLVolumeConfig{Source: ""},
 			},
 			wantErr: domain.ErrRequired,
 		},
@@ -214,7 +214,7 @@ func TestSSLConfig_Validate(t *testing.T) {
 			name: "valid",
 			config: SSLConfig{
 				Ports:  SSLPorts{API: 8080},
-				Config: &SSLVolumeConfig{Source: "volumes://ssl-config", Sync: true},
+				Config: &SSLVolumeConfig{Source: "volumes://ssl-config"},
 			},
 			wantErr: nil,
 		},
@@ -267,30 +267,6 @@ func TestInfraService_Validate(t *testing.T) {
 			wantErr: domain.ErrRequired,
 		},
 		{
-			name: "gateway missing config",
-			service: InfraService{
-				Name: "gateway-1",
-				Type: InfraServiceTypeGateway,
-				ServiceBase: ServiceBase{
-					Server: "server-1",
-				},
-				Image: "nginx:latest",
-			},
-			wantErr: domain.ErrRequired,
-		},
-		{
-			name: "ssl missing config",
-			service: InfraService{
-				Name: "ssl-1",
-				Type: InfraServiceTypeSSL,
-				ServiceBase: ServiceBase{
-					Server: "server-1",
-				},
-				Image: "ssl:latest",
-			},
-			wantErr: domain.ErrRequired,
-		},
-		{
 			name: "gateway invalid ports",
 			service: InfraService{
 				Name: "gateway-1",
@@ -298,9 +274,8 @@ func TestInfraService_Validate(t *testing.T) {
 				ServiceBase: ServiceBase{
 					Server: "server-1",
 				},
-				Image:         "nginx:latest",
-				GatewayConfig: &GatewayConfig{Source: "config", Sync: false},
-				GatewayPorts:  &GatewayPorts{HTTP: 0, HTTPS: 443},
+				Image:        "nginx:latest",
+				GatewayPorts: &GatewayPorts{HTTP: 0, HTTPS: 443},
 			},
 			wantErr: domain.ErrInvalidPort,
 		},
@@ -312,9 +287,8 @@ func TestInfraService_Validate(t *testing.T) {
 				ServiceBase: ServiceBase{
 					Server: "server-1",
 				},
-				Image:         "nginx:latest",
-				GatewayConfig: &GatewayConfig{Source: "config", Sync: false},
-				GatewayPorts:  &GatewayPorts{HTTP: 80, HTTPS: 443},
+				Image:        "nginx:latest",
+				GatewayPorts: &GatewayPorts{HTTP: 80, HTTPS: 443},
 			},
 			wantErr: nil,
 		},
@@ -329,7 +303,7 @@ func TestInfraService_Validate(t *testing.T) {
 				Image: "ssl:latest",
 				SSLConfig: &SSLConfig{
 					Ports:  SSLPorts{API: 8080},
-					Config: &SSLVolumeConfig{Source: "volumes://ssl-config", Sync: true},
+					Config: &SSLVolumeConfig{Source: "volumes://ssl-config"},
 				},
 			},
 			wantErr: nil,

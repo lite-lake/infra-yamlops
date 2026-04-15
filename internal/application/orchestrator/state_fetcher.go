@@ -176,7 +176,6 @@ func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serve
 						Image:           infra.Image,
 						GatewayLogLevel: infra.GatewayLogLevel,
 						GatewayPorts:    infra.GatewayPorts,
-						GatewayConfig:   infra.GatewayConfig,
 						GatewaySSL:      infra.GatewaySSL,
 						GatewayWAF:      infra.GatewayWAF,
 						SSLConfig:       infra.SSLConfig,
