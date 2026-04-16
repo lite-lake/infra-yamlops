@@ -162,19 +162,9 @@ func TestServiceGatewayRoute_Validate(t *testing.T) {
 			wantErr: domain.ErrRequired,
 		},
 		{
-			name:    "invalid container port zero",
-			route:   ServiceGatewayRoute{Hostname: "example.com", ContainerPort: 0},
-			wantErr: domain.ErrInvalidPort,
-		},
-		{
-			name:    "invalid container port negative",
-			route:   ServiceGatewayRoute{Hostname: "example.com", ContainerPort: -1},
-			wantErr: domain.ErrInvalidPort,
-		},
-		{
-			name:    "invalid container port too large",
-			route:   ServiceGatewayRoute{Hostname: "example.com", ContainerPort: 65536},
-			wantErr: domain.ErrInvalidPort,
+			name:    "valid without container_port",
+			route:   ServiceGatewayRoute{Hostname: "example.com", Path: "/api", HTTP: true},
+			wantErr: nil,
 		},
 		{
 			name:    "valid",
@@ -272,7 +262,7 @@ func TestBizService_Validate(t *testing.T) {
 			wantErr: domain.ErrRequired,
 		},
 		{
-			name: "missing image",
+			name: "missing image and external_backends",
 			service: BizService{
 				Name: "api",
 				ServiceBase: ServiceBase{
@@ -280,6 +270,29 @@ func TestBizService_Validate(t *testing.T) {
 				},
 			},
 			wantErr: domain.ErrRequired,
+		},
+		{
+			name: "both image and external_backends",
+			service: BizService{
+				Name: "api",
+				ServiceBase: ServiceBase{
+					Server: "server-1",
+				},
+				Image:            "app:latest",
+				ExternalBackends: []string{"https://example.com"},
+			},
+			wantErr: domain.ErrInvalidFormat,
+		},
+		{
+			name: "valid with external_backends only",
+			service: BizService{
+				Name: "api",
+				ServiceBase: ServiceBase{
+					Server: "server-1",
+				},
+				ExternalBackends: []string{"https://example.com"},
+			},
+			wantErr: nil,
 		},
 		{
 			name: "invalid port",

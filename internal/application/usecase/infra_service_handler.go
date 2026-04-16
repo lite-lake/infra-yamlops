@@ -40,7 +40,8 @@ func (h *InfraServiceHandler) Apply(ctx context.Context, change *valueobject.Cha
 
 	infra, _ := change.NewState().(*entity.InfraService)
 	return ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{
-		PostDeployHook: h.createInfraTypeHook(infra, change.Name(), deployCtx, deps),
+		PreDeployHook:  h.createInfraTypePreHook(infra, change.Name(), deployCtx, deps),
+		PostDeployHook: h.createInfraTypePostHook(infra, change.Name(), deployCtx, deps),
 		RestartAfterUp: true,
 	})
 }
@@ -82,7 +83,7 @@ func (h *InfraServiceHandler) getSSLConfigFilePathFromWorkDir(deps DepsProvider)
 	return filepath.Join(deps.WorkDir(), "userdata", deps.Env(), "volumes", "ssl", "config.yml")
 }
 
-func (h *InfraServiceHandler) createInfraTypeHook(infra *entity.InfraService, serviceName string, deployCtx *ServiceDeployContext, deps DepsProvider) func(*Result) error {
+func (h *InfraServiceHandler) createInfraTypePreHook(infra *entity.InfraService, serviceName string, deployCtx *ServiceDeployContext, deps DepsProvider) func(*Result) error {
 	return func(result *Result) error {
 		if infra != nil && infra.Type == entity.InfraServiceTypeGateway {
 			if err := h.deployGatewayType(serviceName, deployCtx, deps); err != nil {
@@ -99,6 +100,16 @@ func (h *InfraServiceHandler) createInfraTypeHook(infra *entity.InfraService, se
 		}
 		return nil
 	}
+}
+
+func (h *InfraServiceHandler) createInfraTypePostHook(infra *entity.InfraService, serviceName string, deployCtx *ServiceDeployContext, deps DepsProvider) func(*Result) error {
+	return func(result *Result) error {
+		return nil
+	}
+}
+
+func (h *InfraServiceHandler) createInfraTypeHook(infra *entity.InfraService, serviceName string, deployCtx *ServiceDeployContext, deps DepsProvider) func(*Result) error {
+	return h.createInfraTypePostHook(infra, serviceName, deployCtx, deps)
 }
 
 func (h *InfraServiceHandler) deployGatewayType(serviceName string, deployCtx *ServiceDeployContext, deps DepsProvider) error {

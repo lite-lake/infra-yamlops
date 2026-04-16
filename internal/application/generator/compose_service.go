@@ -25,6 +25,9 @@ func (g *Generator) generateServiceComposes(config *entity.Config) error {
 		}
 
 		for _, svc := range services {
+			if svc.Image == "" {
+				continue
+			}
 			if err := g.generateServiceCompose(serverDir, svc, config.GetSecretsMap()); err != nil {
 				return err
 			}

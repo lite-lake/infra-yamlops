@@ -275,16 +275,6 @@ func (m *ServiceRestartManager) RestartInfraService(serverName, serviceName stri
 	remoteDir := GetRemoteDir(m.deps, serviceName)
 	composeFile := filepath.Join(m.deps.WorkDir(), "deployments", serverName, serviceName+".compose.yaml")
 
-	if !RestartServiceWithFileSync(client, &RestartServiceConfig{
-		RemoteDir:   remoteDir,
-		ComposeFile: composeFile,
-		EnvFile:     "",
-		Env:         m.deps.Env(),
-		ServiceName: serviceName,
-	}, result) {
-		return result
-	}
-
 	deployCtx := &ServiceDeployContext{
 		ServerName: serverName,
 		Client:     client,
@@ -297,14 +287,15 @@ func (m *ServiceRestartManager) RestartInfraService(serverName, serviceName stri
 		return result
 	}
 
-	restartCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml restart 2>&1", remoteDir)
-	stdout, stderr, err := client.Run(restartCmd)
-	if err != nil {
-		result.Error = fmt.Errorf("restart failed: %w, stderr: %s", err, stderr)
-		result.Output = stdout + "\n" + stderr
+	if !RestartServiceWithFileSync(client, &RestartServiceConfig{
+		RemoteDir:   remoteDir,
+		ComposeFile: composeFile,
+		EnvFile:     "",
+		Env:         m.deps.Env(),
+		ServiceName: serviceName,
+	}, result) {
 		return result
 	}
-	result.Output = stdout
 
 	result.Success = true
 	return result

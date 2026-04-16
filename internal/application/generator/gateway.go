@@ -72,7 +72,12 @@ func (g *Generator) collectHostRoutes(gw *entity.InfraService, config *entity.Co
 }
 
 func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.ServiceGatewayRoute, gw *entity.InfraService) gate.HostRoute {
-	backend := fmt.Sprintf("http://%s:%d", svc.Name, route.ContainerPort)
+	var backends []string
+	if len(svc.ExternalBackends) > 0 {
+		backends = svc.ExternalBackends
+	} else {
+		backends = []string{fmt.Sprintf("http://%s:%d", svc.Name, route.ContainerPort)}
+	}
 
 	hostname := route.Hostname
 	if hostname == "" {
@@ -100,7 +105,7 @@ func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.Service
 		Name:                hostname,
 		Port:                httpPort,
 		SSLPort:             sslPort,
-		Backend:             []string{backend},
+		Backend:             backends,
 		HealthCheck:         healthPath,
 		HealthCheckInterval: healthInterval,
 		HealthCheckTimeout:  healthTimeout,
