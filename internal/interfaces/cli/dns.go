@@ -112,7 +112,7 @@ func runDNSApply(ctx *Context, domain, record string, autoApprove bool) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
 	planScope := valueobject.NewScope().WithDomain(domain).WithDNSOnly(true)
 
-	executionPlan, cfg, err := wf.Plan(nil, "", planScope)
+	executionPlan, cfg, err := wf.Plan(context.Background(), "", planScope)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(1)

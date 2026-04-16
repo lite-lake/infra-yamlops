@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/lite-lake/infra-yamlops/internal/application/plan"
 	"github.com/lite-lake/infra-yamlops/internal/constants"
@@ -12,6 +13,7 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/domain/repository"
 	"github.com/lite-lake/infra-yamlops/internal/domain/service"
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/dns"
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/persistence"
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/secrets"
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/state"
@@ -93,7 +95,7 @@ func (w *Workflow) Plan(ctx context.Context, outputDir string, scope *valueobjec
 
 		remoteState = w.stateFetcher.FetchWithScope(ctx, cfg, scope)
 	} else {
-		remoteState = repository.NewDeploymentState()
+		remoteState = w.fetchDNSRemoteState(ctx, cfg, scope)
 	}
 
 	opts := []plan.PlannerOption{
@@ -166,4 +168,71 @@ func (w *Workflow) SaveState(ctx context.Context, cfg *entity.Config) error {
 	}
 
 	return nil
+}
+
+func (w *Workflow) fetchDNSRemoteState(ctx context.Context, cfg *entity.Config, scope *valueobject.Scope) *repository.DeploymentState {
+	state := &repository.DeploymentState{
+		Services:      make(map[string]*entity.BizService),
+		InfraServices: make(map[string]*entity.InfraService),
+		Servers:       make(map[string]*entity.Server),
+		Zones:         make(map[string]*entity.Zone),
+		Domains:       make(map[string]*entity.Domain),
+		Records:       make(map[string]*entity.DNSRecord),
+		ISPs:          make(map[string]*entity.ISP),
+	}
+
+	selectedDomains := make(map[string]bool)
+	if scope != nil && scope.Domain() != "" {
+		selectedDomains[scope.Domain()] = true
+	}
+
+	if len(selectedDomains) == 0 {
+		for _, d := range cfg.Domains {
+			selectedDomains[d.Name] = true
+		}
+	}
+
+	dnsFactory := dns.NewFactory()
+	secretsMap := cfg.GetSecretsMap()
+
+	for domainName := range selectedDomains {
+		domain := cfg.GetDomainMap()[domainName]
+		if domain == nil {
+			continue
+		}
+		isp := cfg.GetISPMap()[domain.DNSISP]
+		if isp == nil {
+			continue
+		}
+		provider, err := dnsFactory.Create(isp, secretsMap)
+		if err != nil {
+			continue
+		}
+		remoteRecords, err := provider.ListRecords(ctx, domainName)
+		if err != nil {
+			continue
+		}
+		for _, rr := range remoteRecords {
+			recordName := rr.Name
+			if recordName == domainName || recordName == "" {
+				recordName = "@"
+			} else if strings.HasSuffix(rr.Name, "."+domainName) {
+				recordName = strings.TrimSuffix(rr.Name, "."+domainName)
+			}
+			key := fmt.Sprintf("%s:%s:%s", domainName, rr.Type, recordName)
+			state.Records[key] = &entity.DNSRecord{
+				Domain: domainName,
+				Type:   entity.DNSRecordType(rr.Type),
+				Name:   recordName,
+				Value:  rr.Value,
+				TTL:    rr.TTL,
+			}
+		}
+	}
+
+	for _, d := range cfg.Domains {
+		state.Domains[d.Name] = &d
+	}
+
+	return state
 }

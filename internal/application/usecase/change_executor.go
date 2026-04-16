@@ -103,7 +103,7 @@ func (e *ChangeExecutor) Apply(registry handlerRegistry) []*Result {
 		serverName := ExtractServerFromChange(ch)
 		if serverName != "" {
 			serverGroups[serverName] = append(serverGroups[serverName], ch)
-		} else if ch.Entity() == "dns" || ch.Entity() == "domain" || ch.Entity() == "record" {
+		} else if ch.Entity() == "dns" || ch.Entity() == "domain" || ch.Entity() == "record" || ch.Entity() == "dns_record" || ch.Entity() == "isp" || ch.Entity() == "zone" {
 			dnsChanges = append(dnsChanges, ch)
 		} else {
 			// 其他类型的变更单独作为一组
@@ -159,8 +159,15 @@ func (e *ChangeExecutor) applyChangesGroup(ctx context.Context, groupName string
 	log := logger.FromContext(ctx)
 	log.Debug("processing change group", "group", groupName, "changes", len(changes))
 
-	results := make([]*Result, 0, len(changes))
-	for i, ch := range changes {
+	// 对 DNS 变更组进行特殊排序：Delete → Update → Create
+	sortedChanges := changes
+	if groupName == "dns" {
+		sortedChanges = sortDNSChanges(changes)
+		log.Debug("sorted DNS changes", "count", len(sortedChanges))
+	}
+
+	results := make([]*Result, 0, len(sortedChanges))
+	for i, ch := range sortedChanges {
 		log.Debug("applying change",
 			"group", groupName,
 			"index", i+1,
@@ -171,6 +178,30 @@ func (e *ChangeExecutor) applyChangesGroup(ctx context.Context, groupName string
 		results = append(results, e.applyChange(ctx, ch, registry))
 	}
 	return results
+}
+
+// sortDNSChanges 按照正确的执行顺序排序 DNS 变更：Delete → Update → Create
+func sortDNSChanges(changes []*valueobject.Change) []*valueobject.Change {
+	var deletes, updates, creates []*valueobject.Change
+	for _, ch := range changes {
+		switch ch.Type() {
+		case valueobject.ChangeTypeDelete:
+			deletes = append(deletes, ch)
+		case valueobject.ChangeTypeUpdate:
+			updates = append(updates, ch)
+		case valueobject.ChangeTypeCreate:
+			creates = append(creates, ch)
+		default:
+			// 其他类型放到最后
+			creates = append(creates, ch)
+		}
+	}
+	// 合并结果：Delete first, then Update, then Create
+	result := make([]*valueobject.Change, 0, len(changes))
+	result = append(result, deletes...)
+	result = append(result, updates...)
+	result = append(result, creates...)
+	return result
 }
 
 // applyChange 执行单个变更

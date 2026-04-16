@@ -89,7 +89,14 @@ func (h *DNSHandler) updateRecord(ctx context.Context, change *valueobject.Chang
 	}
 
 	for _, r := range existingRecords {
-		if r.Name == record.Name && strings.EqualFold(r.Type, string(record.Type)) {
+		recordName := r.Name
+		if recordName == record.Domain || recordName == "" {
+			recordName = "@"
+		} else if strings.HasSuffix(r.Name, "."+record.Domain) {
+			recordName = strings.TrimSuffix(r.Name, "."+record.Domain)
+		}
+
+		if recordName == record.Name && strings.EqualFold(r.Type, string(record.Type)) {
 			if err := provider.UpdateRecord(ctx, record.Domain, r.ID, dnsRecord); err != nil {
 				result.Error = fmt.Errorf("%w: update record: %w", domainerr.ErrDNSError, err)
 				return result, nil
@@ -120,7 +127,14 @@ func (h *DNSHandler) deleteRecord(ctx context.Context, change *valueobject.Chang
 	}
 
 	for _, r := range existingRecords {
-		if r.Name == record.Name && strings.EqualFold(r.Type, string(record.Type)) {
+		recordName := r.Name
+		if recordName == record.Domain || recordName == "" {
+			recordName = "@"
+		} else if strings.HasSuffix(r.Name, "."+record.Domain) {
+			recordName = strings.TrimSuffix(r.Name, "."+record.Domain)
+		}
+
+		if recordName == record.Name && strings.EqualFold(r.Type, string(record.Type)) {
 			if err := provider.DeleteRecord(ctx, record.Domain, r.ID); err != nil {
 				result.Error = fmt.Errorf("%w: delete record: %w", domainerr.ErrDNSError, err)
 				return result, nil
