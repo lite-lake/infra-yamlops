@@ -85,7 +85,7 @@ go build -o yamlops ./cmd/yamlops
 ```
 .
 ├── yamlops                  # 可执行文件
-└── userdata/
+└── userdata/                # 用户配置目录（当前仓库无示例数据，请自行创建）
     ├── prod/                # 生产环境
     │   ├── secrets.yaml     # 密钥
     │   ├── isps.yaml        # 服务商
