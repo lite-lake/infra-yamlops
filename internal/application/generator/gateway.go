@@ -111,6 +111,7 @@ func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.Service
 		HealthCheckTimeout:  healthTimeout,
 		PreserveHostHeader:  true,
 		GZipEnabled:         route.GzipEnabled,
+		OverrideHost:        route.OverrideHost,
 	}
 }
 

@@ -108,6 +108,7 @@ type ServiceGatewayRoute struct {
 	HTTP          bool   `yaml:"http,omitempty"`
 	HTTPS         bool   `yaml:"https,omitempty"`
 	GzipEnabled   *bool  `yaml:"gzip_enabled,omitempty"`
+	OverrideHost  string `yaml:"override_host,omitempty"`
 }
 
 type serviceGatewayRouteAlias ServiceGatewayRoute
@@ -120,6 +121,7 @@ func (r *ServiceGatewayRoute) UnmarshalYAML(unmarshal func(interface{}) error) e
 		HTTP          bool   `yaml:"http,omitempty"`
 		HTTPS         bool   `yaml:"https,omitempty"`
 		GzipEnabled   *bool  `yaml:"gzip_enabled,omitempty"`
+		OverrideHost  string `yaml:"override_host,omitempty"`
 	}
 	if err := unmarshal(&raw); err != nil {
 		return err
@@ -135,6 +137,7 @@ func (r *ServiceGatewayRoute) UnmarshalYAML(unmarshal func(interface{}) error) e
 	r.HTTP = raw.HTTP
 	r.HTTPS = raw.HTTPS
 	r.GzipEnabled = raw.GzipEnabled
+	r.OverrideHost = raw.OverrideHost
 
 	return nil
 }

@@ -55,6 +55,7 @@ type hostConfig struct {
 	HealthCheckTimeout  string   `yaml:"health_check_timeout,omitempty"`
 	PreserveHostHeader  bool     `yaml:"preserve_host_header"`
 	GZipEnabled         *bool    `yaml:"g_zip_enabled,omitempty"`
+	OverrideHost        string   `yaml:"override_host,omitempty"`
 }
 
 type gateConfig struct {
@@ -124,6 +125,7 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 			HealthCheckTimeout:  h.HealthCheckTimeout,
 			PreserveHostHeader:  true,
 			GZipEnabled:         h.GZipEnabled,
+			OverrideHost:        h.OverrideHost,
 		}
 		config.Hosts = append(config.Hosts, host)
 	}
