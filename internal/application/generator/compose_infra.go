@@ -8,6 +8,7 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/application/generator/compose"
 	"github.com/lite-lake/infra-yamlops/internal/constants"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 func (g *Generator) generateInfraServiceComposes(config *entity.Config) error {
@@ -15,6 +16,31 @@ func (g *Generator) generateInfraServiceComposes(config *entity.Config) error {
 	for i := range config.InfraServices {
 		infra := &config.InfraServices[i]
 		serverInfraServices[infra.Server] = append(serverInfraServices[infra.Server], infra)
+	}
+
+	for serverName, infraServices := range serverInfraServices {
+		serverDir := filepath.Join(g.outputDir, g.env, serverName)
+		if err := os.MkdirAll(serverDir, 0755); err != nil {
+			return fmt.Errorf("failed to create server directory %s: %w", serverName, err)
+		}
+
+		for _, infra := range infraServices {
+			if err := g.generateInfraServiceCompose(serverDir, infra, config); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (g *Generator) generateInfraServiceComposesWithScope(config *entity.Config, scope *valueobject.Scope) error {
+	serverInfraServices := make(map[string][]*entity.InfraService)
+	for i := range config.InfraServices {
+		infra := &config.InfraServices[i]
+		if scope.ShouldGenerateInfraService(infra.Name, infra.Server) {
+			serverInfraServices[infra.Server] = append(serverInfraServices[infra.Server], infra)
+		}
 	}
 
 	for serverName, infraServices := range serverInfraServices {

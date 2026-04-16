@@ -89,7 +89,7 @@ func newDNSCommand(ctx *Context) *cobra.Command {
 
 func runDNSPlan(ctx *Context, domain, record string) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
-	planScope := valueobject.NewScope().WithDomain(domain)
+	planScope := valueobject.NewScope().WithDomain(domain).WithDNSOnly(true)
 
 	executionPlan, _, err := wf.Plan(context.Background(), "", planScope)
 	if err != nil {
@@ -110,7 +110,7 @@ func runDNSPlan(ctx *Context, domain, record string) {
 
 func runDNSApply(ctx *Context, domain, record string, autoApprove bool) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
-	planScope := valueobject.NewScope().WithDomain(domain)
+	planScope := valueobject.NewScope().WithDomain(domain).WithDNSOnly(true)
 
 	executionPlan, cfg, err := wf.Plan(nil, "", planScope)
 	if err != nil {
@@ -132,11 +132,6 @@ func runDNSApply(ctx *Context, domain, record string, autoApprove bool) {
 			fmt.Println("Cancelled.")
 			return
 		}
-	}
-
-	if err := wf.GenerateDeployments(cfg, ""); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		os.Exit(1)
 	}
 
 	filteredPlan := valueobject.NewPlan()

@@ -9,6 +9,7 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/application/generator/compose"
 	"github.com/lite-lake/infra-yamlops/internal/constants"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 func (g *Generator) generateServiceComposes(config *entity.Config) error {
@@ -21,7 +22,35 @@ func (g *Generator) generateServiceComposes(config *entity.Config) error {
 	for serverName, services := range serverServices {
 		serverDir := filepath.Join(g.outputDir, g.env, serverName)
 		if err := os.MkdirAll(serverDir, 0755); err != nil {
-			return fmt.Errorf("failed to create server directory %s: %w", serverName, err)
+			return fmt.Errorf("failed to create server directory %s: %w", serverDir, err)
+		}
+
+		for _, svc := range services {
+			if svc.Image == "" {
+				continue
+			}
+			if err := g.generateServiceCompose(serverDir, svc, config.GetSecretsMap()); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (g *Generator) generateServiceComposesWithScope(config *entity.Config, scope *valueobject.Scope) error {
+	serverServices := make(map[string][]*entity.BizService)
+	for i := range config.Services {
+		svc := &config.Services[i]
+		if scope.ShouldGenerateBizService(svc.Name, svc.Server) {
+			serverServices[svc.Server] = append(serverServices[svc.Server], svc)
+		}
+	}
+
+	for serverName, services := range serverServices {
+		serverDir := filepath.Join(g.outputDir, g.env, serverName)
+		if err := os.MkdirAll(serverDir, 0755); err != nil {
+			return fmt.Errorf("failed to create server directory %s: %w", serverDir, err)
 		}
 
 		for _, svc := range services {
@@ -46,7 +75,6 @@ func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizServ
 	volumes := []string{}
 	for _, v := range svc.Volumes {
 		source := v.Source
-		// Convert volumes:// protocol to ./ for local bind mount
 		if strings.HasPrefix(source, "volumes://") {
 			source = convertVolumeProtocol(source)
 		}

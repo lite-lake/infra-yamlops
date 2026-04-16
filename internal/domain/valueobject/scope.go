@@ -278,5 +278,67 @@ func (s *Scope) HasInfraServicesOnly() bool {
 }
 
 func (s *Scope) HasAnyServiceSelection() bool {
-	return len(s.services) > 0 || len(s.infraServices) > 0
+	return s.service != "" || len(s.services) > 0 || len(s.infraServices) > 0
+}
+
+func (s *Scope) MatchesServer(serverName string) bool {
+	if s.server != "" && s.server != serverName {
+		return false
+	}
+	return true
+}
+
+func (s *Scope) MatchesBizService(serviceName string) bool {
+	if s.service != "" && s.service != serviceName {
+		return false
+	}
+	if len(s.services) > 0 {
+		found := false
+		for _, svc := range s.services {
+			if svc == serviceName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Scope) MatchesInfraService(serviceName string) bool {
+	if len(s.infraServices) > 0 {
+		found := false
+		for _, svc := range s.infraServices {
+			if svc == serviceName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
+}
+
+func (s *Scope) ShouldGenerateBizService(serviceName, serverName string) bool {
+	if !s.MatchesServer(serverName) {
+		return false
+	}
+	if !s.MatchesBizService(serviceName) {
+		return false
+	}
+	return true
+}
+
+func (s *Scope) ShouldGenerateInfraService(serviceName, serverName string) bool {
+	if !s.MatchesServer(serverName) {
+		return false
+	}
+	if !s.MatchesInfraService(serviceName) {
+		return false
+	}
+	return true
 }

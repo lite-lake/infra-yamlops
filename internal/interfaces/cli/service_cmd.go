@@ -88,9 +88,15 @@ func newServiceCommand(ctx *Context) *cobra.Command {
 func runServiceDeploy(ctx *Context, filters ServiceFilters, autoApprove bool) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
 
+	var bizServices []string
+	if filters.Biz != "" {
+		bizServices = strings.Split(filters.Biz, ",")
+	}
+
 	planScope := valueobject.NewScope().
 		WithServer(filters.Server).
 		WithService(filters.Biz).
+		WithServices(bizServices).
 		WithInfraServices(strings.Split(filters.Infra, ","))
 
 	executionPlan, cfg, err := wf.Plan(context.Background(), "", planScope)
@@ -137,11 +143,6 @@ func runServiceDeploy(ctx *Context, filters ServiceFilters, autoApprove bool) {
 		}
 	}
 
-	if err := wf.GenerateDeployments(cfg, ""); err != nil {
-		fmt.Fprintf(os.Stderr, "Generate deployments error: %v\n", err)
-		os.Exit(1)
-	}
-
 	executor := usecase.NewExecutor(&usecase.ExecutorConfig{
 		Plan: executionPlan,
 		Env:  ctx.Env,
@@ -150,8 +151,23 @@ func runServiceDeploy(ctx *Context, filters ServiceFilters, autoApprove bool) {
 	executor.SetServerEntities(cfg.GetServerMap())
 	executor.SetWorkDir(ctx.ConfigDir)
 
+	relevantServers := make(map[string]bool)
+	for _, svc := range cfg.Services {
+		if planScope.MatchesBizService(svc.Name) {
+			relevantServers[svc.Server] = true
+		}
+	}
+	for _, svc := range cfg.InfraServices {
+		if planScope.MatchesInfraService(svc.Name) {
+			relevantServers[svc.Server] = true
+		}
+	}
+
 	for _, srv := range cfg.Servers {
 		if filters.Server != "" && srv.Name != filters.Server {
+			continue
+		}
+		if !relevantServers[srv.Name] && filters.Server == "" {
 			continue
 		}
 		password, err := srv.SSH.Password.Resolve(cfg.GetSecretsMap())

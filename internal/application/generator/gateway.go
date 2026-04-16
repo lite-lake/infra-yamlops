@@ -9,6 +9,7 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/application/generator/gate"
 	"github.com/lite-lake/infra-yamlops/internal/constants"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 type gatewayRouteResult struct {
@@ -30,7 +31,32 @@ func (g *Generator) generateGatewayConfigs(config *entity.Config) error {
 	for serverName, gateways := range gatewayServers {
 		serverDir := filepath.Join(g.outputDir, g.env, serverName)
 		if err := os.MkdirAll(serverDir, 0755); err != nil {
-			return fmt.Errorf("failed to create server directory %s: %w", serverName, err)
+			return fmt.Errorf("failed to create server directory %s: %w", serverDir, err)
+		}
+
+		for _, gw := range gateways {
+			if err := g.generateGatewayConfig(serverDir, gw, config); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+func (g *Generator) generateGatewayConfigsWithScope(config *entity.Config, scope *valueobject.Scope) error {
+	gatewayServers := make(map[string][]*entity.InfraService)
+	for i := range config.InfraServices {
+		infra := &config.InfraServices[i]
+		if infra.Type == entity.InfraServiceTypeGateway && scope.ShouldGenerateInfraService(infra.Name, infra.Server) {
+			gatewayServers[infra.Server] = append(gatewayServers[infra.Server], infra)
+		}
+	}
+
+	for serverName, gateways := range gatewayServers {
+		serverDir := filepath.Join(g.outputDir, g.env, serverName)
+		if err := os.MkdirAll(serverDir, 0755); err != nil {
+			return fmt.Errorf("failed to create server directory %s: %w", serverDir, err)
 		}
 
 		for _, gw := range gateways {

@@ -84,11 +84,18 @@ func (w *Workflow) Plan(ctx context.Context, outputDir string, scope *valueobjec
 		return nil, nil, fmt.Errorf("resolve secrets: %w", err)
 	}
 
-	if err := w.GenerateDeployments(cfg, outputDir); err != nil {
-		return nil, nil, fmt.Errorf("generate deployments: %w", err)
+	var remoteState *repository.DeploymentState
+
+	if scope == nil || !scope.DNSOnly() {
+		if err := w.GenerateDeploymentsWithScope(cfg, outputDir, scope); err != nil {
+			return nil, nil, fmt.Errorf("generate deployments: %w", err)
+		}
+
+		remoteState = w.stateFetcher.FetchWithScope(ctx, cfg, scope)
+	} else {
+		remoteState = repository.NewDeploymentState()
 	}
 
-	remoteState := w.stateFetcher.Fetch(ctx, cfg)
 	opts := []plan.PlannerOption{
 		plan.WithConfig(cfg),
 		plan.WithEnv(w.env),
@@ -108,6 +115,11 @@ func (w *Workflow) Plan(ctx context.Context, outputDir string, scope *valueobjec
 func (w *Workflow) GenerateDeployments(cfg *entity.Config, outputDir string) error {
 	planner := w.CreatePlanner(cfg, outputDir)
 	return planner.GenerateDeployments()
+}
+
+func (w *Workflow) GenerateDeploymentsWithScope(cfg *entity.Config, outputDir string, scope *valueobject.Scope) error {
+	planner := w.CreatePlanner(cfg, outputDir)
+	return planner.GenerateDeploymentsWithScope(scope)
 }
 
 func (w *Workflow) FetchRemoteState(ctx context.Context, cfg *entity.Config) *repository.DeploymentState {

@@ -201,7 +201,7 @@ func (m *Model) generatePlan() {
 		state = m.fetchDNSRemoteState()
 	} else {
 		fetcher := orchestrator.NewStateFetcher(string(m.Environment), m.ConfigDir)
-		state = fetcher.Fetch(context.Background(), m.Config)
+		state = fetcher.FetchWithScope(context.Background(), m.Config, m.Action.PlanScope)
 	}
 
 	planner := plan.NewPlanner(
@@ -279,7 +279,7 @@ func (m *Model) generatePlanAsync() tea.Cmd {
 			state = m.fetchDNSRemoteState()
 		} else {
 			fetcher := orchestrator.NewStateFetcher(string(m.Environment), m.ConfigDir)
-			state = fetcher.Fetch(context.Background(), m.Config)
+			state = fetcher.FetchWithScope(context.Background(), m.Config, scope)
 		}
 
 		planner := plan.NewPlanner(
@@ -449,7 +449,26 @@ func (m *Model) executeApplyAsync() tea.Cmd {
 		executor.SetServerEntities(m.Config.GetServerMap())
 		executor.SetWorkDir(m.ConfigDir)
 		secrets := m.Config.GetSecretsMap()
+
+		scope := m.Action.PlanScope
+		relevantServers := make(map[string]bool)
+		for _, svc := range m.Config.Services {
+			if scope.MatchesBizService(svc.Name) {
+				relevantServers[svc.Server] = true
+			}
+		}
+		for _, svc := range m.Config.InfraServices {
+			if scope.MatchesInfraService(svc.Name) {
+				relevantServers[svc.Server] = true
+			}
+		}
+
 		for _, srv := range m.Config.Servers {
+			if !relevantServers[srv.Name] && !scope.HasAnyServiceSelection() {
+				// If no services are selected, connect to all servers
+			} else if !relevantServers[srv.Name] {
+				continue
+			}
 			password, err := srv.SSH.Password.Resolve(secrets)
 			if err != nil {
 				continue

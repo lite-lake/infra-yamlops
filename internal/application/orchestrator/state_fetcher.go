@@ -12,6 +12,7 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/domain/contract"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
 	"github.com/lite-lake/infra-yamlops/internal/domain/repository"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/logger"
 )
 
@@ -38,6 +39,11 @@ func NewStateFetcherWithPool(env, configDir string, pool *usecase.SSHPool) *Stat
 
 // Fetch 从所有服务器并发获取部署状态
 func (f *StateFetcher) Fetch(ctx context.Context, cfg *entity.Config) *repository.DeploymentState {
+	return f.FetchWithScope(ctx, cfg, nil)
+}
+
+// FetchWithScope 从指定 Scope 的服务器获取部署状态
+func (f *StateFetcher) FetchWithScope(ctx context.Context, cfg *entity.Config, scope *valueobject.Scope) *repository.DeploymentState {
 	state := repository.NewDeploymentState()
 
 	for _, zone := range cfg.Zones {
@@ -49,6 +55,48 @@ func (f *StateFetcher) Fetch(ctx context.Context, cfg *entity.Config) *repositor
 	var mu sync.Mutex
 
 	for _, srv := range cfg.Servers {
+		includeServer := true
+
+		if scope != nil {
+			// First check if we have a specific server filter
+			if scope.Server() != "" && scope.Server() != srv.Name {
+				includeServer = false
+			}
+
+			// If we have service selection, only include relevant servers
+			if includeServer && scope.HasAnyServiceSelection() {
+				hasRelevantService := false
+
+				// Check business services only if we have business service selections
+				if scope.Service() != "" || len(scope.Services()) > 0 {
+					for _, svc := range cfg.Services {
+						if svc.Server == srv.Name && scope.MatchesBizService(svc.Name) {
+							hasRelevantService = true
+							break
+						}
+					}
+				}
+
+				// Check infra services only if we have infra service selections (and haven't found a match yet)
+				if !hasRelevantService && len(scope.InfraServices()) > 0 {
+					for _, svc := range cfg.InfraServices {
+						if svc.Server == srv.Name && scope.MatchesInfraService(svc.Name) {
+							hasRelevantService = true
+							break
+						}
+					}
+				}
+
+				if !hasRelevantService {
+					includeServer = false
+				}
+			}
+		}
+
+		if !includeServer {
+			continue
+		}
+
 		mu.Lock()
 		state.Servers[srv.Name] = &srv
 		mu.Unlock()
@@ -79,10 +127,10 @@ func (f *StateFetcher) Fetch(ctx context.Context, cfg *entity.Config) *repositor
 		}
 
 		wg.Add(1)
-		go func(serverName string, sshClient contract.SSHClient, config *entity.Config) {
+		go func(serverName string, sshClient contract.SSHClient, config *entity.Config, scope *valueobject.Scope) {
 			defer wg.Done()
-			f.fetchServerServicesState(sshClient, serverName, config, state, &mu)
-		}(srv.Name, client, cfg)
+			f.fetchServerServicesState(sshClient, serverName, config, state, &mu, scope)
+		}(srv.Name, client, cfg, scope)
 	}
 
 	wg.Wait()
@@ -91,7 +139,7 @@ func (f *StateFetcher) Fetch(ctx context.Context, cfg *entity.Config) *repositor
 }
 
 // fetchServerServicesState 获取单个服务器上的服务状态
-func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serverName string, cfg *entity.Config, state *repository.DeploymentState, mu *sync.Mutex) {
+func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serverName string, cfg *entity.Config, state *repository.DeploymentState, mu *sync.Mutex, scope *valueobject.Scope) {
 	stdout, _, err := client.Run("sudo docker compose ls -a --format json 2>/dev/null || sudo docker compose ls -a --format json")
 	if err != nil {
 		logger.Warn("failed to list docker compose projects", "server", serverName, "error", err)
@@ -132,6 +180,9 @@ func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serve
 		if svc.Server != serverName {
 			continue
 		}
+		if scope != nil && !scope.MatchesBizService(svc.Name) {
+			continue
+		}
 		f.processService(client, serverName, svc.Name, deployedServices, func(exists bool, remoteHash, localHash string) {
 			if exists {
 				mu.Lock()
@@ -161,6 +212,9 @@ func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serve
 
 	for _, infra := range cfg.InfraServices {
 		if infra.Server != serverName {
+			continue
+		}
+		if scope != nil && !scope.MatchesInfraService(infra.Name) {
 			continue
 		}
 		f.processService(client, serverName, infra.Name, deployedServices, func(exists bool, remoteHash, localHash string) {

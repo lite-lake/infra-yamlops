@@ -14,6 +14,7 @@ type DeploymentState = repository.DeploymentState
 
 type DeploymentGenerator interface {
 	Generate(config *entity.Config) error
+	GenerateWithScope(config *entity.Config, scope *valueobject.Scope) error
 	SetOutputDir(dir string)
 }
 
@@ -104,6 +105,13 @@ func (p *Planner) Plan(scope *valueobject.Scope) (*valueobject.Plan, error) {
 
 func (p *Planner) GenerateDeployments() error {
 	return p.deployGen.Generate(p.config)
+}
+
+func (p *Planner) GenerateDeploymentsWithScope(scope *valueobject.Scope) error {
+	if scope == nil || scope.IsEmpty() {
+		return p.deployGen.Generate(p.config)
+	}
+	return p.deployGen.GenerateWithScope(p.config, scope)
 }
 
 func (p *Planner) GetConfig() *entity.Config {
