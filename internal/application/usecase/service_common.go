@@ -96,7 +96,7 @@ func GetComposeFilePath(ch *valueobject.Change, deps DepsProvider) string {
 	if serverName == "" {
 		return ""
 	}
-	return filepath.Join(deps.WorkDir(), "deployments", serverName, ch.Name()+".compose.yaml")
+	return filepath.Join(deps.WorkDir(), "deployments", deps.Env(), serverName, ch.Name()+".compose.yaml")
 }
 
 type DeployComposeConfig struct {
@@ -246,7 +246,7 @@ func (m *ServiceRestartManager) RestartBizService(serverName, serviceName string
 	}
 
 	remoteDir := GetRemoteDir(m.deps, serviceName)
-	composeFile := filepath.Join(m.deps.WorkDir(), "deployments", serverName, serviceName+".compose.yaml")
+	composeFile := filepath.Join(m.deps.WorkDir(), "deployments", m.deps.Env(), serverName, serviceName+".compose.yaml")
 	envFile := composeFile[:len(composeFile)-len(".compose.yaml")] + ".env"
 
 	if !RestartServiceWithFileSync(client, &RestartServiceConfig{
@@ -273,7 +273,7 @@ func (m *ServiceRestartManager) RestartInfraService(serverName, serviceName stri
 	}
 
 	remoteDir := GetRemoteDir(m.deps, serviceName)
-	composeFile := filepath.Join(m.deps.WorkDir(), "deployments", serverName, serviceName+".compose.yaml")
+	composeFile := filepath.Join(m.deps.WorkDir(), "deployments", m.deps.Env(), serverName, serviceName+".compose.yaml")
 
 	deployCtx := &ServiceDeployContext{
 		ServerName: serverName,

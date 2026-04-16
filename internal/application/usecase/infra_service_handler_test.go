@@ -283,7 +283,7 @@ func TestInfraServiceHandler_DeployGatewayType_WithFile(t *testing.T) {
 	h := NewInfraServiceHandler()
 
 	tmpDir := t.TempDir()
-	serverDir := filepath.Join(tmpDir, "deployments", "server1")
+	serverDir := filepath.Join(tmpDir, "deployments", "prod", "server1")
 	if err := os.MkdirAll(serverDir, 0755); err != nil {
 		t.Fatal(err)
 	}

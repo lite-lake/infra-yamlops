@@ -165,7 +165,7 @@ func (h *InfraServiceHandler) deploySSLType(infra *entity.InfraService, deployCt
 }
 
 func (h *InfraServiceHandler) getGatewayFilePath(serverName, serviceName string, deps DepsProvider) string {
-	return filepath.Join(deps.WorkDir(), "deployments", serverName, serviceName+".gate.yaml")
+	return filepath.Join(deps.WorkDir(), "deployments", deps.Env(), serverName, serviceName+".gate.yaml")
 }
 
 func (h *InfraServiceHandler) getSSLConfigFilePath(infra *entity.InfraService, deps DepsProvider) string {

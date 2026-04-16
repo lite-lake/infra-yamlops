@@ -28,7 +28,7 @@ func (g *Generator) generateGatewayConfigs(config *entity.Config) error {
 	}
 
 	for serverName, gateways := range gatewayServers {
-		serverDir := filepath.Join(g.outputDir, serverName)
+		serverDir := filepath.Join(g.outputDir, g.env, serverName)
 		if err := os.MkdirAll(serverDir, 0755); err != nil {
 			return fmt.Errorf("failed to create server directory %s: %w", serverName, err)
 		}

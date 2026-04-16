@@ -219,7 +219,7 @@ func (f *StateFetcher) processService(client contract.SSHClient, serverName, ser
 		}
 		remoteHash := hashString(strings.TrimSpace(remoteContent))
 
-		localComposePath := fmt.Sprintf("%s/deployments/%s/%s.compose.yaml", f.configDir, serverName, serviceName)
+		localComposePath := fmt.Sprintf("%s/deployments/%s/%s/%s.compose.yaml", f.configDir, f.env, serverName, serviceName)
 		localContent, err := readFileContent(localComposePath)
 		if err != nil {
 			logger.Debug("failed to read local compose file", "server", serverName, "service", serviceName, "path", localComposePath, "error", err)
