@@ -183,6 +183,10 @@ func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serve
 		if scope != nil && !scope.MatchesBizService(svc.Name) {
 			continue
 		}
+		// 如果启用了强制部署，不要设置状态，这样 differ 会认为这是一个新服务
+		if scope != nil && scope.ForceDeploy() {
+			continue
+		}
 		f.processService(client, serverName, svc.Name, deployedServices, func(exists bool, remoteHash, localHash string) {
 			if exists {
 				mu.Lock()
@@ -215,6 +219,10 @@ func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serve
 			continue
 		}
 		if scope != nil && !scope.MatchesInfraService(infra.Name) {
+			continue
+		}
+		// 如果启用了强制部署，不要设置状态，这样 differ 会认为这是一个新服务
+		if scope != nil && scope.ForceDeploy() {
 			continue
 		}
 		f.processService(client, serverName, infra.Name, deployedServices, func(exists bool, remoteHash, localHash string) {

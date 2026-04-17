@@ -25,6 +25,7 @@ type ServiceFilters struct {
 func newServiceCommand(ctx *Context) *cobra.Command {
 	var filters ServiceFilters
 	var autoApprove bool
+	var forceDeploy bool
 
 	serviceCmd := &cobra.Command{
 		Use:   "service",
@@ -37,7 +38,7 @@ func newServiceCommand(ctx *Context) *cobra.Command {
 		Short: "Deploy services",
 		Long:  "Deploy services. If services already exist, they will be restarted with updated files.",
 		Run: func(cmd *cobra.Command, args []string) {
-			runServiceDeploy(ctx, filters, autoApprove)
+			runServiceDeploy(ctx, filters, autoApprove, forceDeploy)
 		},
 	}
 
@@ -73,6 +74,7 @@ func newServiceCommand(ctx *Context) *cobra.Command {
 	serviceCmd.PersistentFlags().StringVarP(&filters.Biz, "biz", "b", "", "Filter by business service")
 
 	serviceDeployCmd.Flags().BoolVarP(&autoApprove, "yes", "y", false, "Auto approve without confirmation")
+	serviceDeployCmd.Flags().BoolVar(&forceDeploy, "force", false, "Force deploy even if no changes detected")
 	serviceStopCmd.Flags().BoolVarP(&autoApprove, "yes", "y", false, "Auto approve without confirmation")
 	serviceRestartCmd.Flags().BoolVarP(&autoApprove, "yes", "y", false, "Auto approve without confirmation")
 	serviceCleanupCmd.Flags().BoolVarP(&autoApprove, "yes", "y", false, "Auto approve without confirmation")
@@ -85,7 +87,7 @@ func newServiceCommand(ctx *Context) *cobra.Command {
 	return serviceCmd
 }
 
-func runServiceDeploy(ctx *Context, filters ServiceFilters, autoApprove bool) {
+func runServiceDeploy(ctx *Context, filters ServiceFilters, autoApprove bool, forceDeploy bool) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
 
 	var bizServices []string
@@ -98,6 +100,11 @@ func runServiceDeploy(ctx *Context, filters ServiceFilters, autoApprove bool) {
 		WithService(filters.Biz).
 		WithServices(bizServices).
 		WithInfraServices(strings.Split(filters.Infra, ","))
+
+	// 如果指定了 --force 或者通过 -b/-i 选择了服务，则启用强制部署
+	if forceDeploy || filters.Biz != "" || filters.Infra != "" {
+		planScope = planScope.WithForceDeploy(true)
+	}
 
 	executionPlan, cfg, err := wf.Plan(context.Background(), "", planScope)
 	if err != nil {
