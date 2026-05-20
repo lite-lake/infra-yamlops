@@ -130,36 +130,6 @@ func TestInfraServiceHandler_Apply_Deploy(t *testing.T) {
 	}
 }
 
-func TestInfraServiceHandler_Apply_DeploySSL(t *testing.T) {
-	h := NewInfraServiceHandler()
-	ctx := context.Background()
-
-	mockSSH := &mockSSHClient{runStdout: "deployed"}
-	deps := newMockDeps()
-	deps.sshClient = mockSSH
-	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4", Port: 22, User: "root"}
-	deps.serverEntities["server1"] = &entity.Server{Name: "server1"}
-	deps.env = "test"
-	deps.workDir = t.TempDir()
-
-	change := valueobject.NewChange(valueobject.ChangeTypeCreate, "infra_service", "ssl1").
-		WithNewState(&entity.InfraService{
-			ServiceBase: entity.ServiceBase{
-				Server: "server1",
-			},
-			Name: "ssl1",
-			Type: entity.InfraServiceTypeSSL,
-		})
-
-	result, err := h.Apply(ctx, change, deps)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !result.Success {
-		t.Errorf("expected success, got error: %v", result.Error)
-	}
-}
-
 func TestInfraServiceHandler_Apply_Delete(t *testing.T) {
 	h := NewInfraServiceHandler()
 	ctx := context.Background()
@@ -314,51 +284,6 @@ func TestInfraServiceHandler_DeployGatewayType_WithFile(t *testing.T) {
 	}
 }
 
-func TestInfraServiceHandler_DeploySSLType_WithFile(t *testing.T) {
-	h := NewInfraServiceHandler()
-
-	tmpDir := t.TempDir()
-	sslConfigDir := filepath.Join(tmpDir, "userdata", "prod", "volumes", "infra-ssl-config-cn")
-	if err := os.MkdirAll(sslConfigDir, 0755); err != nil {
-		t.Fatal(err)
-	}
-	sslConfigFile := filepath.Join(sslConfigDir, "config.yml")
-	if err := os.WriteFile(sslConfigFile, []byte("ssl config"), 0644); err != nil {
-		t.Fatal(err)
-	}
-
-	mockSSH := &mockSSHClient{}
-	deps := newMockDeps()
-	deps.sshClient = mockSSH
-	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4"}
-	deps.env = "prod"
-	deps.workDir = tmpDir
-
-	infra := &entity.InfraService{
-		ServiceBase: entity.ServiceBase{
-			Server: "server1",
-		},
-		Name: "ssl1",
-		Type: entity.InfraServiceTypeSSL,
-		SSLConfig: &entity.SSLConfig{
-			Config: &entity.SSLVolumeConfig{
-				Source: "volumes://infra-ssl-config-cn",
-			},
-		},
-	}
-
-	deployCtx := &ServiceDeployContext{
-		ServerName: "server1",
-		Client:     mockSSH,
-		RemoteDir:  "/opt/test",
-	}
-
-	err := h.deploySSLType(infra, deployCtx, deps)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
 func TestInfraServiceHandler_GetComposeFilePath(t *testing.T) {
 	deps := newMockDeps()
 	deps.workDir = "/tmp"
@@ -389,30 +314,6 @@ func TestInfraServiceHandler_GetGatewayFilePath(t *testing.T) {
 	}
 }
 
-func TestInfraServiceHandler_GetSSLConfigFilePath(t *testing.T) {
-	h := &InfraServiceHandler{}
-
-	deps := newMockDeps()
-	deps.workDir = "/tmp"
-	deps.env = "demo"
-
-	infra := &entity.InfraService{
-		Name: "ssl1",
-		Type: entity.InfraServiceTypeSSL,
-		SSLConfig: &entity.SSLConfig{
-			Config: &entity.SSLVolumeConfig{
-				Source: "volumes://infra-ssl-config-cn",
-			},
-		},
-	}
-
-	result := h.getSSLConfigFilePath(infra, deps)
-	expected := filepath.Join("/tmp", "userdata", "demo", "volumes", "infra-ssl-config-cn", "config.yml")
-	if result != expected {
-		t.Errorf("expected %s, got %s", expected, result)
-	}
-}
-
 func TestInfraServiceHandler_DeployGatewayType_NoFile(t *testing.T) {
 	h := NewInfraServiceHandler()
 
@@ -430,36 +331,6 @@ func TestInfraServiceHandler_DeployGatewayType_NoFile(t *testing.T) {
 	}
 
 	err := h.deployGatewayType("gateway1", deployCtx, deps)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-}
-
-func TestInfraServiceHandler_DeploySSLType_NoFile(t *testing.T) {
-	h := NewInfraServiceHandler()
-
-	mockSSH := &mockSSHClient{}
-	deps := newMockDeps()
-	deps.sshClient = mockSSH
-	deps.servers["server1"] = &ServerInfo{Host: "1.2.3.4"}
-	deps.env = "prod"
-	deps.workDir = t.TempDir()
-
-	infra := &entity.InfraService{
-		ServiceBase: entity.ServiceBase{
-			Server: "server1",
-		},
-		Name: "ssl1",
-		Type: entity.InfraServiceTypeSSL,
-	}
-
-	deployCtx := &ServiceDeployContext{
-		ServerName: "server1",
-		Client:     mockSSH,
-		RemoteDir:  "/opt/test",
-	}
-
-	err := h.deploySSLType(infra, deployCtx, deps)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -11,7 +11,6 @@ type InfraServiceType string
 
 const (
 	InfraServiceTypeGateway InfraServiceType = "gateway"
-	InfraServiceTypeSSL     InfraServiceType = "ssl"
 )
 
 type GatewayPorts struct {
@@ -69,8 +68,6 @@ type InfraService struct {
 	GatewaySSL      *GatewaySSLConfig `yaml:"ssl,omitempty"`
 	GatewayWAF      *GatewayWAFConfig `yaml:"waf,omitempty"`
 	GatewayLogLevel int               `yaml:"log_level,omitempty"`
-
-	SSLConfig *SSLConfig `yaml:"-"`
 }
 
 type infraServiceAlias InfraService
@@ -109,19 +106,6 @@ func (s *InfraService) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		s.GatewayWAF = gw.WAF
 		s.GatewayLogLevel = gw.LogLevel
 
-	case InfraServiceTypeSSL:
-		var ssl struct {
-			Ports  *SSLPorts        `yaml:"ports"`
-			Config *SSLVolumeConfig `yaml:"config"`
-		}
-		if err := unmarshal(&ssl); err != nil {
-			return err
-		}
-		s.SSLConfig = &SSLConfig{}
-		if ssl.Ports != nil {
-			s.SSLConfig.Ports = *ssl.Ports
-		}
-		s.SSLConfig.Config = ssl.Config
 	}
 
 	return nil
@@ -151,24 +135,6 @@ func (s *InfraService) MarshalYAML() (interface{}, error) {
 			LogLevel: s.GatewayLogLevel,
 			Networks: s.ServiceBase.Networks,
 		}, nil
-	case InfraServiceTypeSSL:
-		return struct {
-			Name     string           `yaml:"name"`
-			Type     InfraServiceType `yaml:"type"`
-			Server   string           `yaml:"server"`
-			Image    string           `yaml:"image"`
-			Ports    *SSLPorts        `yaml:"ports,omitempty"`
-			Config   *SSLVolumeConfig `yaml:"config,omitempty"`
-			Networks []string         `yaml:"networks,omitempty"`
-		}{
-			Name:     s.Name,
-			Type:     s.Type,
-			Server:   s.ServiceBase.Server,
-			Image:    s.Image,
-			Ports:    &s.SSLConfig.Ports,
-			Config:   s.SSLConfig.Config,
-			Networks: s.ServiceBase.Networks,
-		}, nil
 	}
 	return (*infraServiceAlias)(s), nil
 }
@@ -177,7 +143,7 @@ func (s *InfraService) Validate() error {
 	if s.Name == "" {
 		return fmt.Errorf("%w: infra service name is required", domain.ErrInvalidName)
 	}
-	if s.Type != InfraServiceTypeGateway && s.Type != InfraServiceTypeSSL {
+	if s.Type != InfraServiceTypeGateway {
 		return fmt.Errorf("%w: %s", domain.ErrInvalidType, s.Type)
 	}
 	if s.Server == "" {
@@ -193,46 +159,6 @@ func (s *InfraService) Validate() error {
 				return err
 			}
 		}
-	case InfraServiceTypeSSL:
-		if s.SSLConfig == nil {
-			return domain.RequiredField("ssl config for ssl type")
-		}
-		if err := s.SSLConfig.Validate(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-type SSLVolumeConfig struct {
-	Source string `yaml:"source"`
-}
-
-type SSLConfig struct {
-	Ports  SSLPorts         `yaml:"ports,omitempty"`
-	Config *SSLVolumeConfig `yaml:"config,omitempty"`
-}
-
-func (c *SSLConfig) Validate() error {
-	if err := c.Ports.Validate(); err != nil {
-		return err
-	}
-	if c.Config == nil {
-		return domain.RequiredField("config for ssl type")
-	}
-	if c.Config.Source == "" {
-		return domain.RequiredField("config.source for ssl type")
-	}
-	return nil
-}
-
-type SSLPorts struct {
-	API int `yaml:"api"`
-}
-
-func (p *SSLPorts) Validate() error {
-	if err := ValidatePort(p.API); err != nil {
-		return fmt.Errorf("api %w", err)
 	}
 	return nil
 }

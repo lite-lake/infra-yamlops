@@ -63,8 +63,6 @@ func (g *Generator) generateInfraServiceCompose(serverDir string, infra *entity.
 	switch infra.Type {
 	case entity.InfraServiceTypeGateway:
 		return g.generateInfraServiceGateway(serverDir, infra, config)
-	case entity.InfraServiceTypeSSL:
-		return g.generateInfraServiceSSL(serverDir, infra, config)
 	}
 	return nil
 }
@@ -118,45 +116,4 @@ func (g *Generator) generateInfraGatewayCompose(infra *entity.InfraService) (str
 	}
 
 	return g.composeGen.Generate(composeSvc, g.env)
-}
-
-func (g *Generator) generateInfraServiceSSL(serverDir string, infra *entity.InfraService, config *entity.Config) error {
-	if infra.SSLConfig == nil {
-		return nil
-	}
-
-	volumes := []string{
-		"./ssl-data:/app/data",
-		"./ssl-config:/app/configs:ro",
-	}
-
-	ports := []string{}
-	if infra.SSLConfig.Ports.API > 0 {
-		ports = append(ports, fmt.Sprintf("%d:%d", infra.SSLConfig.Ports.API, infra.SSLConfig.Ports.API))
-	}
-
-	networks := infra.Networks
-	if len(networks) == 0 {
-		networks = []string{fmt.Sprintf("yamlops-%s", g.env)}
-	}
-
-	composeSvc := &compose.ComposeService{
-		Name:     infra.Name,
-		Image:    infra.Image,
-		Ports:    ports,
-		Volumes:  volumes,
-		Networks: networks,
-	}
-
-	content, err := g.composeGen.Generate(composeSvc, g.env)
-	if err != nil {
-		return fmt.Errorf("failed to generate ssl compose for %s: %w", infra.Name, err)
-	}
-
-	composeFile := filepath.Join(serverDir, fmt.Sprintf("%s.compose.yaml", infra.Name))
-	if err := os.WriteFile(composeFile, []byte(content), 0644); err != nil {
-		return fmt.Errorf("failed to write ssl compose file %s: %w", composeFile, err)
-	}
-
-	return nil
 }

@@ -240,7 +240,6 @@ func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serve
 						GatewayPorts:    infra.GatewayPorts,
 						GatewaySSL:      infra.GatewaySSL,
 						GatewayWAF:      infra.GatewayWAF,
-						SSLConfig:       infra.SSLConfig,
 					}
 				} else {
 					state.InfraServices[infra.Name] = &entity.InfraService{

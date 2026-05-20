@@ -187,12 +187,6 @@ func (v *Validator) validatePortConflicts() error {
 		if serverPorts[key] == nil {
 			serverPorts[key] = make(map[int]string)
 		}
-		if infra.SSLConfig != nil && infra.SSLConfig.Ports.API > 0 {
-			if existing, ok := serverPorts[key][infra.SSLConfig.Ports.API]; ok {
-				return fmt.Errorf("%w: api port %d on server '%s' is used by both '%s' and '%s'", domain.ErrPortConflict, infra.SSLConfig.Ports.API, infra.Server, existing, infra.Name)
-			}
-			serverPorts[key][infra.SSLConfig.Ports.API] = infra.Name
-		}
 		if infra.GatewayPorts != nil {
 			if infra.GatewayPorts.HTTP > 0 {
 				if existing, ok := serverPorts[key][infra.GatewayPorts.HTTP]; ok {

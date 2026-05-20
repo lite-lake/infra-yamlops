@@ -237,7 +237,7 @@ registries:
 ```yaml
 infra_services:
   - name: main-gateway
-    type: gateway                    # gateway | ssl
+    type: gateway                    # gateway
     server: prod-server-1            # 引用 servers.yaml
     image: litelake/infra-gate:latest
     gatewayPorts:
@@ -248,33 +248,13 @@ infra_services:
       sync: true
     gatewaySSL:
       mode: remote                   # local | remote
-      endpoint: http://infra-ssl:38567
+      endpoint: https://ssl.litelake.com/cert/json
     gatewayWAF:
       enabled: true
       whitelist:
         - 192.168.0.0/16
         - 10.0.0.0/8
     gatewayLogLevel: 1
-    networks:
-      - yamlops-prod
-
-  - name: infra-ssl
-    type: ssl
-    server: prod-server-1
-    image: litelake/infra-ssl:latest
-    gatewayPorts:
-      api: 38567
-    gatewayConfig:
-      auth:
-        enabled: true
-        apikey:
-          secret: ssl_api_key
-      storage:
-        type: local
-        path: /data/certs
-      defaults:
-        issue_provider: letsencrypt_prod
-        storage_provider: local_default
     networks:
       - yamlops-prod
 ```
@@ -296,21 +276,6 @@ infra_services:
 | `gatewayWAF.enabled` | bool | 否 | 启用 WAF |
 | `gatewayWAF.whitelist` | []string | 否 | IP 白名单（CIDR 格式） |
 | `gatewayLogLevel` | int | 否 | 日志级别 |
-| `networks` | []string | 否 | 网络列表 |
-
-**SSL 类型字段：**
-
-| 字段 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `name` | string | 是 | 服务名称 |
-| `type` | string | 是 | 必须为 `ssl` |
-| `server` | string | 是 | 部署服务器 |
-| `image` | string | 是 | Docker 镜像 |
-| `gatewayPorts.api` | int | 是 | API 端口 |
-| `gatewayConfig.auth.enabled` | bool | 否 | 启用认证 |
-| `gatewayConfig.auth.apikey` | SecretRef | 条件 | API 密钥 |
-| `gatewayConfig.storage.type` | string | 否 | 存储类型 |
-| `gatewayConfig.storage.path` | string | 否 | 存储路径 |
 | `networks` | []string | 否 | 网络列表 |
 
 ---

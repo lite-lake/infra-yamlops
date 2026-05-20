@@ -28,8 +28,6 @@ const (
 const (
 	GatewayConfigPath = "./gateway.yml:/app/configs/server.yml:ro"
 	GatewayCachePath  = "./cache:/app/cache"
-	SSLDataPath       = "./ssl-data:/app/data"
-	SSLConfigPath     = "./ssl-config:/app/configs:ro"
 	DefaultLogDir     = "./applogs"
 )
 

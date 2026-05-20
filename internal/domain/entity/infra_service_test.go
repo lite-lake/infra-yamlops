@@ -138,102 +138,6 @@ func TestGatewayWAFConfig_Validate(t *testing.T) {
 	}
 }
 
-func TestSSLPorts_Validate(t *testing.T) {
-	tests := []struct {
-		name    string
-		ports   SSLPorts
-		wantErr error
-	}{
-		{
-			name:    "invalid api port zero",
-			ports:   SSLPorts{API: 0},
-			wantErr: domain.ErrInvalidPort,
-		},
-		{
-			name:    "invalid api port negative",
-			ports:   SSLPorts{API: -1},
-			wantErr: domain.ErrInvalidPort,
-		},
-		{
-			name:    "invalid api port too large",
-			ports:   SSLPorts{API: 65536},
-			wantErr: domain.ErrInvalidPort,
-		},
-		{
-			name:    "valid",
-			ports:   SSLPorts{API: 8080},
-			wantErr: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.ports.Validate()
-			if tt.wantErr != nil {
-				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("Validate() error = %v, want %v", err, tt.wantErr)
-				}
-			} else if err != nil {
-				t.Errorf("Validate() unexpected error = %v", err)
-			}
-		})
-	}
-}
-
-func TestSSLConfig_Validate(t *testing.T) {
-	tests := []struct {
-		name    string
-		config  SSLConfig
-		wantErr error
-	}{
-		{
-			name: "invalid ports",
-			config: SSLConfig{
-				Ports:  SSLPorts{API: 0},
-				Config: &SSLVolumeConfig{Source: "volumes://ssl-config"},
-			},
-			wantErr: domain.ErrInvalidPort,
-		},
-		{
-			name: "missing config",
-			config: SSLConfig{
-				Ports:  SSLPorts{API: 8080},
-				Config: nil,
-			},
-			wantErr: domain.ErrRequired,
-		},
-		{
-			name: "missing config source",
-			config: SSLConfig{
-				Ports:  SSLPorts{API: 8080},
-				Config: &SSLVolumeConfig{Source: ""},
-			},
-			wantErr: domain.ErrRequired,
-		},
-		{
-			name: "valid",
-			config: SSLConfig{
-				Ports:  SSLPorts{API: 8080},
-				Config: &SSLVolumeConfig{Source: "volumes://ssl-config"},
-			},
-			wantErr: nil,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := tt.config.Validate()
-			if tt.wantErr != nil {
-				if !errors.Is(err, tt.wantErr) {
-					t.Errorf("Validate() error = %v, want %v", err, tt.wantErr)
-				}
-			} else if err != nil {
-				t.Errorf("Validate() unexpected error = %v", err)
-			}
-		})
-	}
-}
-
 func TestInfraService_Validate(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -289,22 +193,6 @@ func TestInfraService_Validate(t *testing.T) {
 				},
 				Image:        "nginx:latest",
 				GatewayPorts: &GatewayPorts{HTTP: 80, HTTPS: 443},
-			},
-			wantErr: nil,
-		},
-		{
-			name: "valid ssl",
-			service: InfraService{
-				Name: "ssl-1",
-				Type: InfraServiceTypeSSL,
-				ServiceBase: ServiceBase{
-					Server: "server-1",
-				},
-				Image: "ssl:latest",
-				SSLConfig: &SSLConfig{
-					Ports:  SSLPorts{API: 8080},
-					Config: &SSLVolumeConfig{Source: "volumes://ssl-config"},
-				},
 			},
 			wantErr: nil,
 		},

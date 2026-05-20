@@ -219,8 +219,8 @@ func TestValidator_PortConflicts(t *testing.T) {
 				Zone: "zone1",
 				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")},
 			}},
-			InfraServices: []entity.InfraService{
-				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, ServiceBase: entity.ServiceBase{Server: "srv1"}, Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 38567}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl"}}},
+			Services: []entity.BizService{
+				{Name: "svc1", ServiceBase: entity.ServiceBase{Server: "srv1"}, Image: "nginx", Ports: []entity.ServicePort{{Container: 80, Host: 38567}}},
 			},
 		}
 		validator := service.NewValidator(cfg)
@@ -238,9 +238,9 @@ func TestValidator_PortConflicts(t *testing.T) {
 				Zone: "zone1",
 				SSH:  entity.ServerSSH{Host: "1.2.3.4", Port: 22, User: "root", Password: *valueobject.NewSecretRefPlain("pass")},
 			}},
-			InfraServices: []entity.InfraService{
-				{Name: "ssl1", Type: entity.InfraServiceTypeSSL, ServiceBase: entity.ServiceBase{Server: "srv1"}, Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 38567}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl"}}},
-				{Name: "ssl2", Type: entity.InfraServiceTypeSSL, ServiceBase: entity.ServiceBase{Server: "srv1"}, Image: "nginx", SSLConfig: &entity.SSLConfig{Ports: entity.SSLPorts{API: 38567}, Config: &entity.SSLVolumeConfig{Source: "volumes://ssl"}}},
+			Services: []entity.BizService{
+				{Name: "svc1", ServiceBase: entity.ServiceBase{Server: "srv1"}, Image: "nginx", Ports: []entity.ServicePort{{Container: 80, Host: 38567}}},
+				{Name: "svc2", ServiceBase: entity.ServiceBase{Server: "srv1"}, Image: "nginx", Ports: []entity.ServicePort{{Container: 80, Host: 38567}}},
 			},
 		}
 		validator := service.NewValidator(cfg)

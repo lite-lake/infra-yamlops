@@ -557,7 +557,7 @@ services:
 ```yaml
 infra_services:
   - name: gateway-east-1
-    type: gateway                  # gateway | ssl
+    type: gateway                  # gateway
     server: srv-east-01
     image: infra-gate:latest
     ports:
@@ -568,7 +568,7 @@ infra_services:
       sync: true
     ssl:
       mode: remote                  # local | remote
-      endpoint: http://infra-ssl:38567
+      endpoint: https://ssl.litelake.com/cert/json
       api_key: {secret: ssl_api_key}
     waf:
       enabled: true
@@ -576,18 +576,6 @@ infra_services:
         - 10.0.0.0/8
         - 192.168.0.0/16
     log_level: 1
-    networks:
-      - yamlops-prod
-
-  - name: infra-ssl
-    type: ssl
-    server: srv-east-01
-    image: infra-ssl:latest
-    ports:
-      api: 38567
-    config:
-      source: volumes://infra-ssl
-      sync: true
     networks:
       - yamlops-prod
 ```

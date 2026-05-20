@@ -336,9 +336,6 @@ func InfraServiceEquals(a, b *entity.InfraService) bool {
 	if !gatewayWAFConfigEqual(a.GatewayWAF, b.GatewayWAF) {
 		return false
 	}
-	if !sslConfigEqual(a.SSLConfig, b.SSLConfig) {
-		return false
-	}
 	// Networks: order-insensitive comparison
 	if len(a.Networks) != len(b.Networks) {
 		return false
@@ -376,21 +373,6 @@ func gatewayWAFConfigEqual(a, b *entity.GatewayWAFConfig) bool {
 			return false
 		}
 		return true
-	})
-}
-
-func sslConfigEqual(a, b *entity.SSLConfig) bool {
-	return ptrEqual(a, b, func(x, y *entity.SSLConfig) bool {
-		if x.Ports.API != y.Ports.API {
-			return false
-		}
-		if x.Config == nil && y.Config == nil {
-			return true
-		}
-		if x.Config == nil || y.Config == nil {
-			return false
-		}
-		return x.Config.Source == y.Config.Source
 	})
 }
 

@@ -25,7 +25,7 @@ YAMLOps 是一个基于 Go 语言开发的基础设施即代码（IaC）管理�
 - **服务**：Docker Compose 部署
 - **网关**：infra-gate 配置管理
 - **DNS**：域名和记录管理（支持 Cloudflare、阿里云、腾讯云）
-- **SSL 证书**：通过 infra-ssl 服务管理
+- **SSL 证书**：通过 lite-backend/apps/app-ssl-api 服务管理
 
 ### 1.2 核心特性
 
@@ -315,7 +315,7 @@ servers:
 ```yaml
 infra_services:
   - name: main-gateway
-    type: gateway              # gateway | ssl
+    type: gateway              # gateway
     server: prod-server-1
     image: litelake/infra-gate:latest
     ports:
@@ -326,29 +326,12 @@ infra_services:
       sync: true
     ssl:
       mode: remote             # local | remote
-      endpoint: http://infra-ssl:38567
+      endpoint: https://ssl.litelake.com/cert/json
     waf:
       enabled: true
       whitelist:
         - 192.168.0.0/16
     log_level: 1
-
-  - name: infra-ssl
-    type: ssl
-    server: prod-server-1
-    image: litelake/infra-ssl:latest
-    ports:
-      api: 38567
-    config:
-      auth:
-        enabled: true
-        apikey: {secret: ssl_api_key}
-      storage:
-        type: local
-        path: /data/certs
-      defaults:
-        issue_provider: letsencrypt_prod
-        storage_provider: local_default
 ```
 
 #### 3.2.7 BizService（业务服务）
@@ -456,7 +439,7 @@ type Scope struct {
 ISP (底层基础设施提供商)
   └── Zone (网络区域)
         ├── Server (物理/虚拟服务器)
-        │     ├── InfraService (基础设施服务: gateway/ssl)
+        │     ├── InfraService (基础设施服务: gateway)
         │     └── BizService (业务服务)
         │           └── ServiceGatewayRoute (网关路由)
         └── Domain (域名)
@@ -783,7 +766,7 @@ waf:
 ssl:
   remote:
     enabled: true
-    endpoint: http://infra-ssl:38567
+    endpoint: https://ssl.litelake.com/cert/json
 
 hosts:
   - name: api.example.com

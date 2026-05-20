@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
@@ -60,40 +59,13 @@ func (h *InfraServiceHandler) SyncInfraFiles(serviceName string, deployCtx *Serv
 		}
 	}
 
-	sslConfigFile := h.getSSLConfigFilePathFromWorkDir(deps)
-	if sslConfigFile != "" {
-		if _, err := os.Stat(sslConfigFile); err == nil {
-			content, err := os.ReadFile(sslConfigFile)
-			if err != nil {
-				return fmt.Errorf("%w: SSL config file %s: %w", domainerr.ErrFileReadFailed, sslConfigFile, err)
-			}
-			if err := deployCtx.Client.MkdirAllSudoWithPerm(deployCtx.RemoteDir+"/ssl-config", "755"); err != nil {
-				return fmt.Errorf("%w: ssl-config directory at %s/ssl-config: %w", domainerr.ErrDirectoryCreateFailed, deployCtx.RemoteDir, err)
-			}
-			if err := SyncContent(deployCtx.Client, string(content), deployCtx.RemoteDir+"/ssl-config/config.yml"); err != nil {
-				return fmt.Errorf("%w: SSL config file %s to %s/ssl-config/config.yml: %w", domainerr.ErrComposeSyncFailed, sslConfigFile, deployCtx.RemoteDir, err)
-			}
-		}
-	}
-
 	return nil
-}
-
-func (h *InfraServiceHandler) getSSLConfigFilePathFromWorkDir(deps DepsProvider) string {
-	return filepath.Join(deps.WorkDir(), "userdata", deps.Env(), "volumes", "ssl", "config.yml")
 }
 
 func (h *InfraServiceHandler) createInfraTypePreHook(infra *entity.InfraService, serviceName string, deployCtx *ServiceDeployContext, deps DepsProvider) func(*Result) error {
 	return func(result *Result) error {
 		if infra != nil && infra.Type == entity.InfraServiceTypeGateway {
 			if err := h.deployGatewayType(serviceName, deployCtx, deps); err != nil {
-				result.Error = err
-				return err
-			}
-		}
-
-		if infra != nil && infra.Type == entity.InfraServiceTypeSSL {
-			if err := h.deploySSLType(infra, deployCtx, deps); err != nil {
 				result.Error = err
 				return err
 			}
@@ -134,50 +106,6 @@ func (h *InfraServiceHandler) deployGatewayType(serviceName string, deployCtx *S
 	return nil
 }
 
-func (h *InfraServiceHandler) deploySSLType(infra *entity.InfraService, deployCtx *ServiceDeployContext, deps DepsProvider) error {
-	if infra == nil || infra.SSLConfig == nil || infra.SSLConfig.Config == nil {
-		return nil
-	}
-
-	sslConfigFile := h.getSSLConfigFilePath(infra, deps)
-	if sslConfigFile == "" {
-		return nil
-	}
-
-	if _, err := os.Stat(sslConfigFile); os.IsNotExist(err) {
-		return fmt.Errorf("%w: %s", domainerr.ErrFileNotFound, sslConfigFile)
-	}
-
-	content, err := os.ReadFile(sslConfigFile)
-	if err != nil {
-		return fmt.Errorf("%w: SSL config file %s: %w", domainerr.ErrFileReadFailed, sslConfigFile, err)
-	}
-
-	if err := deployCtx.Client.MkdirAllSudoWithPerm(deployCtx.RemoteDir+"/ssl-config", "755"); err != nil {
-		return fmt.Errorf("%w: ssl-config directory at %s/ssl-config: %w", domainerr.ErrDirectoryCreateFailed, deployCtx.RemoteDir, err)
-	}
-
-	if err := SyncContent(deployCtx.Client, string(content), deployCtx.RemoteDir+"/ssl-config/config.yml"); err != nil {
-		return fmt.Errorf("%w: SSL config file %s to %s/ssl-config/config.yml: %w", domainerr.ErrComposeSyncFailed, sslConfigFile, deployCtx.RemoteDir, err)
-	}
-
-	return nil
-}
-
 func (h *InfraServiceHandler) getGatewayFilePath(serverName, serviceName string, deps DepsProvider) string {
 	return filepath.Join(deps.WorkDir(), "deployments", deps.Env(), serverName, serviceName+".gate.yaml")
-}
-
-func (h *InfraServiceHandler) getSSLConfigFilePath(infra *entity.InfraService, deps DepsProvider) string {
-	if infra.SSLConfig == nil || infra.SSLConfig.Config == nil || infra.SSLConfig.Config.Source == "" {
-		return ""
-	}
-
-	source := infra.SSLConfig.Config.Source
-	if !strings.HasPrefix(source, "volumes://") {
-		return ""
-	}
-
-	volumePath := strings.TrimPrefix(source, "volumes://")
-	return filepath.Join(deps.WorkDir(), "userdata", deps.Env(), "volumes", volumePath, "config.yml")
 }
