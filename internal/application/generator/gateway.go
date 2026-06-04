@@ -122,6 +122,12 @@ func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.Service
 
 	healthInterval, healthTimeout := g.buildHealthCheckConfig(svc)
 
+	var healthCheckEnabled *bool
+	if len(svc.ExternalBackends) > 0 {
+		enabled := false
+		healthCheckEnabled = &enabled
+	}
+
 	httpPort := constants.DefaultHTTPPort
 	if gw.GatewayPorts != nil {
 		httpPort = gw.GatewayPorts.HTTP
@@ -135,6 +141,7 @@ func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.Service
 		HealthCheck:         healthPath,
 		HealthCheckInterval: healthInterval,
 		HealthCheckTimeout:  healthTimeout,
+		HealthCheckEnabled:  healthCheckEnabled,
 		PreserveHostHeader:  true,
 		GZipEnabled:         route.GzipEnabled,
 		OverrideHost:        route.OverrideHost,
