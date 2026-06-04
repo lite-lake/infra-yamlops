@@ -57,6 +57,7 @@ type hostConfig struct {
 	PreserveHostHeader  bool     `yaml:"preserve_host_header"`
 	GZipEnabled         *bool    `yaml:"g_zip_enabled,omitempty"`
 	OverrideHost        string   `yaml:"override_host,omitempty"`
+	StripProxyHeaders   *bool    `yaml:"strip_proxy_headers,omitempty"`
 }
 
 type gateConfig struct {
@@ -128,6 +129,7 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 			PreserveHostHeader:  true,
 			GZipEnabled:         h.GZipEnabled,
 			OverrideHost:        h.OverrideHost,
+			StripProxyHeaders:   h.StripProxyHeaders,
 		}
 		config.Hosts = append(config.Hosts, host)
 	}

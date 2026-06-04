@@ -145,6 +145,7 @@ func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.Service
 		PreserveHostHeader:  true,
 		GZipEnabled:         route.GzipEnabled,
 		OverrideHost:        route.OverrideHost,
+		StripProxyHeaders:   route.StripProxyHeaders,
 	}
 }
 

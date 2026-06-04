@@ -184,6 +184,71 @@ func TestServer_Validate(t *testing.T) {
 - 对通用模式使用泛型（例如：`DoWithResult[T]`、`planSimpleEntity[T]`）
 - 服务命名：`yo-{env}-{service-name}`（例如：`yo-prod-api-server`）
 
+## 业务服务 (BizService) 字段参考
+
+定义在 `internal/domain/entity/biz_service.go`。
+
+| 字段 | YAML 标签 | 类型 | 必填 | 说明 |
+|------|-----------|------|------|------|
+| name | name | string | ✅ | 服务名称 |
+| server | server | string | ✅ | 部署目标服务器 |
+| image | image | string | ⚠️ | Docker 镜像（与 external_backends 二选一） |
+| external_backends | external_backends | []string | ⚠️ | 外部后端 URL（与 image 二选一） |
+| registry | registry | string | ❌ | Docker Registry 名称 |
+| ports | ports | []ServicePort | ❌ | 端口映射 |
+| env | env | map[string]SecretRef | ❌ | 环境变量 |
+| volumes | volumes | []ServiceVolume | ❌ | 卷挂载 |
+| healthcheck | healthcheck | ServiceHealthcheck | ❌ | 健康检查配置 |
+| gateways | gateways | []ServiceGatewayRoute | ❌ | 网关路由 |
+| internal | internal | bool | ❌ | 是否内部服务 |
+
+### image 与 external_backends 互斥规则
+
+- **二选一**：`image` 和 `external_backends` 不能同时指定，也不能都不指定
+- 使用 `image` 时：yamlops 生成 Docker Compose 并部署本地容器
+- 使用 `external_backends` 时：无本地容器，infra-gate 直接反向代理到外部 URL；健康检查自动禁用
+
+### ServiceGatewayRoute 字段
+
+| 字段 | YAML 标签 | 类型 | 默认值 | 说明 |
+|------|-----------|------|--------|------|
+| hostname | hostname | string | (必填) | 域名 |
+| container_port | container_port | int | 80 | 容器端口 |
+| path | path | string | / | 路由路径 |
+| http | http | bool | false | 启用 HTTP |
+| https | https | bool | false | 启用 HTTPS |
+| gzip_enabled | gzip_enabled | *bool | nil(继承全局) | 启用 gzip |
+| override_host | override_host | string | (空) | 覆盖发给上游的 Host 头 |
+| strip_proxy_headers | strip_proxy_headers | *bool | nil(false) | 剥离所有代理相关头部 |
+
+### strip_proxy_headers 说明
+
+当设置为 `true` 时，infra-gate 不会添加以下代理相关头部：
+- `X-Forwarded-For`
+- `X-Forwarded-Proto`
+- `X-Forwarded-Host`
+- `X-Forwarded-Port`
+- `Forwarded` (RFC 7239)
+- `X-Lite-Gate-Forwarded-For`
+- `X-Lite-Gate-Forwarded-Host`
+- `X-Lite-Gate-Trace-Id`
+- `Via`
+
+适用场景：需要伪装成客户端直接请求，不暴露代理身份的场景（如反向代理到第三方 API）。
+
+示例配置：
+```yaml
+services:
+  - name: xiaomi-llm-proxy
+    server: demo-server
+    external_backends:
+      - https://api.xiaomi.com
+    gateways:
+      - hostname: llm.example.com
+        https: true
+        strip_proxy_headers: true  # 禁用所有代理头部
+```
+
 ## 服务操作
 
 | 操作 | CLI 命令 | 描述 |

@@ -102,26 +102,28 @@ func (p *ServicePort) Validate() error {
 }
 
 type ServiceGatewayRoute struct {
-	Hostname      string `yaml:"hostname"`
-	ContainerPort int    `yaml:"container_port,omitempty"`
-	Path          string `yaml:"path,omitempty"`
-	HTTP          bool   `yaml:"http,omitempty"`
-	HTTPS         bool   `yaml:"https,omitempty"`
-	GzipEnabled   *bool  `yaml:"gzip_enabled,omitempty"`
-	OverrideHost  string `yaml:"override_host,omitempty"`
+	Hostname          string `yaml:"hostname"`
+	ContainerPort     int    `yaml:"container_port,omitempty"`
+	Path              string `yaml:"path,omitempty"`
+	HTTP              bool   `yaml:"http,omitempty"`
+	HTTPS             bool   `yaml:"https,omitempty"`
+	GzipEnabled       *bool  `yaml:"gzip_enabled,omitempty"`
+	OverrideHost      string `yaml:"override_host,omitempty"`
+	StripProxyHeaders *bool  `yaml:"strip_proxy_headers,omitempty"` // 是否剥离代理头部
 }
 
 type serviceGatewayRouteAlias ServiceGatewayRoute
 
 func (r *ServiceGatewayRoute) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var raw struct {
-		Hostname      string `yaml:"hostname"`
-		ContainerPort *int   `yaml:"container_port"`
-		Path          string `yaml:"path,omitempty"`
-		HTTP          bool   `yaml:"http,omitempty"`
-		HTTPS         bool   `yaml:"https,omitempty"`
-		GzipEnabled   *bool  `yaml:"gzip_enabled,omitempty"`
-		OverrideHost  string `yaml:"override_host,omitempty"`
+		Hostname          string `yaml:"hostname"`
+		ContainerPort     *int   `yaml:"container_port"`
+		Path              string `yaml:"path,omitempty"`
+		HTTP              bool   `yaml:"http,omitempty"`
+		HTTPS             bool   `yaml:"https,omitempty"`
+		GzipEnabled       *bool  `yaml:"gzip_enabled,omitempty"`
+		OverrideHost      string `yaml:"override_host,omitempty"`
+		StripProxyHeaders *bool  `yaml:"strip_proxy_headers,omitempty"`
 	}
 	if err := unmarshal(&raw); err != nil {
 		return err
@@ -138,6 +140,7 @@ func (r *ServiceGatewayRoute) UnmarshalYAML(unmarshal func(interface{}) error) e
 	r.HTTPS = raw.HTTPS
 	r.GzipEnabled = raw.GzipEnabled
 	r.OverrideHost = raw.OverrideHost
+	r.StripProxyHeaders = raw.StripProxyHeaders
 
 	return nil
 }
