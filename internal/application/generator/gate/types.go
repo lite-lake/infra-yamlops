@@ -1,13 +1,20 @@
 package gate
 
+type NotificationConfig struct {
+	Enabled bool
+	URL     string
+	Timeout string
+}
+
 type GatewayConfig struct {
-	Port        int
-	LogLevel    int
-	WAFEnabled  bool
-	Whitelist   []string
-	SSLMode     string
-	SSLEndpoint string
-	SSLAPIKey   string
+	Port         int
+	LogLevel     int
+	WAFEnabled   bool
+	Whitelist    []string
+	SSLMode      string
+	SSLEndpoint  string
+	SSLAPIKey    string
+	Notification *NotificationConfig
 }
 
 type HostRoute struct {

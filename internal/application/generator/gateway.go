@@ -185,7 +185,7 @@ func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayCon
 		httpPort = gw.GatewayPorts.HTTP
 	}
 
-	return &gate.GatewayConfig{
+	config := &gate.GatewayConfig{
 		Port:        httpPort,
 		LogLevel:    gw.GatewayLogLevel,
 		WAFEnabled:  wafEnabled,
@@ -194,6 +194,17 @@ func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayCon
 		SSLEndpoint: sslEndpoint,
 		SSLAPIKey:   sslAPIKey,
 	}
+
+	// Map notification config if provided
+	if gw.GatewayNotification != nil {
+		config.Notification = &gate.NotificationConfig{
+			Enabled: gw.GatewayNotification.Enabled,
+			URL:     gw.GatewayNotification.URL,
+			Timeout: gw.GatewayNotification.Timeout,
+		}
+	}
+
+	return config
 }
 
 func (g *Generator) generateGatewayConfig(serverDir string, gw *entity.InfraService, config *entity.Config) error {

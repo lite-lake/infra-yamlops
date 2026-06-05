@@ -58,16 +58,30 @@ func (w *GatewayWAFConfig) Validate() error {
 	return nil
 }
 
+type GatewayNotification struct {
+	Enabled bool   `yaml:"enabled"`
+	URL     string `yaml:"url"`
+	Timeout string `yaml:"timeout,omitempty"` // 默认 "5s"
+}
+
+func (n *GatewayNotification) Validate() error {
+	if n.Enabled && n.URL == "" {
+		return domain.RequiredField("notification url when enabled")
+	}
+	return nil
+}
+
 type InfraService struct {
 	ServiceBase
 	Name  string           `yaml:"name"`
 	Type  InfraServiceType `yaml:"type"`
 	Image string           `yaml:"image"`
 
-	GatewayPorts    *GatewayPorts     `yaml:"ports,omitempty"`
-	GatewaySSL      *GatewaySSLConfig `yaml:"ssl,omitempty"`
-	GatewayWAF      *GatewayWAFConfig `yaml:"waf,omitempty"`
-	GatewayLogLevel int               `yaml:"log_level,omitempty"`
+	GatewayPorts       *GatewayPorts        `yaml:"ports,omitempty"`
+	GatewaySSL         *GatewaySSLConfig    `yaml:"ssl,omitempty"`
+	GatewayWAF         *GatewayWAFConfig    `yaml:"waf,omitempty"`
+	GatewayLogLevel    int                  `yaml:"log_level,omitempty"`
+	GatewayNotification *GatewayNotification `yaml:"notification,omitempty"`
 }
 
 type infraServiceAlias InfraService
@@ -93,10 +107,11 @@ func (s *InfraService) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	switch s.Type {
 	case InfraServiceTypeGateway:
 		var gw struct {
-			Ports    *GatewayPorts     `yaml:"ports"`
-			SSL      *GatewaySSLConfig `yaml:"ssl"`
-			WAF      *GatewayWAFConfig `yaml:"waf"`
-			LogLevel int               `yaml:"log_level"`
+			Ports        *GatewayPorts        `yaml:"ports"`
+			SSL          *GatewaySSLConfig    `yaml:"ssl"`
+			WAF          *GatewayWAFConfig    `yaml:"waf"`
+			LogLevel     int                  `yaml:"log_level"`
+			Notification *GatewayNotification `yaml:"notification"`
 		}
 		if err := unmarshal(&gw); err != nil {
 			return err
@@ -105,6 +120,7 @@ func (s *InfraService) UnmarshalYAML(unmarshal func(interface{}) error) error {
 		s.GatewaySSL = gw.SSL
 		s.GatewayWAF = gw.WAF
 		s.GatewayLogLevel = gw.LogLevel
+		s.GatewayNotification = gw.Notification
 
 	}
 
@@ -115,25 +131,27 @@ func (s *InfraService) MarshalYAML() (interface{}, error) {
 	switch s.Type {
 	case InfraServiceTypeGateway:
 		return struct {
-			Name     string            `yaml:"name"`
-			Type     InfraServiceType  `yaml:"type"`
-			Server   string            `yaml:"server"`
-			Image    string            `yaml:"image"`
-			Ports    *GatewayPorts     `yaml:"ports,omitempty"`
-			SSL      *GatewaySSLConfig `yaml:"ssl,omitempty"`
-			WAF      *GatewayWAFConfig `yaml:"waf,omitempty"`
-			LogLevel int               `yaml:"log_level,omitempty"`
-			Networks []string          `yaml:"networks,omitempty"`
+			Name         string               `yaml:"name"`
+			Type         InfraServiceType     `yaml:"type"`
+			Server       string               `yaml:"server"`
+			Image        string               `yaml:"image"`
+			Ports        *GatewayPorts        `yaml:"ports,omitempty"`
+			SSL          *GatewaySSLConfig    `yaml:"ssl,omitempty"`
+			WAF          *GatewayWAFConfig    `yaml:"waf,omitempty"`
+			LogLevel     int                  `yaml:"log_level,omitempty"`
+			Notification *GatewayNotification `yaml:"notification,omitempty"`
+			Networks     []string             `yaml:"networks,omitempty"`
 		}{
-			Name:     s.Name,
-			Type:     s.Type,
-			Server:   s.ServiceBase.Server,
-			Image:    s.Image,
-			Ports:    s.GatewayPorts,
-			SSL:      s.GatewaySSL,
-			WAF:      s.GatewayWAF,
-			LogLevel: s.GatewayLogLevel,
-			Networks: s.ServiceBase.Networks,
+			Name:         s.Name,
+			Type:         s.Type,
+			Server:       s.ServiceBase.Server,
+			Image:        s.Image,
+			Ports:        s.GatewayPorts,
+			SSL:          s.GatewaySSL,
+			WAF:          s.GatewayWAF,
+			LogLevel:     s.GatewayLogLevel,
+			Notification: s.GatewayNotification,
+			Networks:     s.ServiceBase.Networks,
 		}, nil
 	}
 	return (*infraServiceAlias)(s), nil
@@ -156,6 +174,11 @@ func (s *InfraService) Validate() error {
 	case InfraServiceTypeGateway:
 		if s.GatewayPorts != nil {
 			if err := s.GatewayPorts.Validate(); err != nil {
+				return err
+			}
+		}
+		if s.GatewayNotification != nil {
+			if err := s.GatewayNotification.Validate(); err != nil {
 				return err
 			}
 		}

@@ -61,11 +61,18 @@ type hostConfig struct {
 }
 
 type gateConfig struct {
-	Server serverConfig `yaml:"server"`
-	Logger loggerConfig `yaml:"logger"`
-	WAF    wafConfig    `yaml:"waf"`
-	SSL    sslConfig    `yaml:"ssl"`
-	Hosts  []hostConfig `yaml:"hosts"`
+	Server       serverConfig       `yaml:"server"`
+	Logger       loggerConfig       `yaml:"logger"`
+	WAF          wafConfig          `yaml:"waf"`
+	SSL          sslConfig          `yaml:"ssl"`
+	Notification notificationConfig `yaml:"notification,omitempty"`
+	Hosts        []hostConfig       `yaml:"hosts"`
+}
+
+type notificationConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	URL     string `yaml:"url"`
+	Timeout string `yaml:"timeout,omitempty"`
 }
 
 func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, error) {
@@ -114,6 +121,15 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 			},
 		},
 		Hosts: make([]hostConfig, 0, len(hosts)),
+	}
+
+	// Map notification config if provided
+	if cfg.Notification != nil {
+		config.Notification = notificationConfig{
+			Enabled: cfg.Notification.Enabled,
+			URL:     cfg.Notification.URL,
+			Timeout: cfg.Notification.Timeout,
+		}
 	}
 
 	for _, h := range hosts {
