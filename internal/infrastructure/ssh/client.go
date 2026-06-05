@@ -377,7 +377,8 @@ func (c *Client) UploadFileSudoWithPerm(localPath, remotePath, perm string) erro
 		return domainerr.WrapOp("copy file", fmt.Errorf("%w: %w", domainerr.ErrSSHFileTransfer, err))
 	}
 
-	cmd := fmt.Sprintf("sudo mv %s %s && sudo chown %s:%s %s && sudo chmod %s %s", ShellEscape(tmpPath), ShellEscape(remotePath), ShellEscape(c.user), ShellEscape(c.user), ShellEscape(remotePath), ShellEscape(perm), ShellEscape(remotePath))
+	parentDir := filepath.Dir(remotePath)
+	cmd := fmt.Sprintf("sudo mkdir -p %s && sudo mv %s %s && sudo chown %s:%s %s && sudo chmod %s %s", ShellEscape(parentDir), ShellEscape(tmpPath), ShellEscape(remotePath), ShellEscape(c.user), ShellEscape(c.user), ShellEscape(remotePath), ShellEscape(perm), ShellEscape(remotePath))
 	_, stderr, err := c.Run(cmd)
 	if err != nil {
 		return domainerr.WrapOp("sudo mv", fmt.Errorf("%w: stderr: %s", domainerr.ErrSSHCommandFailed, stderr))
