@@ -3,9 +3,12 @@ package cli
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
+
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
 )
 
 func newListCommand(ctx *Context) *cobra.Command {
@@ -15,15 +18,15 @@ func newListCommand(ctx *Context) *cobra.Command {
 		Long:  "List all entities of the specified type.",
 		Args:  cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
-			entity := args[0]
-			runList(ctx, entity)
+			entityType := args[0]
+			runList(ctx, entityType)
 		},
 	}
 
 	return cmd
 }
 
-func runList(ctx *Context, entity string) {
+func runList(ctx *Context, entityType string) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
 	cfg, err := wf.LoadConfig(nil)
 	if err != nil {
@@ -31,8 +34,8 @@ func runList(ctx *Context, entity string) {
 		os.Exit(1)
 	}
 
-	entity = strings.ToLower(entity)
-	switch entity {
+	entityType = strings.ToLower(entityType)
+	switch entityType {
 	case "secrets":
 		for _, s := range cfg.Secrets {
 			fmt.Printf("- %s\n", s.Name)
@@ -65,15 +68,29 @@ func runList(ctx *Context, entity string) {
 			fmt.Printf("- %s (%s)\n", r.Name, r.URL)
 		}
 	case "domains":
-		for _, d := range cfg.Domains {
+		domains := append([]entity.Domain(nil), cfg.Domains...)
+		sort.Slice(domains, func(i, j int) bool {
+			return domains[i].Name < domains[j].Name
+		})
+		for _, d := range domains {
 			fmt.Printf("- %s (isp: %s)\n", d.Name, d.ISP)
 		}
 	case "records", "dns":
-		for _, r := range cfg.GetAllDNSRecords() {
+		records := cfg.GetAllDNSRecords()
+		sort.Slice(records, func(i, j int) bool {
+			if records[i].Domain != records[j].Domain {
+				return records[i].Domain < records[j].Domain
+			}
+			if records[i].Type != records[j].Type {
+				return records[i].Type < records[j].Type
+			}
+			return records[i].Name < records[j].Name
+		})
+		for _, r := range records {
 			fmt.Printf("- %s %s %s -> %s (ttl: %d)\n", r.Domain, r.Type, r.Name, r.Value, r.TTL)
 		}
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown entity type: %s\n", entity)
+		fmt.Fprintf(os.Stderr, "Unknown entity type: %s\n", entityType)
 		fmt.Fprintf(os.Stderr, "Valid types: secrets, isps, zones, servers, services, registries, domains, records\n")
 		os.Exit(1)
 	}

@@ -77,10 +77,10 @@ type InfraService struct {
 	Type  InfraServiceType `yaml:"type"`
 	Image string           `yaml:"image"`
 
-	GatewayPorts       *GatewayPorts        `yaml:"ports,omitempty"`
-	GatewaySSL         *GatewaySSLConfig    `yaml:"ssl,omitempty"`
-	GatewayWAF         *GatewayWAFConfig    `yaml:"waf,omitempty"`
-	GatewayLogLevel    int                  `yaml:"log_level,omitempty"`
+	GatewayPorts        *GatewayPorts        `yaml:"ports,omitempty"`
+	GatewaySSL          *GatewaySSLConfig    `yaml:"ssl,omitempty"`
+	GatewayWAF          *GatewayWAFConfig    `yaml:"waf,omitempty"`
+	GatewayLogLevel     int                  `yaml:"log_level,omitempty"`
 	GatewayNotification *GatewayNotification `yaml:"notification,omitempty"`
 }
 

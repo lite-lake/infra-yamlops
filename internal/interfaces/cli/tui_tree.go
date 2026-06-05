@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
@@ -167,7 +168,14 @@ func (m *Model) buildDNSTree() []*TreeNode {
 			Expanded: false,
 		}
 		domainMap[d.Name] = domainNode
-		for _, r := range d.Records {
+		records := append([]entity.DNSRecord(nil), d.Records...)
+		sort.Slice(records, func(i, j int) bool {
+			if records[i].Type != records[j].Type {
+				return records[i].Type < records[j].Type
+			}
+			return records[i].Name < records[j].Name
+		})
+		for _, r := range records {
 			recordNode := &TreeNode{
 				ID:   fmt.Sprintf("record:%s:%s:%s", d.Name, r.Type, r.Name),
 				Type: NodeTypeDNSRecord,
@@ -184,6 +192,9 @@ func (m *Model) buildDNSTree() []*TreeNode {
 			roots = append(roots, dNode)
 		}
 	}
+	sort.Slice(roots, func(i, j int) bool {
+		return roots[i].Name < roots[j].Name
+	})
 	return roots
 }
 

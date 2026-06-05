@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -202,7 +203,11 @@ func printDomains(cfg *entity.Config) {
 		fmt.Println("  (none)")
 		return
 	}
-	for _, d := range cfg.Domains {
+	domains := append([]entity.Domain(nil), cfg.Domains...)
+	sort.Slice(domains, func(i, j int) bool {
+		return domains[i].Name < domains[j].Name
+	})
+	for _, d := range domains {
 		parentInfo := ""
 		if d.Parent != "" {
 			parentInfo = fmt.Sprintf(", parent: %s", d.Parent)
@@ -222,6 +227,15 @@ func printDNSRecords(cfg *entity.Config) {
 		fmt.Println("  (none)")
 		return
 	}
+	sort.Slice(records, func(i, j int) bool {
+		if records[i].Domain != records[j].Domain {
+			return records[i].Domain < records[j].Domain
+		}
+		if records[i].Type != records[j].Type {
+			return records[i].Type < records[j].Type
+		}
+		return records[i].Name < records[j].Name
+	})
 	for _, r := range records {
 		name := r.Name
 		if name == "" || name == "@" {

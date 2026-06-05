@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
@@ -78,6 +79,7 @@ func (m Model) getDNSISPs() []string {
 			isps = append(isps, isp.Name)
 		}
 	}
+	sort.Strings(isps)
 	return isps
 }
 
@@ -89,6 +91,7 @@ func (m Model) getDNSDomains() []string {
 	for _, d := range m.Config.Domains {
 		domains = append(domains, d.Name)
 	}
+	sort.Strings(domains)
 	return domains
 }
 
