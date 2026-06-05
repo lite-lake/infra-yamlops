@@ -14,7 +14,7 @@ go build -o yamlops ./cmd/yamlops
 go build -o yamlops.exe ./cmd/yamlops
 
 # 指定版本
-go build -ldflags "-X github.com/lite-lake/infra-yamlops/internal/version.Version=1.0.0 -o yamlops ./cmd/yamlops
+go build -ldflags "-X github.com/lite-lake/infra-yamlops/internal/version.Version=1.0.0" -o yamlops ./cmd/yamlops
 ```
 
 ### 依赖管理
@@ -286,26 +286,36 @@ internal/
 │   │   ├── domain.go           # 域名实体
 │   │   ├── dns_record.go       # DNS 记录实体
 │   │   ├── biz_service.go      # 业务服务实体
-│   │   └── infra_service.go    # 基础设施服务实体
+│   │   ├── infra_service.go    # 基础设施服务实体
+│   │   ├── config.go           # 聚合根配置
+│   │   └── validator.go        # 实体验证器
 │   ├── valueobject/            # 值对象
 │   │   ├── secret_ref.go       # 密钥引用
 │   │   ├── change.go           # 变更
 │   │   ├── scope.go            # 作用域
 │   │   └── plan.go             # 执行计划
 │   ├── repository/             # 仓储接口
-│   │   ├── config_loader.go    # 配置加载接口
+│   │   ├── config.go           # 配置加载接口
 │   │   └── state.go            # 状态存储接口
 │   ├── service/                # 领域服务
 │   │   ├── validator.go        # 验证器
 │   │   ├── differ.go           # 差异检测
-│   │   └── differ_generic.go   # 泛型差异检测
-│   ├── contract/               # 接口契约（DNS, SSH等）
+│   │   ├── differ_generic.go   # 泛型差异检测
+│   │   ├── differ_servers.go   # 服务器差异检测
+│   │   └── differ_records.go   # DNS 记录差异检测
+│   ├── contract/               # 接口契约
+│   │   ├── handler.go          # Handler 接口
+│   │   ├── dns.go              # DNSProvider 接口
+│   │   ├── ssh.go              # SSHClient 接口
+│   │   └── infrastructure.go   # 基础设施接口
 │   ├── retry/                  # 重试机制
 │   │   └── retry.go            # Option 模式重试
 │   └── errors.go               # 领域错误
 ├── application/                # 应用层
-│   ├── handler/                # 变更处理器（策略模式）
+│   ├── usecase/                # 变更处理器 + 执行器
 │   │   ├── types.go            # 依赖接口定义
+│   │   ├── executor.go         # Executor 编排器
+│   │   ├── change_executor.go  # ChangeExecutor 并行执行
 │   │   ├── dns_handler.go      # DNS 处理器
 │   │   ├── service_handler.go  # 服务处理器
 │   │   ├── service_common.go   # 服务公共逻辑
@@ -313,35 +323,38 @@ internal/
 │   │   ├── server_handler.go   # 服务器处理器
 │   │   ├── noop_handler.go     # 空操作处理器
 │   │   ├── registry.go         # 处理器注册表
+│   │   ├── ssh_pool.go         # SSH 连接池
 │   │   └── utils.go            # 工具函数
-│   ├── usecase/                # 用例执行器
-│   │   ├── executor.go         # 执行器
-│   │   └── ssh_pool.go         # SSH 连接池
-│   ├── deployment/             # 部署文件生成器
+│   ├── generator/              # 部署文件生成器
 │   │   ├── generator.go        # 主入口
-│   │   ├── compose_service.go  # Compose 生成
+│   │   ├── compose_service.go  # 业务服务 Compose 生成
 │   │   ├── compose_infra.go    # 基础设施服务 Compose 生成
-│   │   ├── gateway.go          # Gateway 配置
-│   │   └── utils.go            # 工具函数
+│   │   ├── gateway.go          # Gateway 配置生成
+│   │   ├── compose/            # Docker Compose 子生成器
+│   │   └── gate/               # infra-gate 子生成器
 │   ├── plan/                   # 规划器
 │   │   └── planner.go          # Option 模式规划器
 │   └── orchestrator/           # 工作流编排
 │       ├── workflow.go         # 主入口
-│       └── state_fetcher.go    # 状态获取
+│       ├── state_fetcher.go    # 状态获取
+│       └── utils.go            # 工具函数
 ├── infrastructure/             # 基础设施层
 │   ├── persistence/            # 配置加载
-│   │   └── config_loader.go    # 配置加载实现
+│   │   └── config_loader.go    # 配置加载实现（带缓存）
 │   ├── state/                  # 状态存储
-│   │   └── file_store.go       # 文件状态存储
+│   │   └── file_store.go       # 文件状态存储（带锁）
 │   ├── ssh/                    # SSH 客户端
 │   │   ├── client.go           # SSH 客户端
 │   │   ├── sftp.go             # SFTP 传输
 │   │   └── shell_escape.go     # Shell 转义
-│   ├── dns/                    # DNS 工厂
-│   │   └── factory.go          # DNS Provider 工厂
-│   ├── generator/              # 生成器
-│   │   ├── compose/            # Docker Compose
-│   │   └── gate/               # infra-gate 配置
+│   ├── dns/                    # DNS Provider
+│   │   ├── provider.go         # Provider 接口
+│   │   ├── factory.go          # DNS Provider 工厂
+│   │   ├── base_provider.go    # 公共基础
+│   │   ├── common.go           # 公共逻辑（重试、批量）
+│   │   ├── cloudflare.go       # Cloudflare 实现
+│   │   ├── aliyun.go           # 阿里云实现
+│   │   └── tencent.go          # 腾讯云实现
 │   ├── secrets/                # 密钥解析器
 │   │   └── resolver.go         # SecretResolver
 │   ├── logger/                 # 日志
@@ -360,29 +373,49 @@ internal/
 │       ├── validate.go         # Validate 命令
 │       ├── list.go             # List 命令
 │       ├── show.go             # Show 命令
+│       ├── show_entity.go      # 实体查找工具
 │       ├── clean.go            # Clean 命令
 │       ├── env.go              # Env 命令
 │       ├── dns.go              # DNS 命令
+│       ├── dns_pull.go         # DNS Pull 命令
 │       ├── server_cmd.go       # Server 命令
 │       ├── service_cmd.go      # Service 命令
 │       ├── config_cmd.go       # Config 命令
 │       ├── app.go              # App 命令
+│       ├── workflow.go         # CLI 工作流模块
+│       ├── context.go          # 执行上下文
+│       ├── confirm.go          # 确认对话框
 │       ├── tui.go              # TUI 主入口
-│       └── ...                 # 其他 TUI 文件
+│       ├── tui_model.go        # TUI 数据模型
+│       ├── tui_menu.go         # TUI 菜单
+│       ├── tui_view.go         # TUI 视图
+│       ├── tui_render.go       # TUI 渲染逻辑
+│       ├── tui_server.go       # TUI 服务器操作
+│       ├── tui_dns.go          # TUI DNS 操作
+│       ├── tui_dns_actions.go  # TUI DNS 动作
+│       ├── tui_service_common.go # TUI 服务公共
+│       ├── tui_service_op.go   # TUI 服务操作
+│       ├── tui_handlers.go     # TUI 事件处理
+│       ├── tui_keys.go         # TUI 按键绑定
+│       ├── tui_cursor.go       # TUI 光标管理
+│       ├── tui_styles.go       # TUI 样式
+│       ├── tui_common.go       # TUI 公共工具
+│       ├── tui_tree.go         # TUI 树形视图
+│       ├── tui_viewport.go     # TUI 视口滚动
+│       ├── tui_cleanup.go      # TUI 清理操作
+│       ├── tui_stop.go         # TUI 停止操作
+│       └── tui_restart.go      # TUI 重启操作
 ├── constants/                  # 常量
 │   └── constants.go            # 路径、格式常量
 ├── environment/                # 环境管理
 │   ├── checker.go              # 环境检查
 │   ├── syncer.go               # 环境同步
-│   └── templates.go            # 配置模板
-├── version/                    # 版本信息
-└── providers/                  # 外部服务提供者
-    └── dns/                    # DNS 提供者
-        ├── provider.go         # 接口定义
-        ├── common.go           # 公共逻辑
-        ├── cloudflare.go       # Cloudflare
-        ├── aliyun.go           # 阿里云
-        └── tencent.go          # 腾讯云
+│   ├── templates.go            # APT 源模板
+│   ├── registry_helper.go      # Registry 登录工具
+│   ├── types.go                # 类型定义
+│   └── templates/apt/          # APT 源模板文件
+└── version/                    # 版本信息
+    └── version.go
 userdata/{env}/                 # 用户配置
 deployments/                    # 生成文件（git-ignored）
 ```
@@ -415,12 +448,13 @@ Interface → Application → Domain ← Infrastructure
 | 策略模式 | Handler 注册表，不同 Handler 实现 |
 | 工厂模式 | DNS Provider 创建 |
 | 适配器模式 | DNS Provider 适配 |
-| 对象池模式 | SSH 连接池 |
+| 对象池模式 | SSH 连接池（TTL + 健康检查） |
 | 依赖注入 (DIP) | Executor 通过 ExecutorConfig 接收依赖 |
 | 接口隔离 (ISP) | DNSDeps / ServiceDeps / CommonDeps |
 | 注册表模式 | Handler Registry |
-| Option 模式 | Planner 配置、Retry 重试机制 |
+| Option 模式 | Planner 配置、Retry 重试机制、BaseDeps 构建 |
 | 泛型编程 | planSimpleEntity 函数 |
+| 并行执行 | ChangeExecutor 按服务器分组并发 |
 
 ---
 
@@ -453,13 +487,13 @@ git commit -m "feat: add new feature"
 1. 在 `internal/domain/entity/` 创建实体定义
 2. 在 `internal/domain/errors.go` 添加相关错误
 3. 在 `internal/domain/service/validator.go` 添加验证逻辑
-4. 在 `internal/application/handler/` 创建处理器
+4. 在 `internal/application/usecase/` 创建处理器
 5. 在 `internal/infrastructure/persistence/config_loader.go` 添加加载逻辑
 
 ### 3. 添加新 DNS 提供者
 
-1. 在 `internal/providers/dns/` 创建提供者实现
-2. 实现 `Provider` 接口
+1. 在 `internal/infrastructure/dns/` 创建提供者实现
+2. 实现 `contract.DNSProvider` 接口
 3. 在 `internal/infrastructure/dns/factory.go` 注册工厂方法
 
 ---
@@ -472,3 +506,5 @@ git commit -m "feat: add new feature"
 - 每个 Handler 必须实现 `Apply(ctx, change, deps)` 方法
 - 服务命名：`yo-{env}-{service-name}`
 - 使用 `errors.Is()` 进行错误比较
+- ChangeExecutor 按服务器分组并行执行变更
+- ConfigLoader 有 30 秒内存缓存，调试时注意

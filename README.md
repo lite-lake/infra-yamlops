@@ -11,7 +11,7 @@
 - **DNS 管理**：支持 Cloudflare、阿里云、腾讯云
 - **Docker Compose**：自动生成和部署
 - **交互式 TUI**：基于 BubbleTea 的终端界面，支持服务重启、多选、滚动视图
-- **服务器环境管理**：Docker 安装、Registry 登录、APT 源配置
+- **服务器环境管理**：APT 源配置、Docker 网络、Registry 登录
 - **网关管理**：infra-gate 配置自动生成
 - **清理功能**：自动识别并清理孤立资源
 
@@ -167,7 +167,7 @@ yamlops
 ./yamlops plan -e prod --domain example.com
 ```
 
-**plan 标志:
+**plan 标志:**
 
 | 标志 | 描述 |
 |------|------|
@@ -187,7 +187,7 @@ yamlops
 ./yamlops apply -e prod --server srv-east-01
 ```
 
-**apply 标志:
+**apply 标志:**
 
 | 标志 | 描述 |
 |------|------|
@@ -243,7 +243,7 @@ yamlops
 ./yamlops env sync -e prod --server srv-east-01
 ```
 
-**env 子命令标志:
+**env 子命令标志:**
 
 | 标志 | 描述 |
 |------|------|
@@ -305,7 +305,7 @@ yamlops
 ./yamlops dns pull records -e prod -d example.com --auto-approve
 ```
 
-**dns 子命令标志:
+**dns 子命令标志:**
 
 | 标志 | 短标志 | 描述 |
 |------|--------|------|
@@ -440,6 +440,7 @@ yamlops
 | x | 取消操作 |
 | Esc | 返回 |
 | q/Ctrl+C | 退出 |
+| ? | 显示帮助 |
 
 ## 实体配置
 
@@ -459,13 +460,13 @@ secrets:
 isps:
   - name: aliyun
     type: aliyun                    # aliyun | cloudflare | tencent
-    services: [server, domain, dns, certificate]
+    services: [server, domain, dns]
     credentials:
       access_key_id: {secret: aliyun_access_key}
       access_key_secret: {secret: aliyun_access_secret}
 
   - name: cloudflare
-    services: [dns, certificate]
+    services: [dns]
     credentials:
       api_token: "cf-api-token"
 ```
@@ -507,6 +508,8 @@ servers:
 
 ### services_biz.yaml - 业务服务配置
 
+指定 `image` 部署本地容器，或指定 `external_backends` 由 infra-gate 直接反向代理到外部 URL（两者互斥）。
+
 ```yaml
 services:
   - name: api-server
@@ -523,6 +526,8 @@ services:
       REDIS_PASSWORD: {secret: redis_password}
     secrets:
       - redis_password
+    networks:
+      - yamlops-prod
     healthcheck:
       path: /health
       interval: 30s
@@ -543,8 +548,6 @@ services:
         http: true
         https: true
     internal: false
-    networks:
-      - yamlops-prod
 ```
 
 **Volume 格式**:
@@ -557,17 +560,14 @@ services:
 ```yaml
 infra_services:
   - name: gateway-east-1
-    type: gateway                  # gateway
+    type: gateway
     server: srv-east-01
     image: infra-gate:latest
     ports:
       http: 80
       https: 443
-    config:
-      source: volumes://infra-gate
-      sync: true
     ssl:
-      mode: remote                  # local | remote
+      mode: remote
       endpoint: https://ssl.litelake.com/cert/json
       api_key: {secret: ssl_api_key}
     waf:
@@ -576,6 +576,10 @@ infra_services:
         - 10.0.0.0/8
         - 192.168.0.0/16
     log_level: 1
+    notification:
+      enabled: true
+      url: https://hooks.example.com/notify
+      timeout: 5s
     networks:
       - yamlops-prod
 ```
@@ -756,13 +760,6 @@ networks:
 1. 检查 Docker 镜像是否存在
 2. 确认 Registry 登录状态
 3. 查看容器日志: `docker logs yo-<服务名>`
-
-## 环境变量
-
-| 变量 | 说明 |
-|------|------|
-| `YAMLOPS_ENV` | 默认环境 |
-| `YAMLOPS_CONFIG` | 默认配置目录 |
 
 ## 更多文档
 

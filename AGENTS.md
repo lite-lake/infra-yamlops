@@ -44,31 +44,31 @@ internal/
 ├── domain/                     # 领域层（无外部依赖）
 │   ├── entity/                 # 实体定义
 │   ├── valueobject/            # 值对象
-│   ├── repository/             # 仓库接口
+│   ├── repository/             # 仓储接口
 │   ├── service/                # 领域服务
 │   ├── contract/               # 接口契约（DNS、SSH 等）
+│   ├── retry/                  # 重试机制（Option 模式）
 │   └── errors.go               # 领域错误
 ├── application/
-│   ├── handler/                # 变更处理器
-│   ├── usecase/                # 执行器、SSHPool
-│   ├── deployment/             # 部署生成器
+│   ├── usecase/                # 变更处理器 + 执行器 + SSHPool
+│   ├── generator/              # 部署配置生成器（Compose + Gate）
+│   │   ├── compose/            # Docker Compose 生成器
+│   │   └── gate/               # infra-gate 配置生成器
 │   ├── plan/                   # 计划协调
 │   └── orchestrator/           # 工作流编排
 ├── infrastructure/
 │   ├── persistence/            # 配置加载器
 │   ├── ssh/                    # SSH 客户端、SFTP
 │   ├── state/                  # 基于文件的状态存储
-│   ├── dns/                    # DNS 工厂
+│   ├── dns/                    # DNS Provider（Cloudflare、阿里云、腾讯云）
 │   ├── secrets/                # SecretResolver
-│   ├── logger/                 # 日志记录
+│   ├── logger/                 # 日志记录 + 指标
 │   ├── network/                # Docker 网络管理器
-│   ├── registry/               # Docker 注册表管理器
-│   └── generator/              # Compose 和 Gate 配置生成器
+│   └── registry/               # Docker 注册表管理器
 ├── interfaces/cli/             # Cobra 命令、BubbleTea TUI
 ├── constants/                  # 共享常量
-├── environment/                # 环境设置
+├── environment/                # 环境设置（检查、同步、APT 模板）
 ├── version/                    # 版本信息
-└── providers/dns/              # Cloudflare、阿里云、腾讯云 DNS 提供商
 userdata/{env}/                 # 用户配置目录（当前仓库无示例数据，请自行创建）
 deployments/                    # 生成的文件（git 忽略）
 ```
@@ -181,6 +181,7 @@ func TestServer_Validate(t *testing.T) {
 - `deployments/` 目录被 git 忽略
 - 领域层必须没有外部依赖
 - Handler 模式：每个实体类型都有一个实现 `Apply(ctx, change, deps)` 的 Handler
+- 执行采用**并行模式**：按服务器分组，不同服务器的变更并发执行
 - 对通用模式使用泛型（例如：`DoWithResult[T]`、`planSimpleEntity[T]`）
 - 服务命名：`yo-{env}-{service-name}`（例如：`yo-prod-api-server`）
 
@@ -192,13 +193,16 @@ func TestServer_Validate(t *testing.T) {
 |------|-----------|------|------|------|
 | name | name | string | ✅ | 服务名称 |
 | server | server | string | ✅ | 部署目标服务器 |
+| networks | networks | []string | ❌ | Docker 网络列表 |
 | image | image | string | ⚠️ | Docker 镜像（与 external_backends 二选一） |
 | external_backends | external_backends | []string | ⚠️ | 外部后端 URL（与 image 二选一） |
 | registry | registry | string | ❌ | Docker Registry 名称 |
 | ports | ports | []ServicePort | ❌ | 端口映射 |
 | env | env | map[string]SecretRef | ❌ | 环境变量 |
+| secrets | secrets | []string | ❌ | 依赖的密钥列表 |
 | volumes | volumes | []ServiceVolume | ❌ | 卷挂载 |
 | healthcheck | healthcheck | ServiceHealthcheck | ❌ | 健康检查配置 |
+| resources | resources | ServiceResources | ❌ | 资源限制（cpu/memory） |
 | gateways | gateways | []ServiceGatewayRoute | ❌ | 网关路由 |
 | internal | internal | bool | ❌ | 是否内部服务 |
 
@@ -248,6 +252,23 @@ services:
         https: true
         strip_proxy_headers: true  # 禁用所有代理头部
 ```
+
+## 基础设施服务 (InfraService) 字段参考
+
+定义在 `internal/domain/entity/infra_service.go`。当前仅支持 `gateway` 类型。
+
+| 字段 | YAML 标签 | 类型 | 必填 | 说明 |
+|------|-----------|------|------|------|
+| name | name | string | ✅ | 服务名称 |
+| type | type | string | ✅ | 类型（当前仅 `gateway`） |
+| server | server | string | ✅ | 部署服务器 |
+| networks | networks | []string | ❌ | Docker 网络列表 |
+| image | image | string | ✅ | Docker 镜像 |
+| ports | ports | GatewayPorts | ❌ | 端口配置（http/https） |
+| ssl | ssl | GatewaySSLConfig | ❌ | SSL 配置（mode/endpoint/api_key） |
+| waf | waf | GatewayWAFConfig | ❌ | WAF 配置（enabled/whitelist） |
+| log_level | log_level | int | ❌ | 日志级别 |
+| notification | notification | GatewayNotification | ❌ | 通知配置（enabled/url/timeout） |
 
 ## 服务操作
 

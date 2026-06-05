@@ -30,6 +30,8 @@ Handler 策略模式允许系统根据实体类型动态选择对应的处理器
 
 ### 核心接口定义
 
+定义在 `internal/domain/contract/handler.go`：
+
 ```go
 type Handler interface {
     EntityType() string
@@ -49,6 +51,7 @@ type Result struct {
     Change   *valueobject.Change
     Success  bool
     Error    error
+    Output   string
     Warnings []string
 }
 ```
@@ -58,6 +61,8 @@ type Result struct {
 ## Handler 注册表
 
 ### Registry 实现
+
+定义在 `internal/application/usecase/registry.go`：
 
 ```go
 type Registry struct {
@@ -82,39 +87,70 @@ func (r *Registry) Get(entityType string) (Handler, bool) {
 
 ### 注册流程
 
+定义在 `internal/application/usecase/executor.go`，使用 `RegisterDefaults()` 方法（幂等注册）：
+
 ```go
-func (e *Executor) registerHandlers() {
-    e.registry.Register(NewDNSHandler())
-    e.registry.Register(NewServiceHandler())
-    e.registry.Register(NewInfraServiceHandler())
-    e.registry.Register(NewServerHandler())
-    e.registry.Register(NewNoopHandler("isp"))
-    e.registry.Register(NewNoopHandler("zone"))
-    e.registry.Register(NewNoopHandler("registry"))
+func (e *Executor) RegisterDefaults() {
+    defaultHandlers := []Handler{
+        NewDNSHandler(),
+        NewServiceHandler(),
+        NewInfraServiceHandler(),
+        NewServerHandler(),
+    }
+    for _, h := range defaultHandlers {
+        if _, ok := e.handlerRegistry.Get(h.EntityType()); !ok {
+            e.handlerRegistry.Register(h)
+        }
+    }
+    RegisterNoopHandlers(e.handlerRegistry)
 }
 ```
+
+NoopHandler 注册的实体类型（定义在 `noop_handler.go`）：`isp`、`zone`、`domain`、`certificate`
 
 ---
 
 ## 依赖注入接口
 
-Handler 依赖采用接口隔离原则（ISP），拆分为专用接口：
+Handler 依赖采用接口隔离原则（ISP），存在两层定义：
 
-### DNS 操作依赖
+### 领域层契约（contract/handler.go）
+
+最小接口，不依赖具体实现：
 
 ```go
+type DepsProvider interface {
+    DNSDeps
+    ServiceDeps
+    CommonDeps
+}
+
 type DNSDeps interface {
     DNSProvider(ispName string) (DNSProvider, error)
-    Domain(name string) (*entity.Domain, bool)
-    ISP(name string) (*entity.ISP, bool)
+}
+
+type ServiceDeps interface {
+    SSHClient(server string) (SSHClient, error)
+}
+
+type CommonDeps interface {
+    ResolveSecret(ref *valueobject.SecretRef) (string, error)
 }
 ```
 
-### 服务操作依赖
+### 应用层扩展（usecase/types.go）
+
+扩展接口，提供完整依赖：
 
 ```go
+type DNSDeps interface {
+    DNSProvider(ispName string) (contract.DNSProvider, error)
+    Domain(name string) (*entity.Domain, bool)
+    ISP(name string) (*entity.ISP, bool)
+}
+
 type ServiceDeps interface {
-    SSHClient(server string) (SSHClient, error)
+    SSHClient(server string) (contract.SSHClient, error)
     ServerInfo(name string) (*ServerInfo, bool)
     Server(name string) (*entity.Server, bool)
     WorkDir() string
@@ -123,19 +159,11 @@ type ServiceDeps interface {
     GetAllRegistries() []*entity.Registry
     Secrets() map[string]string
 }
-```
 
-### 通用依赖
-
-```go
 type CommonDeps interface {
     ResolveSecret(ref *valueobject.SecretRef) (string, error)
 }
-```
 
-### 组合依赖接口
-
-```go
 type DepsProvider interface {
     DNSDeps
     ServiceDeps
@@ -143,21 +171,39 @@ type DepsProvider interface {
 }
 ```
 
+### BaseDeps 实现
+
+使用 Option 模式构建依赖：
+
+```go
+type BaseDeps struct {
+    sshClient      contract.SSHClient
+    sshError       error
+    dnsFactory     DNSFactory
+    secrets        map[string]string
+    domains        map[string]*entity.Domain
+    isps           map[string]*entity.ISP
+    servers        map[string]*ServerInfo
+    serverEntities map[string]*entity.Server
+    registries     map[string]*entity.Registry
+    workDir        string
+    env            string
+}
+
+func NewBaseDeps(opts ...BaseDepsOption) *BaseDeps { ... }
+```
+
 ---
 
 ## Handler 实现
 
+所有 Handler 定义在 `internal/application/usecase/` 目录下。
+
 ### DNSHandler
 
-处理 DNS 记录的 CRUD 操作。
+处理 DNS 记录的 CRUD 操作。实体类型：`dns_record`
 
 ```go
-type DNSHandler struct{}
-
-func (h *DNSHandler) EntityType() string {
-    return "dns_record"
-}
-
 func (h *DNSHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
     switch change.Type() {
     case valueobject.ChangeTypeCreate:
@@ -170,75 +216,32 @@ func (h *DNSHandler) Apply(ctx context.Context, change *valueobject.Change, deps
         return &Result{Change: change, Success: true}, nil
     }
 }
-
-func (h *DNSHandler) create(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
-    record := change.NewState().(*entity.DNSRecord)
-    domain, _ := deps.Domain(record.Domain)
-    isp, _ := deps.ISP(domain.DNSISP)
-    
-    provider, err := deps.DNSProvider(isp.Name)
-    if err != nil {
-        return &Result{Change: change, Success: false, Error: err}, nil
-    }
-    
-    err = provider.CreateRecord(domain.Name, &dns.DNSRecord{
-        Name:  record.Name,
-        Type:  record.Type,
-        Value: record.Value,
-        TTL:   record.TTL,
-    })
-    
-    return &Result{Change: change, Success: err == nil, Error: err}, nil
-}
 ```
 
 ### ServiceHandler
 
-处理业务服务的 Docker Compose 部署。
+处理业务服务的 Docker Compose 部署。实体类型：`service`
 
 ```go
-type ServiceHandler struct{}
-
-func (h *ServiceHandler) EntityType() string {
-    return "service"
-}
-
 func (h *ServiceHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
-    service := change.NewState().(*entity.BizService)
-    serverInfo, _ := deps.ServerInfo(service.Server)
-    
-    client, err := deps.SSHClient(service.Server)
-    if err != nil {
-        return &Result{Change: change, Success: false, Error: err}, nil
-    }
-    
-    // 1. 上传 docker-compose.yml
-    // 2. 执行 docker compose up -d
-    // 3. 健康检查
-    
-    return &Result{Change: change, Success: true}, nil
+    // 1. 获取 SSH 客户端和服务信息
+    // 2. Registry 登录
+    // 3. 同步 volumes 文件
+    // 4. 拉取镜像
+    // 5. docker compose up -d
 }
 ```
 
 ### InfraServiceHandler
 
-处理基础设施服务（gateway/ssl）的部署。
+处理基础设施服务（gateway）的部署。实体类型：`infra_service`
 
 ```go
-type InfraServiceHandler struct{}
-
-func (h *InfraServiceHandler) EntityType() string {
-    return "infra_service"
-}
-
 func (h *InfraServiceHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
     infra := change.NewState().(*entity.InfraService)
-    
     switch infra.Type {
     case "gateway":
-        return h.applyGateway(ctx, change, deps, infra)
-    case "ssl":
-        return h.applySSL(ctx, change, deps, infra)
+        return h.deployGatewayType(ctx, change, deps, infra)
     default:
         return &Result{Change: change, Success: false, Error: fmt.Errorf("unknown infra type: %s", infra.Type)}, nil
     }
@@ -247,51 +250,24 @@ func (h *InfraServiceHandler) Apply(ctx context.Context, change *valueobject.Cha
 
 ### ServerHandler
 
-处理服务器环境同步（Docker 安装、Registry 登录等）。
+处理服务器环境同步（Registry 登录）。实体类型：`server`
 
 ```go
-type ServerHandler struct{}
-
-func (h *ServerHandler) EntityType() string {
-    return "server"
-}
-
 func (h *ServerHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
-    server := change.NewState().(*entity.Server)
-    
-    client, err := deps.SSHClient(server.Name)
-    if err != nil {
-        return &Result{Change: change, Success: false, Error: err}, nil
-    }
-    
-    // 同步服务器环境
-    // 1. 检查 Docker
-    // 2. 检查 Docker Compose
-    // 3. 登录 Registry
-    
-    return &Result{Change: change, Success: true}, nil
+    // 1. 获取服务器配置的 registries 列表
+    // 2. 对每个 registry 调用 RegistryManager.EnsureLoggedIn()
 }
 ```
 
 ### NoopHandler
 
-空操作处理器，用于非部署实体（如 ISP、Zone）。
+空操作处理器，用于非部署实体。
 
 ```go
-type NoopHandler struct {
-    entityType string
-}
-
-func NewNoopHandler(entityType string) *NoopHandler {
-    return &NoopHandler{entityType: entityType}
-}
-
-func (h *NoopHandler) EntityType() string {
-    return h.entityType
-}
+var NoopEntities = []string{"isp", "zone", "domain", "certificate"}
 
 func (h *NoopHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
-    return &Result{Change: change, Success: true}, nil
+    return &Result{Change: change, Success: true, Output: "skipped (not a deployable entity)"}, nil
 }
 ```
 
@@ -299,56 +275,76 @@ func (h *NoopHandler) Apply(ctx context.Context, change *valueobject.Change, dep
 
 ## Handler 类型与职责
 
-| Handler | Entity | 职责 |
-|---------|--------|------|
-| DNSHandler | `dns_record` | DNS 记录 CRUD |
-| ServiceHandler | `service` | Docker Compose 服务部署 |
-| InfraServiceHandler | `infra_service` | 基础设施服务部署 (gateway/ssl) |
-| ServerHandler | `server` | 服务器环境同步 |
-| NoopHandler | `isp`/`zone`/`domain`/`registry` | 空操作（非部署实体） |
+| Handler | Entity | 文件 | 职责 |
+|---------|--------|------|------|
+| DNSHandler | `dns_record` | dns_handler.go | DNS 记录 CRUD |
+| ServiceHandler | `service` | service_handler.go | Docker Compose 服务部署 |
+| InfraServiceHandler | `infra_service` | infra_service_handler.go | 基础设施服务部署 (gateway) |
+| ServerHandler | `server` | server_handler.go | 服务器 Registry 登录 |
+| NoopHandler | `isp`/`zone`/`domain`/`certificate` | noop_handler.go | 空操作（非部署实体） |
 
 ---
 
-## Executor 执行流程
+## Executor 与 ChangeExecutor
+
+### 架构分层
+
+Executor 是面向外部的入口，内部委托给 ChangeExecutor 执行实际变更：
+
+```
+Executor (executor.go)
+├── handlerRegistry *Registry     # Handler 注册表
+├── changeExecutor  *ChangeExecutor  # 变更执行器
+├── plan            *valueobject.Plan
+└── env             string
+
+ChangeExecutor (change_executor.go)
+├── plan           *valueobject.Plan
+├── sshPool        SSHPoolInterface
+├── secrets        map[string]string
+├── servers        map[string]*ServerInfo
+├── domains        map[string]*entity.Domain
+├── isps           map[string]*entity.ISP
+├── dnsFactory     DNSFactoryInterface
+└── workDir        string
+```
+
+### 并行执行流程
+
+ChangeExecutor 按服务器分组，不同服务器的变更并发执行：
 
 ```go
-func (e *Executor) Apply() []*handler.Result {
-    e.registerHandlers()
-    
-    var results []*handler.Result
-    
-    for _, change := range e.plan.Changes() {
-        h, ok := e.registry.Get(change.Entity())
-        if !ok {
-            results = append(results, &handler.Result{
-                Change: change,
-                Success: false,
-                Error: fmt.Errorf("no handler for entity type: %s", change.Entity()),
-            })
-            continue
-        }
-        
-        result := h.Apply(context.Background(), change, e.buildDeps(change))
-        results = append(results, result)
+func (ce *ChangeExecutor) Apply(registry handlerRegistry) []*Result {
+    // 1. 按服务器名分组变更
+    groups := ce.groupChangesByServer()
+
+    // 2. DNS 变更排序：Delete → Update → Create
+    ce.sortDNSChanges()
+
+    // 3. 并行执行各服务器组
+    var wg sync.WaitGroup
+    for serverName, changes := range groups {
+        wg.Add(1)
+        go func(srv string, chs []*valueobject.Change) {
+            defer wg.Done()
+            // 构建依赖、逐个执行变更
+        }(serverName, changes)
     }
-    
-    e.sshPool.CloseAll()
+    wg.Wait()
+
+    // 4. 关闭 SSH 连接池
+    ce.sshPool.CloseAll()
     return results
 }
-
-func (e *Executor) buildDeps(change *valueobject.Change) handler.DepsProvider {
-    return &BaseDeps{
-        sshClient:  e.sshPool,
-        dnsFactory: e.dnsFactory,
-        secrets:    e.secrets,
-        domains:    e.domains,
-        isps:       e.isps,
-        servers:    e.servers,
-        workDir:    e.workDir,
-        env:        e.env,
-    }
-}
 ```
+
+### SSHPool
+
+SSH 连接池支持 TTL 过期和健康检查：
+
+- **默认 TTL**：30 分钟
+- **健康检查**：通过 `SSHHealthChecker.Healthy()` 接口
+- **工厂方法**：`NewSSHPool()`、`NewSSHPoolWithTTL()`、`NewSSHPoolWithFactory()`
 
 ---
 
@@ -390,7 +386,7 @@ func TestDNSHandler_Create(t *testing.T) {
         Value:  "1.2.3.4",
         TTL:    600,
     })
-    
+
     mockDeps := &MockDepsProvider{
         DomainFunc: func(name string) (*entity.Domain, bool) {
             return &entity.Domain{Name: name, DNSISP: "cloudflare"}, true
@@ -402,9 +398,9 @@ func TestDNSHandler_Create(t *testing.T) {
             return &MockDNSProvider{}, nil
         },
     }
-    
+
     result, err := handler.Apply(context.Background(), change, mockDeps)
-    
+
     assert.NoError(t, err)
     assert.True(t, result.Success)
 }
@@ -433,9 +429,11 @@ func (h *NewEntityHandler) Apply(ctx context.Context, change *valueobject.Change
 2. **注册 Handler：**
 
 ```go
-func (e *Executor) registerHandlers() {
+func (e *Executor) RegisterDefaults() {
     // ... 现有注册
-    e.registry.Register(&NewEntityHandler{})
+    if _, ok := e.handlerRegistry.Get("new_entity"); !ok {
+        e.handlerRegistry.Register(&NewEntityHandler{})
+    }
 }
 ```
 

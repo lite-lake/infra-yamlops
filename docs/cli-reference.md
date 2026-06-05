@@ -8,7 +8,6 @@ YAMLOps CLI 命令行工具完整参考文档。
 |------|--------|--------|------|
 | `--env` | `-e` | `dev` | 环境名称 (prod/staging/dev/demo) |
 | `--config` | `-c` | `.` | 配置目录路径 |
-| `--version` | `-v` | `false` | 显示版本信息 |
 
 ## 命令概览
 
@@ -72,13 +71,14 @@ yamlops --env staging --config /path/to/config
 | `↓` / `j` | 下移 |
 | `Space` | 切换选择 |
 | `Enter` | 确认/展开 |
-| `Tab` | 切换视图 |
+| `Tab` | 切换视图（App / DNS） |
 | `a` / `n` | 选择/取消当前项 |
 | `A` / `N` | 全选/全不选 |
 | `p` | 生成计划 |
 | `r` | 刷新配置 |
 | `s` | 同步（在服务器检查视图） |
 | `x` | 取消操作 |
+| `?` | 显示帮助 |
 | `Esc` | 返回 |
 | `q` / `Ctrl+C` | 退出 |
 
@@ -99,9 +99,9 @@ yamlops plan -e dev --domain example.com
 
 | 标志 | 描述 |
 |------|------|
-| `--domain`, `-d` | 按域名过滤 |
-| `--zone`, `-z` | 按区域过滤 |
-| `--server`, `-s` | 按服务器过滤 |
+| `--domain` | 按域名过滤 |
+| `--zone` | 按区域过滤 |
+| `--server` | 按服务器过滤 |
 | `--service` | 按服务过滤 |
 
 **输出示例：**
@@ -133,20 +133,22 @@ yamlops apply -e staging --zone cn-east
 
 | 标志 | 描述 |
 |------|------|
-| `--domain`, `-d` | 按域名过滤 |
-| `--zone`, `-z` | 按区域过滤 |
-| `--server`, `-s` | 按服务器过滤 |
+| `--domain` | 按域名过滤 |
+| `--zone` | 按区域过滤 |
+| `--server` | 按服务器过滤 |
 | `--service` | 按服务过滤 |
 
 **工作流程：**
 
 1. 加载配置并验证
-2. 生成执行计划
-3. 显示变更预览
-4. 请求确认
-5. 生成部署文件
-6. 执行变更
-7. 保存状态
+2. 解析密钥引用
+3. 生成部署文件
+4. 获取远程状态
+5. 生成执行计划
+6. 显示变更预览
+7. 请求确认
+8. 执行变更（并行，按服务器分组）
+9. 保存状态
 
 ---
 
@@ -194,7 +196,6 @@ yamlops list records -e prod
 | `zones` | 网络区域列表 |
 | `servers` | 服务器列表 |
 | `services` | 业务服务列表 |
-| `infra_services` | 基础设施服务列表 |
 | `registries` | Docker 仓库列表 |
 | `domains` | 域名列表 |
 | `records` / `dns` | DNS 记录列表 |
@@ -255,6 +256,8 @@ yamlops env check -e prod --zone cn-east
 
 **检查项：**
 
+- SSH 连接
+- Sudo 免密
 - Docker 安装状态
 - Docker Compose 安装状态
 - APT 源配置
@@ -274,10 +277,11 @@ yamlops env sync -e prod --zone cn-east
 
 **同步内容：**
 
-- Docker 安装（如未安装）
-- Docker Compose 安装（如未安装）
 - APT 源配置
+- Docker 网络创建
 - Docker Registry 登录
+
+**注意：** 环境同步不会自动安装 Docker，Docker 需预先安装。
 
 ---
 
@@ -295,10 +299,10 @@ yamlops dns plan -e prod --record www.example.com
 
 **标志：**
 
-| 标志 | 短标志 | 描述 |
-|------|--------|------|
-| `--domain` | `-d` | 按域名过滤 |
-| `--record` | `-r` | 按记录过滤（格式：name.domain） |
+| 标志 | 描述 |
+|------|------|
+| `--domain` | 按域名过滤 |
+| `--record` | 按记录过滤（格式：name.domain） |
 
 ---
 
@@ -316,8 +320,8 @@ yamlops dns apply -e prod --auto-approve
 
 | 标志 | 描述 |
 |------|------|
-| `--domain`, `-d` | 按域名过滤 |
-| `--record`, `-r` | 按记录过滤 |
+| `--domain` | 按域名过滤 |
+| `--record` | 按记录过滤 |
 | `--auto-approve` | 跳过确认提示 |
 
 ---
@@ -382,8 +386,8 @@ yamlops server setup -e prod --sync-only
 
 | 标志 | 描述 |
 |------|------|
-| `--server`, `-s` | 按服务器过滤 |
-| `--zone`, `-z` | 按区域过滤 |
+| `--server` | 按服务器过滤 |
+| `--zone` | 按区域过滤 |
 | `--check-only` | 仅检查，不同步 |
 | `--sync-only` | 仅同步，不检查 |
 
@@ -461,12 +465,12 @@ yamlops app plan -e prod --biz api-server
 
 **标志：**
 
-| 标志 | 短标志 | 描述 |
-|------|--------|------|
-| `--zone` | `-z` | 按区域过滤 |
-| `--server` | `-s` | 按服务器过滤 |
-| `--infra` | `-i` | 按基础设施服务过滤 |
-| `--biz` | `-b` | 按业务服务过滤 |
+| 标志 | 描述 |
+|------|------|
+| `--zone` | 按区域过滤 |
+| `--server` | 按服务器过滤 |
+| `--infra` | 按基础设施服务过滤 |
+| `--biz` | 按业务服务过滤 |
 
 ---
 
@@ -483,10 +487,10 @@ yamlops app apply -e prod --server srv-cn1 --auto-approve
 
 | 标志 | 描述 |
 |------|------|
-| `--zone`, `-z` | 按区域过滤 |
-| `--server`, `-s` | 按服务器过滤 |
-| `--infra`, `-i` | 按基础设施服务过滤 |
-| `--biz`, `-b` | 按业务服务过滤 |
+| `--zone` | 按区域过滤 |
+| `--server` | 按服务器过滤 |
+| `--infra` | 按基础设施服务过滤 |
+| `--biz` | 按业务服务过滤 |
 | `--auto-approve` | 自动确认 |
 
 ---
@@ -536,18 +540,22 @@ yamlops service deploy -e prod --biz api-server
 # 部署指定的基础设施服务
 yamlops service deploy -e prod --infra gateway-cn1
 
+# 强制部署（即使无变更）
+yamlops service deploy -e prod --biz api-server --force
+
 # 跳过确认直接部署
 yamlops service deploy -e prod --yes
 ```
 
 **标志：**
 
-| 标志 | 短标志 | 描述 |
-|------|--------|------|
-| `--server` | `-s` | 按服务器过滤 |
-| `--infra` | `-i` | 按基础设施服务过滤 |
-| `--biz` | `-b` | 按业务服务过滤 |
-| `--yes` | `-y` | 跳过确认提示 |
+| 标志 | 描述 |
+|------|------|
+| `--server` | 按服务器过滤 |
+| `--infra` | 按基础设施服务过滤 |
+| `--biz` | 按业务服务过滤 |
+| `--force` | 强制部署（即使无变更或使用 -b/-i 过滤时） |
+| `--yes` | 跳过确认提示 |
 
 **部署行为：**
 
@@ -576,12 +584,12 @@ yamlops service stop -e prod --yes
 
 **标志：**
 
-| 标志 | 短标志 | 描述 |
-|------|--------|------|
-| `--server` | `-s` | 按服务器过滤 |
-| `--infra` | `-i` | 按基础设施服务过滤 |
-| `--biz` | `-b` | 按业务服务过滤 |
-| `--yes` | `-y` | 跳过确认提示 |
+| 标志 | 描述 |
+|------|------|
+| `--server` | 按服务器过滤 |
+| `--infra` | 按基础设施服务过滤 |
+| `--biz` | 按业务服务过滤 |
+| `--yes` | 跳过确认提示 |
 
 **注意：** 此命令仅停止容器，不会删除容器或数据。
 
@@ -607,12 +615,12 @@ yamlops service restart -e prod --yes
 
 **标志：**
 
-| 标志 | 短标志 | 描述 |
-|------|--------|------|
-| `--server` | `-s` | 按服务器过滤 |
-| `--infra` | `-i` | 按基础设施服务过滤 |
-| `--biz` | `-b` | 按业务服务过滤 |
-| `--yes` | `-y` | 跳过确认提示 |
+| 标志 | 描述 |
+|------|------|
+| `--server` | 按服务器过滤 |
+| `--infra` | 按基础设施服务过滤 |
+| `--biz` | 按业务服务过滤 |
+| `--yes` | 跳过确认提示 |
 
 **注意：** 此命令仅执行 `docker compose restart`，不更新任何文件或镜像。
 
@@ -635,10 +643,12 @@ yamlops service cleanup -e prod --yes
 
 **标志：**
 
-| 标志 | 短标志 | 描述 |
-|------|--------|------|
-| `--server` | `-s` | 按服务器过滤 |
-| `--yes` | `-y` | 跳过确认提示 |
+| 标志 | 描述 |
+|------|------|
+| `--server` | 按服务器过滤 |
+| `--infra` | 按基础设施服务过滤 |
+| `--biz` | 按业务服务过滤 |
+| `--yes` | 跳过确认提示 |
 
 **清理内容：**
 

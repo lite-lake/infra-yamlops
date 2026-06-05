@@ -10,8 +10,8 @@ userdata/
 │   ├── secrets.yaml         # 密钥配置
 │   ├── isps.yaml            # 服务提供商配置
 │   ├── zones.yaml           # 网络区域配置
-│   ├── servers.yaml         # 服务器配置
 │   ├── services_infra.yaml  # 基础设施服务配置
+│   ├── servers.yaml         # 服务器配置
 │   ├── services_biz.yaml    # 业务服务配置
 │   ├── registries.yaml      # Docker 仓库配置
 │   └── dns.yaml             # DNS 配置
@@ -78,7 +78,7 @@ isps:
   - name: aliyun
     type: aliyun                    # aliyun | cloudflare | tencent
     services:
-      - domain                      # domain | dns | server
+      - domain                      # server | domain | dns
       - dns
     credentials:
       access_key_id:
@@ -142,7 +142,7 @@ zones:
 |------|------|------|------|
 | `name` | string | 是 | 区域名称 |
 | `description` | string | 否 | 区域描述 |
-| `isp` | string | 是 | 关联的 ISP 名称 |
+| `isp` | string | 否 | 关联的 ISP 名称 |
 | `region` | string | 否 | 地理区域标识 |
 
 ---
@@ -166,15 +166,15 @@ servers:
       user: root
       password:
         secret: server_password      # 引用 secrets.yaml
+      strict_host_key_checking: false
     networks:
       - name: yamlops-prod
         type: bridge
         driver: bridge
     environment:
-      apt_source: aliyun
+      apt_source: aliyun             # tuna | aliyun | tencent | official
       registries:
         - dockerhub                  # 引用 registries.yaml
-    remark: 主应用服务器
 ```
 
 | 字段 | 类型 | 必填 | 描述 |
@@ -183,16 +183,16 @@ servers:
 | `zone` | string | 是 | 所属区域 |
 | `isp` | string | 否 | 服务提供商 |
 | `os` | string | 否 | 操作系统类型 |
-| `ip.public` | string | 是 | 公网 IP |
+| `ip.public` | string | 否 | 公网 IP |
 | `ip.private` | string | 否 | 内网 IP |
 | `ssh.host` | string | 是 | SSH 主机地址 |
 | `ssh.port` | int | 否 | SSH 端口（默认 22） |
 | `ssh.user` | string | 是 | SSH 用户名 |
 | `ssh.password` | SecretRef | 是 | SSH 密码 |
+| `ssh.strict_host_key_checking` | bool | 否 | 是否严格检查主机密钥（默认 false） |
 | `networks` | []Network | 否 | Docker 网络配置 |
 | `environment.registries` | []string | 否 | Registry 引用列表 |
 | `environment.apt_source` | string | 否 | APT 源 |
-| `remark` | string | 否 | 备注说明 |
 
 ---
 
@@ -232,7 +232,7 @@ registries:
 
 ### 6. services_infra.yaml
 
-定义基础设施服务（网关、SSL 等）。
+定义基础设施服务（网关等）。当前仅支持 `gateway` 类型。
 
 ```yaml
 infra_services:
@@ -240,21 +240,24 @@ infra_services:
     type: gateway                    # gateway
     server: prod-server-1            # 引用 servers.yaml
     image: litelake/infra-gate:latest
-    gatewayPorts:
+    ports:
       http: 80
       https: 443
-    gatewayConfig:
-      source: volumes://infra-gate
-      sync: true
-    gatewaySSL:
+    ssl:
       mode: remote                   # local | remote
       endpoint: https://ssl.litelake.com/cert/json
-    gatewayWAF:
+      api_key:
+        secret: ssl_api_key
+    waf:
       enabled: true
       whitelist:
         - 192.168.0.0/16
         - 10.0.0.0/8
-    gatewayLogLevel: 1
+    log_level: 1
+    notification:
+      enabled: true
+      url: https://hooks.example.com/notify
+      timeout: 5s
     networks:
       - yamlops-prod
 ```
@@ -267,16 +270,18 @@ infra_services:
 | `type` | string | 是 | 必须为 `gateway` |
 | `server` | string | 是 | 部署服务器 |
 | `image` | string | 是 | Docker 镜像 |
-| `gatewayPorts.http` | int | 是 | HTTP 端口 |
-| `gatewayPorts.https` | int | 否 | HTTPS 端口 |
-| `gatewayConfig.source` | string | 否 | 配置源路径 |
-| `gatewayConfig.sync` | bool | 否 | 是否同步配置 |
-| `gatewaySSL.mode` | string | 否 | SSL 模式（local/remote） |
-| `gatewaySSL.endpoint` | string | 条件 | SSL 服务端点（remote 模式必填） |
-| `gatewayWAF.enabled` | bool | 否 | 启用 WAF |
-| `gatewayWAF.whitelist` | []string | 否 | IP 白名单（CIDR 格式） |
-| `gatewayLogLevel` | int | 否 | 日志级别 |
 | `networks` | []string | 否 | 网络列表 |
+| `ports.http` | int | 否 | HTTP 端口 |
+| `ports.https` | int | 否 | HTTPS 端口 |
+| `ssl.mode` | string | 否 | SSL 模式（local/remote） |
+| `ssl.endpoint` | string | 条件 | SSL 服务端点（remote 模式必填） |
+| `ssl.api_key` | SecretRef | 否 | SSL API 密钥 |
+| `waf.enabled` | bool | 否 | 启用 WAF |
+| `waf.whitelist` | []string | 否 | IP 白名单（CIDR 格式） |
+| `log_level` | int | 否 | 日志级别 |
+| `notification.enabled` | bool | 否 | 启用通知 |
+| `notification.url` | string | 条件 | 通知 URL（enabled 时必填） |
+| `notification.timeout` | string | 否 | 通知超时（默认 5s） |
 
 ---
 
@@ -326,10 +331,13 @@ services:
 |------|------|------|------|
 | `name` | string | 是 | 服务名称 |
 | `server` | string | 是 | 部署服务器 |
-| `image` | string | 是 | Docker 镜像 |
+| `networks` | []string | 否 | 网络列表 |
+| `image` | string | ⚠️ | Docker 镜像（与 external_backends 二选一） |
+| `external_backends` | []string | ⚠️ | 外部后端 URL（与 image 二选一） |
+| `registry` | string | 否 | Docker Registry 名称 |
 | `ports` | []Port | 否 | 端口映射列表 |
 | `env` | map | 否 | 环境变量 |
-| `secrets` | []string | 否 | 需要的密钥列表 |
+| `secrets` | []string | 否 | 依赖的密钥列表 |
 | `volumes` | []Volume | 否 | 卷挂载 |
 | `healthcheck.path` | string | 否 | 健康检查路径 |
 | `healthcheck.interval` | string | 否 | 检查间隔 |
@@ -338,7 +346,12 @@ services:
 | `resources.memory` | string | 否 | 内存限制 |
 | `gateways` | []Gateway | 否 | 网关路由配置 |
 | `internal` | bool | 否 | 是否仅内部访问 |
-| `networks` | []string | 否 | 网络列表 |
+
+### image 与 external_backends 互斥
+
+- **二选一**：`image` 和 `external_backends` 不能同时指定，也不能都不指定
+- 使用 `image` 时：生成 Docker Compose 并部署本地容器
+- 使用 `external_backends` 时：无本地容器，infra-gate 直接反向代理；健康检查自动禁用
 
 **Port 字段：**
 
@@ -347,6 +360,14 @@ services:
 | `container` | int | 是 | 容器端口 |
 | `host` | int | 是 | 主机端口 |
 | `protocol` | string | 否 | 协议（tcp/udp，默认 tcp） |
+
+**Volume 格式：**
+
+支持三种格式：
+- `volumes://xxx` - 引用本地 volumes 目录，sync 时上传到服务器
+- `./xxx` - 相对路径，在服务器上创建
+- `name:/path` - Docker named volume
+- `source:target` - 简写格式
 
 **Gateway 字段：**
 
@@ -357,6 +378,9 @@ services:
 | `path` | string | 否 | 路径前缀 |
 | `http` | bool | 否 | 启用 HTTP |
 | `https` | bool | 否 | 启用 HTTPS |
+| `gzip_enabled` | *bool | 否 | 启用 gzip（nil 时继承全局） |
+| `override_host` | string | 否 | 覆盖发给上游的 Host 头 |
+| `strip_proxy_headers` | *bool | 否 | 剥离所有代理相关头部 |
 
 ---
 
@@ -382,7 +406,6 @@ domains:
         name: '@'
         value: mail.example.com
         ttl: 600
-        priority: 10
       - type: TXT
         name: '@'
         value: '"v=spf1 include:_spf.google.com ~all"'
@@ -414,8 +437,7 @@ domains:
 | `type` | string | 是 | 记录类型（A/AAAA/CNAME/MX/TXT/NS/SRV） |
 | `name` | string | 是 | 记录名称（`@` 表示根域名） |
 | `value` | string | 是 | 记录值 |
-| `ttl` | int | 是 | TTL 值（秒） |
-| `priority` | int | 条件 | 优先级（MX/SRV 必填） |
+| `ttl` | int | 否 | TTL 值（秒，默认 0） |
 
 **支持的记录类型：**
 
@@ -483,10 +505,10 @@ YAMLOps 按以下顺序加载配置文件：
 1. `secrets.yaml` - 密钥
 2. `isps.yaml` - 服务提供商
 3. `zones.yaml` - 网络区域
-4. `registries.yaml` - Docker 仓库
+4. `services_infra.yaml` - 基础设施服务
 5. `servers.yaml` - 服务器
-6. `services_infra.yaml` - 基础设施服务
-7. `services_biz.yaml` - 业务服务
+6. `services_biz.yaml` - 业务服务
+7. `registries.yaml` - Docker 仓库
 8. `dns.yaml` - DNS 配置
 
 ---

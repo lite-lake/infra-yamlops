@@ -25,13 +25,12 @@ YAMLOps 是一个基于 Go 语言开发的基础设施即代码（IaC）管理�
 - **服务**：Docker Compose 部署
 - **网关**：infra-gate 配置管理
 - **DNS**：域名和记录管理（支持 Cloudflare、阿里云、腾讯云）
-- **SSL 证书**：通过 lite-backend/apps/app-ssl-api 服务管理
 
 ### 1.2 核心特性
 
 | 特性 | 说明 |
 |------|------|
-| 多环境支持 | prod / staging / dev 环境隔离 |
+| 多环境支持 | prod / staging / dev / demo 环境隔离 |
 | Plan/Apply 工作流 | 类似 Terraform 的预览+执行模式 |
 | 密钥引用 | 支持明文和密钥引用两种方式 |
 | 声明式配置 | 通过 YAML 描述期望状态 |
@@ -47,6 +46,7 @@ YAMLOps 是一个基于 Go 语言开发的基础设施即代码（IaC）管理�
 | YAML 解析 | gopkg.in/yaml.v3 |
 | SSH | golang.org/x/crypto/ssh |
 | SFTP | github.com/pkg/sftp |
+| 文件锁 | github.com/gofrs/flock |
 
 ---
 
@@ -63,7 +63,7 @@ YAMLOps 是一个基于 Go 语言开发的基础设施即代码（IaC）管理�
 │                      Application Layer                               │
 │                    (application/)                                    │
 │    Handler 策略模式 + Executor 编排器 + Planner 规划器                 │
-│    + Orchestrator 工作流 + Deployment 生成器                          │
+│    + Orchestrator 工作流 + Generator 生成器                           │
 ├─────────────────────────────────────────────────────────────────────┤
 │                        Domain Layer                                  │
 │                         (domain/)                                    │
@@ -98,8 +98,8 @@ internal/
 │   ├── retry/                      # 重试机制（Config, Option, Do, DoWithResult）
 │   └── errors.go                   # 领域错误（统一定义）
 ├── application/                    # 应用层
-│   ├── handler/                    # 变更处理器（策略模式）
-│   │   ├── types.go                # 依赖接口定义（ISP: DNSDeps, ServiceDeps, CommonDeps）
+│   ├── usecase/                    # 变更处理器 + 执行器 + SSH 连接池
+│   │   ├── types.go                # 依赖接口定义（Handler, DNSDeps, ServiceDeps, CommonDeps, BaseDeps）
 │   │   ├── dns_handler.go          # DNS 记录处理器
 │   │   ├── service_handler.go      # 业务服务处理器
 │   │   ├── service_common.go       # 服务公共逻辑
@@ -107,16 +107,17 @@ internal/
 │   │   ├── server_handler.go       # 服务器处理器
 │   │   ├── noop_handler.go         # 空操作处理器（isp/zone/domain/certificate）
 │   │   ├── registry.go             # 处理器注册表
-│   │   └── utils.go                # 工具函数
-│   ├── usecase/                    # 用例执行器
 │   │   ├── executor.go             # 执行器（支持依赖注入 DIP）
+│   │   ├── change_executor.go      # 变更执行器（并行执行）
 │   │   └── ssh_pool.go             # SSH 连接池
-│   ├── deployment/                 # 部署文件生成器
-│   │   ├── generator.go            # 生成器主入口
-│   │   ├── compose_service.go      # 业务服务 Compose 生成
-│   │   ├── compose_infra.go        # 基础设施服务 Compose 生成
-│   │   ├── gateway.go              # Gateway 配置生成
-│   │   └── utils.go                # 工具函数
+│   ├── generator/                  # 部署文件生成器
+│   │   ├── compose/                # Docker Compose 生成器
+│   │   │   ├── generator.go
+│   │   │   └── types.go
+│   │   ├── gate/                   # infra-gate 配置生成器
+│   │   │   ├── generator.go
+│   │   │   └── types.go
+│   │   └── generator.go            # 生成器主入口
 │   ├── plan/                       # 规划协调层
 │   │   └── planner.go              # Planner 主入口（Option 模式）
 │   └── orchestrator/               # 工作流编排器
@@ -125,22 +126,20 @@ internal/
 │       └── utils.go                # 工具函数
 ├── infrastructure/                 # 基础设施层
 │   ├── persistence/                # 配置加载实现
-│   │   └── config_loader.go        # 配置加载器
+│   │   └── config_loader.go        # 配置加载器（30 秒缓存）
 │   ├── state/                      # 状态存储实现
-│   │   └── file_store.go           # 文件状态存储
-│   ├── dns/                        # DNS 工厂
-│   │   └── factory.go              # DNS Provider 工厂
+│   │   └── file_store.go           # 文件状态存储（flock 文件锁 + 原子写入）
+│   ├── dns/                        # DNS Provider（Cloudflare、阿里云、腾讯云）
+│   │   ├── provider.go             # Provider 类型别名
+│   │   ├── common.go               # DNS 公共逻辑（EnsureRecord、批量操作）
+│   │   ├── factory.go              # DNS Provider 工厂
+│   │   ├── cloudflare.go           # Cloudflare 实现
+│   │   ├── aliyun.go               # 阿里云实现
+│   │   └── tencent.go              # 腾讯云实现
 │   ├── ssh/                        # SSH 客户端
-│   │   ├── client.go               # SSH 客户端
+│   │   ├── client.go               # SSH 客户端（Run、RunWithStdin、StreamRun、Healthy）
 │   │   ├── sftp.go                 # SFTP 文件传输
 │   │   └── shell_escape.go         # Shell 转义
-│   ├── generator/                  # 生成器
-│   │   ├── compose/                # Docker Compose 生成器
-│   │   │   ├── generator.go
-│   │   │   └── types.go
-│   │   └── gate/                   # infra-gate 配置生成器
-│   │       ├── generator.go
-│   │       └── types.go
 │   ├── network/                    # Docker 网络管理
 │   │   └── manager.go
 │   ├── registry/                   # 镜像仓库管理
@@ -168,7 +167,7 @@ internal/
 │       ├── dns_pull.go             # DNS Pull 命令
 │       ├── app.go                  # App 命令
 │       ├── server_cmd.go           # Server 命令
-│       ├── service_cmd.go          # Service 命令
+│       ├── service_cmd.go          # Service 命令（deploy/stop/restart/cleanup）
 │       ├── config_cmd.go           # Config 命令
 │       ├── tui.go                  # TUI 主入口
 │       ├── tui_model.go            # TUI 数据模型
@@ -189,18 +188,11 @@ internal/
 ├── constants/                      # 常量定义
 │   └── constants.go                # 路径、格式等常量
 ├── environment/                    # 服务器环境管理
-│   ├── checker.go                  # 环境检查器
+│   ├── checker.go                  # 环境检查器（SSH 连接、Sudo、Docker、APT 源、Registry）
 │   ├── syncer.go                   # 环境同步器
-│   ├── templates.go                # 配置模板
+│   ├── templates.go                # APT 源配置模板
 │   └── types.go                    # 类型定义
 ├── version/                        # 版本信息
-└── providers/                      # 外部服务提供者
-    └── dns/                        # DNS 提供者
-        ├── provider.go             # DNS Provider 接口
-        ├── common.go               # DNS 公共逻辑
-        ├── cloudflare.go           # Cloudflare 实现
-        ├── aliyun.go               # 阿里云实现
-        └── tencent.go              # 腾讯云实现
 userdata/{env}/                     # 用户配置文件
 deployments/                        # 生成的部署文件（git-ignored）
 ```
@@ -218,7 +210,7 @@ Config (聚合根)
 ├── Registries[]        # Docker 镜像仓库
 ├── Zones[]             # 网络区域
 ├── Servers[]           # 服务器
-├── InfraServices[]     # 基础设施服务 (gateway/ssl)
+├── InfraServices[]     # 基础设施服务 (gateway)
 ├── Services[]          # 业务服务
 └── Domains[]           # 域名
 ```
@@ -244,7 +236,7 @@ secrets:
 isps:
   - name: aliyun
     type: aliyun                    # aliyun | cloudflare | tencent
-    services: [server, domain, dns] # server | domain | dns | certificate
+    services: [server, domain, dns] # server | domain | dns
     credentials:
       access_key_id: {secret: aliyun_ak}
       access_key_secret: {secret: aliyun_sk}
@@ -321,9 +313,6 @@ infra_services:
     ports:
       http: 80
       https: 443
-    config:
-      source: volumes://infra-gate
-      sync: true
     ssl:
       mode: remote             # local | remote
       endpoint: https://ssl.litelake.com/cert/json
@@ -332,6 +321,10 @@ infra_services:
       whitelist:
         - 192.168.0.0/16
     log_level: 1
+    notification:
+      enabled: true
+      url: https://hooks.example.com/notify
+      timeout: 10
 ```
 
 #### 3.2.7 BizService（业务服务）
@@ -403,6 +396,8 @@ password: {secret: db_password}
 
 #### 3.3.2 Change（变更）
 
+字段为 unexported，通过 getter 方法访问：
+
 ```go
 type ChangeType int
 const (
@@ -413,24 +408,56 @@ const (
 )
 
 type Change struct {
-    Type     ChangeType    // 变更类型
-    Entity   string        // 实体类型名称
-    Name     string        // 实体名称
-    OldState interface{}   // 旧状态
-    NewState interface{}   // 新状态
-    Actions  []string      // 操作描述列表
+    changeType   ChangeType
+    entity       string
+    name         string
+    oldState     interface{}
+    newState     interface{}
+    actions      []string
+    remoteExists bool
 }
+
+// Getter 方法
+func (c *Change) Type() ChangeType      // 变更类型
+func (c *Change) Entity() string        // 实体类型名称
+func (c *Change) Name() string          // 实体名称
+func (c *Change) OldState() interface{} // 旧状态
+func (c *Change) NewState() interface{} // 新状态
+func (c *Change) Actions() []string     // 操作描述列表
+func (c *Change) RemoteExists() bool    // 远程是否存在
 ```
 
 #### 3.3.3 Scope（作用域）
 
 ```go
 type Scope struct {
-    Domain  string  // 域名过滤
-    Zone    string  // 区域过滤
-    Server  string  // 服务器过滤
-    Service string  // 服务过滤
+    domain        string
+    zone          string
+    server        string
+    service       string
+    services      []string
+    infraServices []string
+    forceDeploy   bool
+    dnsOnly       bool
 }
+
+// Getter 方法
+func (s *Scope) Domain() string          // 域名过滤
+func (s *Scope) Zone() string            // 区域过滤
+func (s *Scope) Server() string          // 服务器过滤
+func (s *Scope) Service() string         // 服务过滤
+func (s *Scope) Services() []string      // 服务列表过滤
+func (s *Scope) InfraServices() []string // 基础设施服务列表过滤
+func (s *Scope) ForceDeploy() bool       // 强制部署
+func (s *Scope) DNSOnly() bool           // 仅 DNS
+
+// 方法
+func (s *Scope) Matches(zone, server, service, domain string) bool
+func (s *Scope) MatchesInfra(zone, server, infraService string) bool
+func (s *Scope) IsEmpty() bool
+func (s *Scope) HasServicesOnly() bool
+func (s *Scope) HasInfraServicesOnly() bool
+func (s *Scope) HasAnyServiceSelection() bool
 ```
 
 ### 3.4 实体层级关系
@@ -473,6 +500,14 @@ type Handler interface {
     EntityType() string
     Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error)
 }
+
+type Result struct {
+    Change   *valueobject.Change
+    Success  bool
+    Error    error
+    Output   string
+    Warnings []string
+}
 ```
 
 ### 4.3 依赖注入接口
@@ -489,7 +524,7 @@ type DNSDeps interface {
 
 // 服务操作依赖
 type ServiceDeps interface {
-    SSHClient(server string) (SSHClient, error)
+    SSHClient(server string) (contract.SSHClient, error)
     ServerInfo(name string) (*ServerInfo, bool)
     Server(name string) (*entity.Server, bool)
     WorkDir() string
@@ -516,15 +551,17 @@ type DepsProvider interface {
 
 ```go
 type BaseDeps struct {
-    sshClient  SSHClient
-    sshError   error
-    dnsFactory DNSFactory
-    secrets    map[string]string
-    domains    map[string]*entity.Domain
-    isps       map[string]*entity.ISP
-    servers    map[string]*ServerInfo
-    workDir    string
-    env        string
+    sshClient      contract.SSHClient
+    sshError       error
+    dnsFactory     DNSFactory
+    secrets        map[string]string
+    domains        map[string]*entity.Domain
+    isps           map[string]*entity.ISP
+    servers        map[string]*ServerInfo
+    serverEntities map[string]*entity.Server
+    registries     map[string]*entity.Registry
+    workDir        string
+    env            string
 }
 ```
 
@@ -534,61 +571,44 @@ type BaseDeps struct {
 |---------|--------|------|
 | DNSHandler | dns_record | DNS 记录 CRUD |
 | ServiceHandler | service | Docker Compose 服务部署 |
-| InfraServiceHandler | infra_service | 基础设施服务部署 (gateway/ssl) |
+| InfraServiceHandler | infra_service | 基础设施服务部署 (gateway) |
 | ServerHandler | server | 服务器环境同步（含 Registry 登录） |
-| NoopHandler | isp/zone/domain/registry | 空操作（非部署实体，跳过） |
+| NoopHandler | isp/zone/domain/certificate | 空操作（非部署实体，跳过） |
 
 ### 4.6 Executor 执行器
 
-采用配置结构支持依赖注入：
+Executor 委托给 ChangeExecutor 执行变更：
 
 ```go
-type ExecutorConfig struct {
-    Registry   RegistryInterface   // 处理器注册表
-    SSHPool    SSHPoolInterface    // SSH 连接池
-    DNSFactory DNSFactoryInterface // DNS 工厂
-    Plan       *valueobject.Plan   // 执行计划
-    Env        string              // 环境名称
-}
-
 type Executor struct {
-    plan       *valueobject.Plan
-    registry   RegistryInterface
-    sshPool    SSHPoolInterface
-    dnsFactory DNSFactoryInterface
-    secrets    map[string]string
-    servers    map[string]*ServerInfo
-    env        string
-    domains    map[string]*entity.Domain
-    isps       map[string]*entity.ISP
-    workDir    string
+    handlerRegistry *Registry
+    changeExecutor  *ChangeExecutor
+    plan            *valueobject.Plan
+    env             string
+}
+```
+
+**并行执行**：ChangeExecutor 将变更按服务器分组，不同服务器的变更在独立的 goroutine 中并行执行。DNS/ISP/Zone 类型的变更归入 `dns` 组。同一服务器组内的变更顺序执行。
+
+```go
+type ChangeExecutor struct {
+    plan           *valueobject.Plan
+    sshPool        SSHPoolInterface
+    secrets        map[string]string
+    servers        map[string]*ServerInfo
+    serverEntities map[string]*entity.Server
+    env            string
+    domains        map[string]*entity.Domain
+    isps           map[string]*entity.ISP
+    workDir        string
+    dnsFactory     DNSFactoryInterface
 }
 
-func NewExecutor(cfg *ExecutorConfig) *Executor {
-    // 支持默认值和 nil 安全
-    if cfg == nil {
-        cfg = &ExecutorConfig{}
-    }
-    // 自动初始化默认组件
-    ...
-}
-
-func (e *Executor) Apply() []*handler.Result {
-    e.registerHandlers()  // 注册所有 Handler
-    
-    for _, ch := range e.plan.Changes {
-        h, ok := e.registry.Get(ch.Entity)
-        result := h.Apply(ctx, ch, e.buildDeps(ch))
-        results = append(results, result)
-    }
-    
-    e.sshPool.CloseAll()
-    return results
-}
-
-func (e *Executor) FilterPlanByServer(serverName string) *valueobject.Plan {
-    // 按服务器过滤变更计划
-    ...
+func (e *ChangeExecutor) Apply(registry handlerRegistry) []*Result {
+    // 1. 按服务器分组变更
+    // 2. DNS 变更排序：Delete → Update → Create
+    // 3. 每组启动一个 goroutine 并行执行
+    // 4. 汇总结果，关闭 SSH 连接池
 }
 ```
 
@@ -596,12 +616,12 @@ func (e *Executor) FilterPlanByServer(serverName string) *valueobject.Plan {
 
 ```go
 type RegistryInterface interface {
-    Register(h handler.Handler)
-    Get(entityType string) (handler.Handler, bool)
+    Register(h Handler)
+    Get(entityType string) (Handler, bool)
 }
 
 type SSHPoolInterface interface {
-    Get(info *handler.ServerInfo) (handler.SSHClient, error)
+    Get(info *ServerInfo) (contract.SSHClient, error)
     CloseAll()
 }
 
@@ -624,40 +644,49 @@ func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, er
 func (l *ConfigLoader) Validate(cfg *entity.Config) error
 ```
 
-**加载顺序**：
+**加载顺序**（带 30 秒缓存）：
 1. secrets.yaml
 2. isps.yaml
 3. zones.yaml
-4. registries.yaml
+4. services_infra.yaml
 5. servers.yaml
-6. services_infra.yaml
-7. services_biz.yaml
+6. services_biz.yaml
+7. registries.yaml
 8. dns.yaml
 
 ### 5.2 状态存储
 
 ```go
 type FileStore struct {
-    path string
+    path  string
+    flock *flock.Flock  // github.com/gofrs/flock 文件锁
 }
 
 func NewFileStore(path string) *FileStore
-func (s *FileStore) Load() (*repository.DeploymentState, error)
-func (s *FileStore) Save(state *repository.DeploymentState) error
+func (s *FileStore) Load(ctx context.Context, env string) (*repository.DeploymentState, error)
+func (s *FileStore) Save(ctx context.Context, env string, state *repository.DeploymentState) error
 ```
+
+- **文件锁**：使用 `gofrs/flock` 实现进程级文件锁，防止并发读写冲突
+- **原子写入**：先写入临时文件 `.state/{env}.yaml.tmp`，再 `os.Rename` 替换
+- **存储路径**：`{configDir}/.state/{env}.yaml`
 
 ### 5.3 DNS 提供者
 
 #### 5.3.1 Provider 接口
 
 ```go
-type Provider interface {
+type DNSProvider interface {
     Name() string
-    ListDomains() ([]string, error)
-    ListRecords(domain string) ([]DNSRecord, error)
-    CreateRecord(domain string, record *DNSRecord) error
-    UpdateRecord(domain string, recordID string, record *DNSRecord) error
-    DeleteRecord(domain string, recordID string) error
+    ListDomains(ctx context.Context) ([]string, error)
+    ListRecords(ctx context.Context, domain string) ([]DNSRecord, error)
+    CreateRecord(ctx context.Context, domain string, record *DNSRecord) error
+    DeleteRecord(ctx context.Context, domain string, recordID string) error
+    UpdateRecord(ctx context.Context, domain string, recordID string, record *DNSRecord) error
+    GetRecordsByTypes(ctx context.Context, domain, recordType string) ([]DNSRecord, error)
+    BatchCreateRecords(ctx context.Context, domain string, records []*DNSRecord) error
+    BatchDeleteRecords(ctx context.Context, domain string, recordIDs []string) error
+    EnsureRecord(ctx context.Context, domain string, record *DNSRecord) error
 }
 
 type DNSRecord struct {
@@ -672,23 +701,24 @@ type DNSRecord struct {
 #### 5.3.2 公共逻辑 (common.go)
 
 ```go
-// 确保记录存在，自动判断创建或更新
-func EnsureRecord(provider Provider, domain string, desired *DNSRecord) error {
-    records, err := provider.ListRecords(domain)
-    if err != nil {
-        return fmt.Errorf("list records: %w", err)
-    }
-    
+// 确保记录存在，自动判断创建或更新（带重试）
+func EnsureRecord(ctx context.Context, provider Provider, domain string, desired *DNSRecord, retryCfg *RetryConfig) error {
+    records, err := provider.ListRecords(ctx, domain)
+    // ...
     for _, existing := range records {
         if existing.Type == desired.Type && existing.Name == desired.Name {
             if existing.Value == desired.Value && existing.TTL == desired.TTL {
                 return nil  // 无需变更
             }
-            return provider.UpdateRecord(domain, existing.ID, desired)
+            return provider.UpdateRecord(ctx, domain, existing.ID, desired)
         }
     }
-    return provider.CreateRecord(domain, desired)
+    return provider.CreateRecord(ctx, domain, desired)
 }
+
+// 批量操作辅助函数
+func BatchCreateRecordsHelper(ctx context.Context, provider Provider, domainName string, records []*DNSRecord) error
+func BatchDeleteRecordsHelper(ctx context.Context, provider Provider, domainName string, recordIDs []string) error
 ```
 
 #### 5.3.3 提供商实现
@@ -710,16 +740,37 @@ func EnsureRecord(provider Provider, domain string, desired *DNSRecord) error {
 
 ```go
 type Client struct {
-    client *ssh.Client
-    user   string
+    client           *ssh.Client
+    user             string
+    sftp             sftpClient
+    lastHealthCheck  time.Time
+    healthCheckCache bool
 }
 
 // 命令执行
 func (c *Client) Run(cmd string) (stdout, stderr string, err error)
+func (c *Client) RunWithStdin(stdin string, cmd string) (stdout, stderr string, err error)
+func (c *Client) StreamRun(ctx context.Context, cmd string, stdoutChan, stderrChan chan string) error
+
+// 健康检查（30 秒缓存）
+func (c *Client) Healthy() bool
 
 // 文件传输
+func (c *Client) UploadFile(localPath, remotePath string) error
 func (c *Client) UploadFileSudo(localPath, remotePath string) error
+func (c *Client) UploadFileSudoWithPerm(localPath, remotePath, perm string) error
+
+// 目录操作
+func (c *Client) MkdirAll(path string) error
+func (c *Client) MkdirAllSudo(path string) error
 func (c *Client) MkdirAllSudoWithPerm(path, perm string) error
+
+// 文件检查
+func (c *Client) FileExists(path string) (bool, error)
+
+// 连接管理
+func (c *Client) Close() error
+func NewClientWithRetry(ctx context.Context, host string, port int, user, password string, cfg *SSHRetryConfig) (*Client, error)
 ```
 
 ### 5.6 Compose 生成器
@@ -745,7 +796,7 @@ networks:
   yamlops-{env}: {}
 ```
 
-### 5.6 Gate 生成器
+### 5.7 Gate 生成器
 
 生成 infra-gate 配置格式：
 
@@ -787,9 +838,9 @@ hosts:
 ```go
 type Planner struct {
     config        *entity.Config
-    differService *service.DifferService  // 变更检测服务
-    deployGen     *deployment.Generator   // 部署文件生成器
-    stateStore    *state.FileStore        // 状态存储
+    deployGen     DeploymentGenerator      // interface
+    stateRepo     repository.StateRepository // interface
+    differService *service.DifferService
     outputDir     string
     env           string
 }
@@ -798,24 +849,25 @@ type Planner struct {
 ### 6.2 Plan 工作流程
 
 ```
-1. 加载配置 (ConfigLoader)
+1. LoadAndValidate (加载 + 验证配置)
    └─→ 从 userdata/{env}/ 读取所有 YAML 文件
 
-2. 验证配置 (Validator)
-   └─→ 引用完整性检查、端口冲突检测、域名冲突检测
+2. ResolveSecrets (解析密钥引用)
+   └─→ 将 {secret: xxx} 引用替换为实际值
 
-3. 生成部署文件 (Generator)
+3. GenerateDeploymentsWithScope (生成部署文件)
    ├─→ generateServiceComposes()
    ├─→ generateInfraServiceComposes()
    └─→ generateGatewayConfigs()
 
-4. 生成计划 (DifferService)
+4. FetchRemoteState (获取远程状态)
+   └─→ 通过 SSH 获取服务器当前状态
+
+5. Planner.Plan (生成计划)
    ├─→ PlanISPs()
    ├─→ PlanZones()
    ├─→ PlanDomains()
    ├─→ PlanRecords()
-   ├─→ PlanCertificates()
-   ├─→ PlanRegistries()
    ├─→ PlanServers()
    ├─→ PlanInfraServices()
    └─→ PlanServices()
@@ -892,6 +944,11 @@ yamlops
 │   ├── setup                # 完整设置（check + sync）
 │   ├── check                # 检查服务器状态
 │   └── sync                 # 同步服务器配置
+├── service
+│   ├── deploy               # 部署服务
+│   ├── stop                 # 停止服务
+│   ├── restart              # 重启服务
+│   └── cleanup              # 清理孤立容器和目录
 ├── config
 │   ├── list [type]          # 列出配置项
 │   └── show <type> <name>   # 显示配置详情
@@ -923,6 +980,10 @@ yamlops
 | A/N | 全选/全不选 |
 | p | 生成计划 |
 | r | 刷新配置 |
+| ? | 帮助 |
+| x | 取消当前操作 |
+| Tab | 切换视图 |
+| s | 同步 |
 | Esc | 返回 |
 | q/Ctrl+C | 退出 |
 
@@ -945,7 +1006,9 @@ userdata/
 │   └── dns.yaml
 ├── staging/                 # 预发布环境
 │   └── ...
-└── dev/                     # 开发环境
+├── dev/                     # 开发环境
+│   └── ...
+└── demo/                    # 演示环境
     └── ...
 ```
 
@@ -1054,14 +1117,30 @@ yamlops app plan -e prod --server prod-server-1
 yamlops app apply -e prod --server prod-server-1
 ```
 
-### 10.5 清理操作
+### 10.5 服务操作
+
+```bash
+# 部署服务
+yamlops service deploy -e prod --service api-server
+
+# 停止服务
+yamlops service stop -e prod --service api-server
+
+# 重启服务
+yamlops service restart -e prod --service api-server
+
+# 清理孤立资源
+yamlops service cleanup -e prod
+```
+
+### 10.6 清理操作
 
 ```bash
 # 清理孤立资源
 yamlops clean -e prod
 ```
 
-### 10.6 交互模式
+### 10.7 交互模式
 
 ```bash
 # 启动 TUI 界面
@@ -1076,6 +1155,8 @@ yamlops -e prod
 
 Domain 层统一定义在 `internal/domain/errors.go`：
 
+#### 验证错误
+
 | 错误 | 说明 |
 |------|------|
 | ErrInvalidName | 无效名称 |
@@ -1088,6 +1169,8 @@ Domain 层统一定义在 `internal/domain/errors.go`：
 | ErrInvalidTTL | 无效 TTL |
 | ErrInvalidDuration | 无效时长 |
 | ErrInvalidType | 无效类型 |
+| ErrInvalidPath | 无效路径 |
+| ErrInvalidFormat | 无效格式 |
 | ErrEmptyValue | 空值 |
 | ErrRequired | 必填字段缺失 |
 | ErrMissingSecret | 缺少密钥引用 |
@@ -1098,18 +1181,100 @@ Domain 层统一定义在 `internal/domain/errors.go`：
 | ErrHostnameConflict | 主机名冲突 |
 | ErrDNSSubdomainConflict | DNS 子域名冲突 |
 
+#### SSH 错误
+
+| 错误 | 说明 |
+|------|------|
+| ErrSSHConnectFailed | SSH 连接失败 |
+| ErrSSHAuthFailed | SSH 认证失败 |
+| ErrSSHSessionFailed | SSH 会话创建失败 |
+| ErrSSHCommandFailed | SSH 命令执行失败 |
+| ErrSSHHostKeyMismatch | SSH 主机密钥不匹配 |
+| ErrSSHFileTransfer | SSH 文件传输失败 |
+| ErrSSHClientNotAvailable | SSH 客户端不可用 |
+
+#### 配置错误
+
+| 错误 | 说明 |
+|------|------|
+| ErrConfigReadFailed | 配置读取失败 |
+| ErrConfigParseFailed | 配置解析失败 |
+| ErrConfigValidateFail | 配置验证失败 |
+| ErrConfigNotFound | 配置未找到 |
+
+#### 状态错误
+
+| 错误 | 说明 |
+|------|------|
+| ErrStateReadFailed | 状态读取失败 |
+| ErrStateWriteFailed | 状态写入失败 |
+| ErrStateSerializeFail | 状态序列化失败 |
+| ErrStateNotFound | 状态未找到 |
+
+#### DNS 错误
+
+| 错误 | 说明 |
+|------|------|
+| ErrDNSError | DNS 操作失败 |
+| ErrDNSRecordExists | DNS 记录已存在 |
+| ErrDNSRecordNotFound | DNS 记录未找到 |
+| ErrDNSDomainNotFound | DNS 域名未找到 |
+
+#### 网络错误
+
+| 错误 | 说明 |
+|------|------|
+| ErrNetworkTimeout | 网络超时 |
+| ErrNetworkUnreachable | 网络不可达 |
+| ErrDNSResolveFailed | DNS 解析失败 |
+| ErrConnectionRefused | 连接被拒绝 |
+| ErrConnectionReset | 连接重置 |
+
+#### 文件错误
+
+| 错误 | 说明 |
+|------|------|
+| ErrFileReadFailed | 文件读取失败 |
+| ErrFileWriteFailed | 文件写入失败 |
+| ErrFileNotFound | 文件未找到 |
+| ErrTempFileFailed | 临时文件操作失败 |
+| ErrDirectoryCreateFailed | 目录创建失败 |
+| ErrDirectoryRemoveFailed | 目录删除失败 |
+
+#### Compose 错误
+
+| 错误 | 说明 |
+|------|------|
+| ErrComposeGenerateFailed | Compose 生成失败 |
+| ErrComposeSyncFailed | Compose 同步失败 |
+| ErrDockerComposeFailed | Docker Compose 执行失败 |
+| ErrServiceInvalid | 服务无效 |
+
+#### 其他错误
+
+| 错误 | 说明 |
+|------|------|
+| ErrISPNotFound | ISP 未找到 |
+| ErrISPNoDNSService | ISP 不提供 DNS 服务 |
+| ErrServerNotRegistered | 服务器未注册 |
+| ErrRegistryNotFound | Registry 未找到 |
+| ErrRegistryLoginFailed | Registry 登录失败 |
+| ErrUnsupportedProvider | 不支持的提供商类型 |
+| ErrMissingCredential | 缺少凭据 |
+
 ### B. 部署状态
 
 ```go
 type DeploymentState struct {
-    Services      map[string]*entity.BizService
-    InfraServices map[string]*entity.InfraService
-    Servers       map[string]*entity.Server
+    Secrets       map[string]string
+    Registries    map[string]*entity.Registry
+    ISPs          map[string]*entity.ISP
     Zones         map[string]*entity.Zone
+    Servers       map[string]*entity.Server
+    InfraServices map[string]*entity.InfraService
+    Services      map[string]*entity.BizService
     Domains       map[string]*entity.Domain
     Records       map[string]*entity.DNSRecord
-    ISPs          map[string]*entity.ISP
-    Registries    map[string]*entity.Registry
 }
 ```
 
@@ -1131,20 +1296,24 @@ type DeploymentState struct {
 
 #### D.1 Handler 依赖接口隔离 (ISP)
 
-Handler 依赖拆分为专注的接口，定义在 `internal/application/handler/types.go`：
+Handler 依赖拆分为专注的接口，定义在 `internal/application/usecase/types.go`：
 
 ```go
 type DNSDeps interface {
-    DNSProvider(ispName string) (DNSProvider, error)
+    DNSProvider(ispName string) (contract.DNSProvider, error)
     Domain(name string) (*entity.Domain, bool)
     ISP(name string) (*entity.ISP, bool)
 }
 
 type ServiceDeps interface {
-    SSHClient(server string) (SSHClient, error)
+    SSHClient(server string) (contract.SSHClient, error)
     ServerInfo(name string) (*ServerInfo, bool)
+    Server(name string) (*entity.Server, bool)
     WorkDir() string
     Env() string
+    RegistryManager(server string) (*registry.Manager, error)
+    GetAllRegistries() []*entity.Registry
+    Secrets() map[string]string
 }
 
 type CommonDeps interface {
@@ -1186,17 +1355,21 @@ type Workflow struct {
     stateFetcher *StateFetcher
 }
 
+func (w *Workflow) Env() string
 func (w *Workflow) LoadConfig(ctx context.Context) (*entity.Config, error)
 func (w *Workflow) LoadAndValidate(ctx context.Context) (*entity.Config, error)
 func (w *Workflow) ResolveSecrets(cfg *entity.Config) error
 func (w *Workflow) CreatePlanner(cfg *entity.Config, outputDir string) *plan.Planner
 func (w *Workflow) Plan(ctx context.Context, outputDir string, scope *valueobject.Scope) (*valueobject.Plan, *entity.Config, error)
 func (w *Workflow) GenerateDeployments(cfg *entity.Config, outputDir string) error
+func (w *Workflow) GenerateDeploymentsWithScope(cfg *entity.Config, outputDir string, scope *valueobject.Scope) error
+func (w *Workflow) FetchRemoteState(ctx context.Context, cfg *entity.Config) *repository.DeploymentState
+func (w *Workflow) SaveState(ctx context.Context, cfg *entity.Config) error
 ```
 
-#### D.4 Deployment 生成器模块
+#### D.4 Generator 生成器模块
 
-`internal/application/deployment/` 负责生成部署文件：
+`internal/application/generator/` 负责生成部署文件：
 
 ```go
 type Generator struct {
@@ -1207,6 +1380,7 @@ type Generator struct {
 }
 
 func (g *Generator) Generate(config *entity.Config) error
+func (g *Generator) GenerateWithScope(config *entity.Config, scope *valueobject.Scope) error
 ```
 
 生成内容：
@@ -1220,17 +1394,21 @@ func (g *Generator) Generate(config *entity.Config) error
 ```go
 type Planner struct {
     config        *entity.Config
+    deployGen     DeploymentGenerator      // interface
+    stateRepo     repository.StateRepository // interface
     differService *service.DifferService
-    deployGen     *deployment.Generator
-    stateStore    *state.FileStore
     outputDir     string
     env           string
 }
 
-type Option func(*Planner)
+type PlannerOption func(*Planner)
 
-func WithDifferService(ds *service.DifferService) Option
-func WithStateStore(ss *state.FileStore) Option
+func WithConfig(cfg *entity.Config) PlannerOption
+func WithEnv(env string) PlannerOption
+func WithState(st *DeploymentState) PlannerOption
+func WithStateRepo(repo repository.StateRepository) PlannerOption
+func WithGenerator(gen DeploymentGenerator) PlannerOption
+func WithOutputDir(dir string) PlannerOption
 ```
 
 #### D.6 Retry 重试机制
@@ -1274,9 +1452,9 @@ func (r *SecretResolver) ResolveAll(cfg *entity.Config) error
 
 | 文件 | 职责 |
 |------|------|
-| checker.go | 检查 Docker、Docker Compose、APT 源、Registry 登录状态 |
+| checker.go | 检查 SSH 连接、Sudo 免密、Docker、Docker Compose、APT 源、Registry 登录状态 |
 | syncer.go | 同步服务器环境配置 |
-| templates.go | 配置模板（Docker daemon.json 等） |
+| templates.go | APT 源配置模板 |
 | types.go | 类型定义（CheckResult、CheckStatus） |
 
 #### D.9 TUI 模块拆分
@@ -1302,11 +1480,40 @@ TUI 按功能拆分为独立文件，提高可维护性：
 
 ```go
 const (
-    RemoteBaseDir       = "/data/yamlops"
-    ServiceDirPattern   = "yo-%s-%s"
-    TempFilePattern     = "yamlops-*.yml"
-    RemoteTempFileFmt   = "/tmp/yamlops-%d"
-    ServicePrefixFormat = "yo-%s-%s"
+    RemoteBaseDir     = "/data/yamlops"
+    ServiceNameFormat = "yo-%s-%s"
+    TempFilePattern   = "yamlops-*.yml"
+    RemoteTempFileFmt = "/tmp/yamlops-%d"
+    StateDir          = ".state"
+    StateFileFormat   = "%s.yaml"
+)
+
+// 默认端口
+const (
+    DefaultHTTPPort  = 80
+    DefaultHTTPSPort = 443
+)
+
+// Compose 配置
+const (
+    ComposeVersion       = "3.8"
+    DefaultRestartPolicy = "unless-stopped"
+)
+
+// SSH 配置
+const (
+    DefaultSSHTimeoutSec           = 30
+    DefaultSSHRetryAttempts        = 3
+    DefaultSSHRetryInitialDelaySec = 1
+    DefaultSSHRetryMaxDelaySec     = 30
+)
+
+// 文件权限
+const (
+    FilePermissionOwnerRW = 0600
+    DirPermissionOwner    = 0700
+    DefaultRemoteFilePerm = "644"
+    DefaultRemoteDirPerm  = "755"
 )
 ```
 
@@ -1323,6 +1530,14 @@ var (
 
 func RequiredField(field string) error {
     return fmt.Errorf("%w: %s", ErrRequired, field)
+}
+
+func WrapOp(op string, err error) error {
+    return fmt.Errorf("%s: %w", op, err)
+}
+
+func WrapEntity(entity, name string, err error) error {
+    return fmt.Errorf("%s[%s]: %w", entity, name, err)
 }
 ```
 

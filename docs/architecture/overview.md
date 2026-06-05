@@ -12,8 +12,8 @@ YAMLOps 采用领域驱动设计（DDD）分层架构，实现关注点分离和
 ├─────────────────────────────────────────────────────────────────────┤
 │                      Application Layer                               │
 │                    (application/)                                    │
-│    Handler 策略模式 + Executor 编排器 + Planner 规划器                 │
-│    + Orchestrator 工作流 + Deployment 生成器                          │
+│    Handler 策略模式 + ChangeExecutor 并行执行 + Executor 编排器        │
+│    + Planner 规划器 + Orchestrator 工作流 + Generator 生成器           │
 ├─────────────────────────────────────────────────────────────────────┤
 │                        Domain Layer                                  │
 │                         (domain/)                                    │
@@ -21,7 +21,7 @@ YAMLOps 采用领域驱动设计（DDD）分层架构，实现关注点分离和
 ├─────────────────────────────────────────────────────────────────────┤
 │                    Infrastructure Layer                              │
 │                     (infrastructure/)                                │
-│    配置加载 + DNS Factory + 状态存储 + SSH + 生成器 + 网络 + 密钥       │
+│    配置加载 + DNS Factory + 状态存储 + SSH + 网络 + 密钥               │
 │    + 镜像仓库 + 日志                                                  │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -58,7 +58,7 @@ Interface → Application → Domain ← Infrastructure
 **组件：**
 - `root.go` - 根命令和全局标志
 - `plan.go`, `apply.go`, `validate.go` - 核心命令
-- `dns.go`, `server_cmd.go`, `app.go` - 领域命令
+- `dns.go`, `server_cmd.go`, `app.go`, `service_cmd.go` - 领域命令
 - `tui*.go` - TUI 相关组件
 
 ---
@@ -70,6 +70,7 @@ Interface → Application → Domain ← Infrastructure
 **职责：**
 - 用例编排和执行
 - Handler 策略模式
+- 并行变更执行（按服务器分组）
 - 部署文件生成
 - 工作流编排
 
@@ -77,9 +78,8 @@ Interface → Application → Domain ← Infrastructure
 
 | 目录 | 职责 |
 |------|------|
-| `handler/` | 变更处理器（策略模式） |
-| `usecase/` | Executor 执行器、SSH 连接池 |
-| `deployment/` | Docker Compose 和 Gateway 配置生成 |
+| `usecase/` | Handler 实现、Executor、ChangeExecutor、SSHPool、Handler Registry |
+| `generator/` | Docker Compose 和 infra-gate 配置生成 |
 | `plan/` | Planner 规划器 |
 | `orchestrator/` | 工作流编排器 |
 
@@ -109,6 +109,7 @@ Interface → Application → Domain ← Infrastructure
 | `valueobject/` | 值对象（SecretRef, Change, Scope, Plan） |
 | `repository/` | 仓储接口（ConfigLoader, StateRepository） |
 | `service/` | 领域服务（Validator, DifferService） |
+| `contract/` | 接口契约（DNSProvider, SSHClient, Handler） |
 | `retry/` | 重试机制（Option 模式） |
 | `errors.go` | 统一领域错误定义 |
 
@@ -128,12 +129,14 @@ Interface → Application → Domain ← Infrastructure
 
 | 目录 | 职责 |
 |------|------|
-| `persistence/` | 配置加载器实现 |
-| `state/` | 文件状态存储 |
-| `ssh/` | SSH 客户端、SFTP |
-| `dns/` | DNS Provider 工厂 |
+| `persistence/` | 配置加载器实现（带 30 秒缓存） |
+| `state/` | 文件状态存储（带文件锁、原子写入） |
+| `ssh/` | SSH 客户端、SFTP、Shell 转义 |
+| `dns/` | DNS Provider 工厂（Cloudflare、阿里云、腾讯云） |
 | `secrets/` | 密钥解析器 |
-| `logger/` | 日志基础设施 |
+| `logger/` | 日志基础设施（slog、上下文传播、指标） |
+| `network/` | Docker 网络管理（通过 SSH） |
+| `registry/` | Docker 镜像仓库管理（通过 SSH） |
 
 ---
 
@@ -172,6 +175,11 @@ Interface → Application → Domain ← Infrastructure
                            ▼
                     ┌─────────────┐
                     │  Executor   │
+                    └─────────────┘
+                           │
+                           ▼
+                    ┌─────────────┐
+                    │ChangeExecutor│ (按服务器分组并行)
                     └─────────────┘
                            │
             ┌──────────────┼──────────────┐
@@ -231,7 +239,7 @@ func NewProvider(isp *entity.ISP, secrets map[string]string) (Provider, error) {
 
 ### 3. 依赖注入 (Dependency Injection)
 
-**应用：** Executor 配置
+**应用：** Executor 和 ChangeExecutor 配置
 
 ```go
 type ExecutorConfig struct {
@@ -243,51 +251,33 @@ type ExecutorConfig struct {
 }
 
 func NewExecutor(cfg *ExecutorConfig) *Executor {
-    if cfg == nil {
-        cfg = &ExecutorConfig{}
-    }
-    return &Executor{
-        registry:   cfg.Registry,
-        sshPool:    cfg.SSHPool,
-        dnsFactory: cfg.DNSFactory,
-        plan:       cfg.Plan,
-        env:        cfg.Env,
-    }
+    // 自动初始化默认组件，支持 nil 安全
 }
 ```
 
 ### 4. 接口隔离 (Interface Segregation)
 
-**应用：** Handler 依赖接口
+**应用：** Handler 依赖接口（领域层 vs 应用层）
 
 ```go
-type DNSDeps interface {
-    DNSProvider(ispName string) (DNSProvider, error)
-    Domain(name string) (*entity.Domain, bool)
-    ISP(name string) (*entity.ISP, bool)
-}
-
-type ServiceDeps interface {
-    SSHClient(server string) (SSHClient, error)
-    ServerInfo(name string) (*ServerInfo, bool)
-    WorkDir() string
-    Env() string
-}
-
-type CommonDeps interface {
-    ResolveSecret(ref *valueobject.SecretRef) (string, error)
-}
-
+// 领域层契约（contract/handler.go）- 最小接口
 type DepsProvider interface {
-    DNSDeps
-    ServiceDeps
+    DNSDeps     // DNSProvider(ispName string)
+    ServiceDeps // SSHClient(server string)
+    CommonDeps  // ResolveSecret(ref *SecretRef)
+}
+
+// 应用层实现（usecase/types.go）- 扩展接口
+type DepsProvider interface {
+    DNSDeps     // + Domain(), ISP()
+    ServiceDeps // + ServerInfo(), Server(), WorkDir(), Env(), RegistryManager(), GetAllRegistries(), Secrets()
     CommonDeps
 }
 ```
 
 ### 5. Option 模式
 
-**应用：** Planner 和 Retry 配置
+**应用：** Planner、Retry、BaseDeps 配置
 
 ```go
 type Option func(*Config)
@@ -296,16 +286,12 @@ func WithMaxAttempts(n int) Option {
     return func(c *Config) { c.MaxAttempts = n }
 }
 
-func WithInitialDelay(d time.Duration) Option {
-    return func(c *Config) { c.InitialDelay = d }
-}
-
 func Do(ctx context.Context, fn func() error, opts ...Option) error {
     cfg := DefaultConfig()
     for _, opt := range opts {
         opt(cfg)
     }
-    // ... retry logic
+    // ... retry logic with exponential backoff
 }
 ```
 
@@ -322,7 +308,7 @@ Config (聚合根)
 ├── Registries[]        # Docker 镜像仓库
 ├── Zones[]             # 网络区域
 ├── Servers[]           # 服务器
-├── InfraServices[]     # 基础设施服务 (gateway/ssl)
+├── InfraServices[]     # 基础设施服务 (gateway)
 ├── Services[]          # 业务服务
 └── Domains[]           # 域名
 ```
@@ -333,7 +319,7 @@ Config (聚合根)
 ISP (底层基础设施提供商)
   └── Zone (网络区域)
         ├── Server (物理/虚拟服务器)
-        │     ├── InfraService (基础设施服务: gateway/ssl)
+        │     ├── InfraService (基础设施服务: gateway)
         │     └── BizService (业务服务)
         │           └── ServiceGatewayRoute (网关路由)
         └── Domain (域名)
@@ -348,13 +334,14 @@ ISP (底层基础设施提供商)
 
 1. **领域层：** 在 `domain/entity/` 创建实体
 2. **领域层：** 在 `domain/errors.go` 添加错误
-3. **应用层：** 在 `application/handler/` 创建 Handler
+3. **应用层：** 在 `application/usecase/` 创建 Handler
 4. **基础设施层：** 在配置加载器添加解析逻辑
 
 ### 添加新 DNS 提供者
 
-1. 实现 `providers/dns.Provider` 接口
-2. 在 `infrastructure/dns/factory.go` 注册
+1. 在 `infrastructure/dns/` 创建提供者实现
+2. 实现 `contract.DNSProvider` 接口
+3. 在 `infrastructure/dns/factory.go` 注册
 
 ### 添加新 CLI 命令
 
