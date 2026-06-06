@@ -15,8 +15,19 @@ func newListCommand(ctx *Context) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list <entity>",
 		Short: "List entities",
-		Long:  "List all entities of the specified type.",
-		Args:  cobra.ExactArgs(1),
+		Long: `List all entities of the specified type.
+
+Valid entity types:
+  secrets      - List all secrets
+  isps         - List all ISPs
+  zones        - List all zones
+  servers      - List all servers
+  services     - List all business services
+  registries   - List all registries
+  domains      - List all domains
+  records      - List all DNS records (alias: dns)
+  endpoints    - List all externally exposed service URLs`,
+		Args: cobra.ExactArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			entityType := args[0]
 			runList(ctx, entityType)
