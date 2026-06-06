@@ -2,6 +2,7 @@ package entity
 
 import (
 	"fmt"
+	"sort"
 	"strconv"
 
 	"github.com/lite-lake/infra-yamlops/internal/domain"
@@ -128,6 +129,39 @@ func (c *Config) GetAllDNSRecords() []DNSRecord {
 		records = append(records, d.FlattenRecords()...)
 	}
 	return records
+}
+
+// GetEndpoints 获取所有对外暴露的应用端点
+func (c *Config) GetEndpoints() []Endpoint {
+	var endpoints []Endpoint
+	for _, svc := range c.Services {
+		if svc.Internal {
+			continue
+		}
+		for _, route := range svc.Gateways {
+			if !route.HasGateway() {
+				continue
+			}
+			protocol := "https"
+			if route.HTTP && !route.HTTPS {
+				protocol = "http"
+			}
+			endpoints = append(endpoints, Endpoint{
+				ServiceName: svc.Name,
+				Hostname:    route.Hostname,
+				Protocol:    protocol,
+				Path:        route.Path,
+				Server:      svc.Server,
+			})
+		}
+	}
+	sort.Slice(endpoints, func(i, j int) bool {
+		if endpoints[i].Hostname != endpoints[j].Hostname {
+			return endpoints[i].Hostname < endpoints[j].Hostname
+		}
+		return endpoints[i].ServiceName < endpoints[j].ServiceName
+	})
+	return endpoints
 }
 
 // ParsePort 解析端口号字符串

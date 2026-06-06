@@ -89,9 +89,23 @@ func runList(ctx *Context, entityType string) {
 		for _, r := range records {
 			fmt.Printf("- %s %s %s -> %s (ttl: %d)\n", r.Domain, r.Type, r.Name, r.Value, r.TTL)
 		}
+	case "endpoints":
+		endpoints := cfg.GetEndpoints()
+		if len(endpoints) == 0 {
+			return
+		}
+		fmt.Printf("%-20s %-35s %-8s %-10s %s\n", "SERVICE", "URL", "PROTO", "PATH", "SERVER")
+		for _, ep := range endpoints {
+			path := ep.Path
+			if path == "" {
+				path = "/"
+			}
+			fmt.Printf("%-20s %-35s %-8s %-10s %s\n",
+				ep.ServiceName, ep.URL(), ep.Protocol, path, ep.Server)
+		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown entity type: %s\n", entityType)
-		fmt.Fprintf(os.Stderr, "Valid types: secrets, isps, zones, servers, services, registries, domains, records\n")
+		fmt.Fprintf(os.Stderr, "Valid types: secrets, isps, zones, servers, services, registries, domains, records, endpoints\n")
 		os.Exit(1)
 	}
 }
