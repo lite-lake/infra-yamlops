@@ -105,14 +105,10 @@ func runList(ctx *Context, entityType string) {
 		if len(endpoints) == 0 {
 			return
 		}
-		fmt.Printf("%-20s %-35s %-8s %-10s %s\n", "SERVICE", "URL", "PROTO", "PATH", "SERVER")
+		fmt.Println("| SERVICE | URL | SERVER |")
+		fmt.Println("|---|---|---|")
 		for _, ep := range endpoints {
-			path := ep.Path
-			if path == "" {
-				path = "/"
-			}
-			fmt.Printf("%-20s %-35s %-8s %-10s %s\n",
-				ep.ServiceName, ep.URL(), ep.Protocol, path, ep.Server)
+			fmt.Printf("| %s | %s | %s |\n", ep.ServiceName, ep.URL(), ep.Server)
 		}
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown entity type: %s\n", entityType)
