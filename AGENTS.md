@@ -281,6 +281,18 @@ services:
 | 重启 | `yamlops cli service restart` | 重启容器（不同步文件/镜像） |
 | 清理 | `yamlops cli service cleanup` | 移除孤立容器和目录 |
 
+## 相关 Skills
+
+| Skill | 位置 | 用途 |
+|-------|------|------|
+| build-yamlops | docs/skills/build-yamlops/ | 构建和部署 yamlops 二进制文件 |
+| lite-git-commit-and-push-all | docs/skills/lite-git-commit-and-push-all/ | Git 提交和推送规范 |
+
+> 完整 skill 列表见 docs/skills/
+
 ## 注意事项
 
-- **Mac 系统**：在调用任何 skill 之前记得先 `source ~/.zshrc`
+- **环境配置**：在调用任何 skill 之前记得先配置环境
+  - Mac：`source ~/.zshrc`
+  - Linux：`source ~/.bashrc`
+- 如果 Go 命令找不到，尝试：`export PATH=$PATH:/usr/local/go/bin`
