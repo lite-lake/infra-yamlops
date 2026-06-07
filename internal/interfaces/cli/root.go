@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/lite-lake/infra-yamlops/internal/interfaces/tui"
 	"github.com/lite-lake/infra-yamlops/internal/version"
 	"github.com/spf13/cobra"
 )
@@ -15,11 +16,7 @@ var (
 
 var Version = version.Version
 
-// validateFlags 验证命令行标志
 func validateFlags(cmd *cobra.Command, args []string) error {
-	// 验证环境标志（只要不为空即可）
-
-	// 验证配置目录标志
 	if flagConfigDir != "" {
 		info, err := os.Stat(flagConfigDir)
 		if err != nil {
@@ -49,26 +46,52 @@ func Execute() {
 			ctx.ConfigDir = flagConfigDir
 			return nil
 		},
-		Run: func(cmd *cobra.Command, args []string) {
-			runTUI(ctx)
-		},
 	}
 
 	rootCmd.PersistentFlags().StringVarP(&flagEnv, "env", "e", "dev", "Environment")
 	rootCmd.PersistentFlags().StringVarP(&flagConfigDir, "config", "c", ".", "Configuration directory")
 
-	rootCmd.AddCommand(newPlanCommand(ctx))
-	rootCmd.AddCommand(newApplyCommand(ctx))
-	rootCmd.AddCommand(newValidateCommand(ctx))
-	rootCmd.AddCommand(newListCommand(ctx))
-	rootCmd.AddCommand(newShowCommand(ctx))
-	rootCmd.AddCommand(newEnvCommand(ctx))
-	rootCmd.AddCommand(newDNSCommand(ctx))
-	rootCmd.AddCommand(newCleanCommand(ctx))
-	rootCmd.AddCommand(newServerCommand(ctx))
-	rootCmd.AddCommand(newConfigCommand(ctx))
-	rootCmd.AddCommand(newAppCommand(ctx))
-	rootCmd.AddCommand(newServiceCommand(ctx))
+	tuiCmd := &cobra.Command{
+		Use:   "tui",
+		Short: "Launch interactive terminal UI",
+		Long:  "Launch the interactive terminal user interface.",
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := tui.Run(ctx.Env, ctx.ConfigDir); err != nil {
+				fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+				os.Exit(1)
+			}
+		},
+	}
+
+	cliCmd := &cobra.Command{
+		Use:   "cli",
+		Short: "Non-interactive CLI commands",
+		Long:  "Run non-interactive CLI commands for automation and scripting.",
+	}
+	cliCmd.AddCommand(newPlanCommand(ctx))
+	cliCmd.AddCommand(newApplyCommand(ctx))
+	cliCmd.AddCommand(newValidateCommand(ctx))
+	cliCmd.AddCommand(newListCommand(ctx))
+	cliCmd.AddCommand(newShowCommand(ctx))
+	cliCmd.AddCommand(newEnvCommand(ctx))
+	cliCmd.AddCommand(newDNSCommand(ctx))
+	cliCmd.AddCommand(newCleanCommand(ctx))
+	cliCmd.AddCommand(newServerCommand(ctx))
+	cliCmd.AddCommand(newConfigCommand(ctx))
+	cliCmd.AddCommand(newAppCommand(ctx))
+	cliCmd.AddCommand(newServiceCommand(ctx))
+
+	apiCmd := &cobra.Command{
+		Use:   "api",
+		Short: "HTTP API server (coming soon)",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("HTTP API mode is coming soon.")
+		},
+	}
+
+	rootCmd.AddCommand(tuiCmd)
+	rootCmd.AddCommand(cliCmd)
+	rootCmd.AddCommand(apiCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)

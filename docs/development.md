@@ -366,45 +366,48 @@ internal/
 │   └── registry/               # 镜像仓库管理
 │       └── manager.go
 ├── interfaces/                 # 接口层
-│   └── cli/                    # CLI 命令
-│       ├── root.go             # 根命令
-│       ├── plan.go             # Plan 命令
-│       ├── apply.go            # Apply 命令
-│       ├── validate.go         # Validate 命令
-│       ├── list.go             # List 命令
-│       ├── show.go             # Show 命令
-│       ├── show_entity.go      # 实体查找工具
-│       ├── clean.go            # Clean 命令
-│       ├── env.go              # Env 命令
-│       ├── dns.go              # DNS 命令
-│       ├── dns_pull.go         # DNS Pull 命令
-│       ├── server_cmd.go       # Server 命令
-│       ├── service_cmd.go      # Service 命令
-│       ├── config_cmd.go       # Config 命令
-│       ├── app.go              # App 命令
-│       ├── workflow.go         # CLI 工作流模块
-│       ├── context.go          # 执行上下文
-│       ├── confirm.go          # 确认对话框
-│       ├── tui.go              # TUI 主入口
-│       ├── tui_model.go        # TUI 数据模型
-│       ├── tui_menu.go         # TUI 菜单
-│       ├── tui_view.go         # TUI 视图
-│       ├── tui_render.go       # TUI 渲染逻辑
-│       ├── tui_server.go       # TUI 服务器操作
-│       ├── tui_dns.go          # TUI DNS 操作
-│       ├── tui_dns_actions.go  # TUI DNS 动作
-│       ├── tui_service_common.go # TUI 服务公共
-│       ├── tui_service_op.go   # TUI 服务操作
-│       ├── tui_handlers.go     # TUI 事件处理
-│       ├── tui_keys.go         # TUI 按键绑定
-│       ├── tui_cursor.go       # TUI 光标管理
-│       ├── tui_styles.go       # TUI 样式
-│       ├── tui_common.go       # TUI 公共工具
-│       ├── tui_tree.go         # TUI 树形视图
-│       ├── tui_viewport.go     # TUI 视口滚动
-│       ├── tui_cleanup.go      # TUI 清理操作
-│       ├── tui_stop.go         # TUI 停止操作
-│       └── tui_restart.go      # TUI 重启操作
+│   ├── cli/                    # CLI 命令（Cobra）
+│   │   ├── root.go             # 根命令
+│   │   ├── plan.go             # Plan 命令
+│   │   ├── apply.go            # Apply 命令
+│   │   ├── validate.go         # Validate 命令
+│   │   ├── list.go             # List 命令
+│   │   ├── show.go             # Show 命令
+│   │   ├── show_entity.go      # 实体查找工具
+│   │   ├── clean.go            # Clean 命令
+│   │   ├── env.go              # Env 命令
+│   │   ├── dns.go              # DNS 命令
+│   │   ├── dns_pull.go         # DNS Pull 命令
+│   │   ├── server_cmd.go       # Server 命令
+│   │   ├── service_cmd.go      # Service 命令
+│   │   ├── config_cmd.go       # Config 命令
+│   │   ├── app.go              # App 命令
+│   │   ├── workflow.go         # CLI 工作流模块
+│   │   ├── context.go          # 执行上下文
+│   │   └── confirm.go          # 确认对话框
+│   ├── tui/                    # BubbleTea TUI
+│   │   ├── tui.go              # TUI 主入口
+│   │   ├── tui_model.go        # TUI 数据模型
+│   │   ├── tui_menu.go         # TUI 菜单
+│   │   ├── tui_view.go         # TUI 视图
+│   │   ├── tui_render.go       # TUI 渲染逻辑
+│   │   ├── tui_server.go       # TUI 服务器操作
+│   │   ├── tui_dns.go          # TUI DNS 操作
+│   │   ├── tui_dns_actions.go  # TUI DNS 动作
+│   │   ├── tui_service_common.go # TUI 服务公共
+│   │   ├── tui_service_op.go   # TUI 服务操作
+│   │   ├── tui_handlers.go     # TUI 事件处理
+│   │   ├── tui_keys.go         # TUI 按键绑定
+│   │   ├── tui_cursor.go       # TUI 光标管理
+│   │   ├── tui_styles.go       # TUI 样式
+│   │   ├── tui_common.go       # TUI 公共工具
+│   │   ├── tui_tree.go         # TUI 树形视图
+│   │   ├── tui_viewport.go     # TUI 视口滚动
+│   │   ├── tui_cleanup.go      # TUI 清理操作
+│   │   ├── tui_stop.go         # TUI 停止操作
+│   │   └── tui_restart.go      # TUI 重启操作
+│   └── shared/
+│       └── styles/             # 共享样式
 ├── constants/                  # 常量
 │   └── constants.go            # 路径、格式常量
 ├── environment/                # 环境管理
@@ -426,7 +429,7 @@ deployments/                    # 生成文件（git-ignored）
 
 | 层 | 包 | 依赖 |
 |----|----|----|
-| 接口层 | interfaces/cli | → application |
+| 接口层 | interfaces/cli, interfaces/tui | → application |
 | 应用层 | application/ | → domain, infrastructure |
 | 领域层 | domain/ | 无外部依赖 |
 | 基础设施层 | infrastructure/ | → domain（实现接口） |

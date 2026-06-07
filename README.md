@@ -34,16 +34,16 @@
 go build -o yamlops ./cmd/yamlops
 
 # 验证配置
-./yamlops validate -e prod
+./yamlops cli validate -e prod
 
 # 查看变更计划
-./yamlops plan -e prod
+./yamlops cli plan -e prod
 
 # 应用变更
-./yamlops apply -e prod
+./yamlops cli apply -e prod
 
 # 启动交互式 TUI
-./yamlops -e prod
+./yamlops tui -e prod
 ```
 
 ## 安装
@@ -118,53 +118,57 @@ go build -o yamlops ./cmd/yamlops
 
 ```
 yamlops
-├── plan [scope]             # 生成执行计划
-├── apply [scope]            # 应用变更
-├── validate                 # 验证配置
-├── list <entity>            # 列出实体
-├── show <entity> <name>     # 显示详情
-├── clean                    # 清理孤立资源
-├── env
-│   ├── check                # 检查环境状态
-│   └── sync                 # 同步环境配置
-├── server
-│   ├── setup                # 完整设置（check + sync）
-│   ├── check                # 检查服务器状态
-│   └── sync                 # 同步服务器配置
-├── dns
-│   ├── plan                 # DNS 变更计划
-│   ├── apply                # 应用 DNS 变更
-│   ├── list [resource]      # 列出域名/记录
-│   ├── show <resource> <name>
-│   └── pull
-│       ├── domains          # 从 ISP 拉取域名
-│       └── records          # 从域名拉取记录
-├── config
-│   ├── list [secrets|isps|registries]  # 列出配置项
-│   └── show <type> <name>   # 显示配置详情
-├── app
-│   ├── plan                 # 应用部署计划
-│   ├── apply                # 应用部署
-│   ├── list [resource]      # 列出资源
-│   └── show <resource> <name>
-└── service
-    ├── deploy               # 部署服务
-    ├── stop                 # 停止服务
-    ├── restart              # 重启服务
-    └── cleanup              # 清理孤儿资源
+├── tui                        # 启动交互界面（默认）
+│   └── -e <env>               # 指定环境
+├── cli                        # CLI 命令
+│   ├── plan [scope]           # 生成执行计划
+│   ├── apply [scope]          # 应用变更
+│   ├── validate               # 验证配置
+│   ├── list <entity>          # 列出实体
+│   ├── show <entity> <name>   # 显示详情
+│   ├── clean                  # 清理孤立资源
+│   ├── env
+│   │   ├── check              # 检查环境状态
+│   │   └── sync               # 同步环境配置
+│   ├── server
+│   │   ├── setup              # 完整设置（check + sync）
+│   │   ├── check              # 检查服务器状态
+│   │   └── sync               # 同步服务器配置
+│   ├── dns
+│   │   ├── plan               # DNS 变更计划
+│   │   ├── apply              # 应用 DNS 变更
+│   │   ├── list [resource]    # 列出域名/记录
+│   │   ├── show <resource> <name>
+│   │   └── pull
+│   │       ├── domains        # 从 ISP 拉取域名
+│   │       └── records        # 从域名拉取记录
+│   ├── config
+│   │   ├── list [secrets|isps|registries]  # 列出配置项
+│   │   └── show <type> <name> # 显示配置详情
+│   ├── app
+│   │   ├── plan               # 应用部署计划
+│   │   ├── apply              # 应用部署
+│   │   ├── list [resource]    # 列出资源
+│   │   └── show <resource> <name>
+│   └── service
+│       ├── deploy             # 部署服务
+│       ├── stop               # 停止服务
+│       ├── restart            # 重启服务
+│       └── cleanup            # 清理孤儿资源
+└── api                        # API 服务（计划中）
 ```
 
 ### plan - 生成变更计划
 
 ```bash
 # 查看所有变更
-./yamlops plan -e prod
+./yamlops cli plan -e prod
 
 # 按作用域过滤
-./yamlops plan -e prod --zone cn-east
-./yamlops plan -e prod --server srv-east-01
-./yamlops plan -e prod --service api-server
-./yamlops plan -e prod --domain example.com
+./yamlops cli plan -e prod --zone cn-east
+./yamlops cli plan -e prod --server srv-east-01
+./yamlops cli plan -e prod --service api-server
+./yamlops cli plan -e prod --domain example.com
 ```
 
 **plan 标志:**
@@ -180,11 +184,11 @@ yamlops
 
 ```bash
 # 应用所有变更（需确认）
-./yamlops apply -e prod
+./yamlops cli apply -e prod
 
 # 按作用域应用
-./yamlops apply -e prod --zone cn-east
-./yamlops apply -e prod --server srv-east-01
+./yamlops cli apply -e prod --zone cn-east
+./yamlops cli apply -e prod --server srv-east-01
 ```
 
 **apply 标志:**
@@ -199,31 +203,31 @@ yamlops
 ### validate - 验证配置
 
 ```bash
-./yamlops validate -e prod
-./yamlops validate -e staging -c /path/to/config
+./yamlops cli validate -e prod
+./yamlops cli validate -e staging -c /path/to/config
 ```
 
 ### list / show - 实体管理
 
 ```bash
 # 列出实体
-./yamlops list secrets -e prod
-./yamlops list isps -e prod
-./yamlops list zones -e prod
-./yamlops list servers -e prod
-./yamlops list services -e prod
-./yamlops list registries -e prod
-./yamlops list domains -e prod
-./yamlops list records -e prod
+./yamlops cli list secrets -e prod
+./yamlops cli list isps -e prod
+./yamlops cli list zones -e prod
+./yamlops cli list servers -e prod
+./yamlops cli list services -e prod
+./yamlops cli list registries -e prod
+./yamlops cli list domains -e prod
+./yamlops cli list records -e prod
 
 # 查看详情
-./yamlops show secret db_password -e prod
-./yamlops show isp aliyun -e prod
-./yamlops show zone cn-east -e prod
-./yamlops show server srv-east-01 -e prod
-./yamlops show service api-server -e prod
-./yamlops show registry registry-aliyun -e prod
-./yamlops show domain example.com -e prod
+./yamlops cli show secret db_password -e prod
+./yamlops cli show isp aliyun -e prod
+./yamlops cli show zone cn-east -e prod
+./yamlops cli show server srv-east-01 -e prod
+./yamlops cli show service api-server -e prod
+./yamlops cli show registry registry-aliyun -e prod
+./yamlops cli show domain example.com -e prod
 ```
 
 **list 有效实体类型**: secrets, isps, zones, servers, services, registries, domains, records
@@ -234,13 +238,13 @@ yamlops
 
 ```bash
 # 检查环境状态
-./yamlops env check -e prod
-./yamlops env check -e prod --server srv-east-01
-./yamlops env check -e prod --zone cn-east
+./yamlops cli env check -e prod
+./yamlops cli env check -e prod --server srv-east-01
+./yamlops cli env check -e prod --zone cn-east
 
 # 同步环境配置
-./yamlops env sync -e prod
-./yamlops env sync -e prod --server srv-east-01
+./yamlops cli env sync -e prod
+./yamlops cli env sync -e prod --server srv-east-01
 ```
 
 **env 子命令标志:**
@@ -254,19 +258,19 @@ yamlops
 
 ```bash
 # 完整设置（检查 + 同步）
-./yamlops server setup -e prod --server srv-east-01
+./yamlops cli server setup -e prod --server srv-east-01
 
 # 仅检查
-./yamlops server check -e prod --zone cn-east
+./yamlops cli server check -e prod --zone cn-east
 
 # 仅同步
-./yamlops server sync -e prod --server srv-east-01
+./yamlops cli server sync -e prod --server srv-east-01
 
 # 仅检查不同步
-./yamlops server setup -e prod --check-only --zone cn-east
+./yamlops cli server setup -e prod --check-only --zone cn-east
 
 # 仅同步不检查
-./yamlops server setup -e prod --sync-only --server srv-east-01
+./yamlops cli server setup -e prod --sync-only --server srv-east-01
 ```
 
 **server 子命令标志**:
@@ -282,27 +286,27 @@ yamlops
 
 ```bash
 # 查看 DNS 变更计划
-./yamlops dns plan -e prod -d example.com
+./yamlops cli dns plan -e prod -d example.com
 
 # 应用 DNS 变更
-./yamlops dns apply -e prod -d example.com --auto-approve
+./yamlops cli dns apply -e prod -d example.com --auto-approve
 
 # 列出 DNS 资源
-./yamlops dns list -e prod
-./yamlops dns list domains -e prod
-./yamlops dns list records -e prod
+./yamlops cli dns list -e prod
+./yamlops cli dns list domains -e prod
+./yamlops cli dns list records -e prod
 
 # 查看资源详情
-./yamlops dns show domain example.com -e prod
-./yamlops dns show record www.example.com -e prod
+./yamlops cli dns show domain example.com -e prod
+./yamlops cli dns show record www.example.com -e prod
 
 # 从 ISP 拉取域名
-./yamlops dns pull domains -e prod -i aliyun
-./yamlops dns pull domains -e prod -i aliyun --auto-approve
+./yamlops cli dns pull domains -e prod -i aliyun
+./yamlops cli dns pull domains -e prod -i aliyun --auto-approve
 
 # 从域名拉取 DNS 记录
-./yamlops dns pull records -e prod -d example.com
-./yamlops dns pull records -e prod -d example.com --auto-approve
+./yamlops cli dns pull records -e prod -d example.com
+./yamlops cli dns pull records -e prod -d example.com --auto-approve
 ```
 
 **dns 子命令标志:**
@@ -318,27 +322,27 @@ yamlops
 
 ```bash
 # 生成部署计划
-./yamlops app plan -e prod
-./yamlops app plan -e prod -z cn-east
-./yamlops app plan -e prod -s srv-east-01
-./yamlops app plan -e prod -i infra-gate
-./yamlops app plan -e prod -b api-server
+./yamlops cli app plan -e prod
+./yamlops cli app plan -e prod -z cn-east
+./yamlops cli app plan -e prod -s srv-east-01
+./yamlops cli app plan -e prod -i infra-gate
+./yamlops cli app plan -e prod -b api-server
 
 # 应用部署
-./yamlops app apply -e prod --auto-approve
+./yamlops cli app apply -e prod --auto-approve
 
 # 列出资源
-./yamlops app list -e prod
-./yamlops app list zones -e prod
-./yamlops app list servers -e prod
-./yamlops app list infra -e prod
-./yamlops app list biz -e prod -s srv-east-01
+./yamlops cli app list -e prod
+./yamlops cli app list zones -e prod
+./yamlops cli app list servers -e prod
+./yamlops cli app list infra -e prod
+./yamlops cli app list biz -e prod -s srv-east-01
 
 # 查看资源详情
-./yamlops app show zone cn-east -e prod
-./yamlops app show server srv-east-01 -e prod
-./yamlops app show infra infra-gate -e prod
-./yamlops app show biz api-server -e prod
+./yamlops cli app show zone cn-east -e prod
+./yamlops cli app show server srv-east-01 -e prod
+./yamlops cli app show infra infra-gate -e prod
+./yamlops cli app show biz api-server -e prod
 ```
 
 **app 持久标志** (所有子命令通用):
@@ -364,15 +368,15 @@ yamlops
 
 ```bash
 # 列出配置项
-./yamlops config list -e prod
-./yamlops config list secrets -e prod
-./yamlops config list isps -e prod
-./yamlops config list registries -e prod
+./yamlops cli config list -e prod
+./yamlops cli config list secrets -e prod
+./yamlops cli config list isps -e prod
+./yamlops cli config list registries -e prod
 
 # 查看配置详情
-./yamlops config show secret db_password -e prod
-./yamlops config show isp aliyun -e prod
-./yamlops config show registry registry-aliyun -e prod
+./yamlops cli config show secret db_password -e prod
+./yamlops cli config show isp aliyun -e prod
+./yamlops cli config show registry registry-aliyun -e prod
 ```
 
 **config show 有效类型**: secret, isp, registry
@@ -381,26 +385,26 @@ yamlops
 
 ```bash
 # 清理孤立服务和目录
-./yamlops clean -e prod
+./yamlops cli clean -e prod
 ```
 
 ### service - 服务运维
 
 ```bash
 # 部署服务（同步最新配置）
-./yamlops service deploy -e prod --biz api-server
-./yamlops service deploy -e prod --server srv-east-01 -y
+./yamlops cli service deploy -e prod --biz api-server
+./yamlops cli service deploy -e prod --server srv-east-01 -y
 
 # 停止服务（保留数据）
-./yamlops service stop -e prod --biz api-server
-./yamlops service stop -e prod --infra infra-gate
-./yamlops service stop -e prod --server srv-east-01 -y
+./yamlops cli service stop -e prod --biz api-server
+./yamlops cli service stop -e prod --infra infra-gate
+./yamlops cli service stop -e prod --server srv-east-01 -y
 
 # 重启服务（不更新文件和镜像）
-./yamlops service restart -e prod --biz api-server
+./yamlops cli service restart -e prod --biz api-server
 
 # 清理孤儿资源
-./yamlops service cleanup -e prod -y
+./yamlops cli service cleanup -e prod -y
 ```
 
 **service 持久标志** (所有子命令通用):
@@ -420,8 +424,8 @@ yamlops
 ### TUI 交互模式
 
 ```bash
-# 无参数启动进入 TUI
-./yamlops -e prod
+# 启动 TUI
+./yamlops tui -e prod
 ```
 
 **TUI 快捷键**:
@@ -632,13 +636,13 @@ domains:
 vim userdata/prod/services_biz.yaml
 
 # 2. 验证配置
-./yamlops validate -e prod
+./yamlops cli validate -e prod
 
 # 3. 查看变更计划
-./yamlops plan -e prod --service my-service
+./yamlops cli plan -e prod --service my-service
 
 # 4. 应用变更
-./yamlops apply -e prod --service my-service
+./yamlops cli apply -e prod --service my-service
 ```
 
 ### 2. 更新服务镜像
@@ -646,7 +650,7 @@ vim userdata/prod/services_biz.yaml
 ```bash
 # 1. 修改 services_biz.yaml 中的 image 字段
 # 2. 验证并应用
-./yamlops validate -e prod && ./yamlops apply -e prod --service api-server
+./yamlops cli validate -e prod && ./yamlops cli apply -e prod --service api-server
 ```
 
 ### 3. 新增服务器
@@ -655,34 +659,34 @@ vim userdata/prod/services_biz.yaml
 # 1. 添加服务器配置到 servers.yaml
 # 2. 添加 SSH 密码到 secrets.yaml
 # 3. 验证环境
-./yamlops server check -e prod --server new-server
+./yamlops cli server check -e prod --server new-server
 
 # 4. 同步环境
-./yamlops server sync -e prod --server new-server
+./yamlops cli server sync -e prod --server new-server
 
 # 或一步完成
-./yamlops server setup -e prod --server new-server
+./yamlops cli server setup -e prod --server new-server
 ```
 
 ### 4. DNS 管理
 
 ```bash
 # 从远程拉取到本地
-./yamlops dns pull domains -e prod -i aliyun
-./yamlops dns pull records -e prod -d example.com
+./yamlops cli dns pull domains -e prod -i aliyun
+./yamlops cli dns pull records -e prod -d example.com
 
 # 从本地推送到远程
-./yamlops dns plan -e prod
-./yamlops dns apply -e prod --auto-approve
+./yamlops cli dns plan -e prod
+./yamlops cli dns apply -e prod --auto-approve
 ```
 
 ### 5. 日常部署
 
 ```bash
 # Plan + Apply 工作流
-./yamlops plan -e prod --zone cn-east
+./yamlops cli plan -e prod --zone cn-east
 # 确认变更后
-./yamlops apply -e prod --zone cn-east
+./yamlops cli apply -e prod --zone cn-east
 ```
 
 ## 服务器部署规范
@@ -741,7 +745,7 @@ networks:
 ## 故障排查
 
 ```bash
-./yamlops validate -e prod
+./yamlops cli validate -e prod
 ```
 
 常见错误：

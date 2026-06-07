@@ -65,7 +65,9 @@ internal/
 │   ├── logger/                 # 日志记录 + 指标
 │   ├── network/                # Docker 网络管理器
 │   └── registry/               # Docker 注册表管理器
-├── interfaces/cli/             # Cobra 命令、BubbleTea TUI
+├── interfaces/
+│   ├── cli/                    # Cobra 命令
+│   └── tui/                    # BubbleTea TUI
 ├── constants/                  # 共享常量
 ├── environment/                # 环境设置（检查、同步、APT 模板）
 ├── version/                    # 版本信息
@@ -170,7 +172,7 @@ func TestServer_Validate(t *testing.T) {
 
 | 层 | 包 | 依赖 |
 |-------|---------|--------------|
-| 接口 | interfaces/cli | → application |
+| 接口 | interfaces/cli, interfaces/tui | → application |
 | 应用 | application/ | → domain, infrastructure |
 | 领域 | domain/ | 无外部依赖 |
 | 基础设施 | infrastructure/ | → domain（实现接口） |
@@ -274,10 +276,10 @@ services:
 
 | 操作 | CLI 命令 | 描述 |
 |-----------|-------------|-------------|
-| 部署 | `yamlops service deploy` | 同步文件、拉取镜像、创建/重建容器 |
-| 停止 | `yamlops service stop` | 停止容器（数据保留） |
-| 重启 | `yamlops service restart` | 重启容器（不同步文件/镜像） |
-| 清理 | `yamlops service cleanup` | 移除孤立容器和目录 |
+| 部署 | `yamlops cli service deploy` | 同步文件、拉取镜像、创建/重建容器 |
+| 停止 | `yamlops cli service stop` | 停止容器（数据保留） |
+| 重启 | `yamlops cli service restart` | 重启容器（不同步文件/镜像） |
+| 清理 | `yamlops cli service cleanup` | 移除孤立容器和目录 |
 
 ## 注意事项
 

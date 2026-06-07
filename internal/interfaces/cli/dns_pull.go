@@ -16,6 +16,7 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 	infradns "github.com/lite-lake/infra-yamlops/internal/infrastructure/dns"
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/persistence"
+	"github.com/lite-lake/infra-yamlops/internal/interfaces/shared/styles"
 )
 
 func newDNSPullCommand(ctx *Context) *cobra.Command {
@@ -162,7 +163,7 @@ func runDNSPullDomains(ctx *Context, ispName string, autoApprove bool) {
 	fmt.Printf("Domain Differences (ISP: %s):\n", ispName)
 	fmt.Println("=================================")
 	for _, diff := range diffs {
-		prefix, style := FormatChangeType(diff.ChangeType)
+		prefix, style := styles.FormatChangeType(diff.ChangeType)
 		fmt.Printf("%s %s\n", style.Render(prefix), style.Render(diff.Name))
 	}
 
@@ -292,7 +293,7 @@ func runDNSPullRecords(ctx *Context, domainName string, autoApprove bool) {
 	fmt.Printf("DNS Record Differences (Domain: %s):\n", domainName)
 	fmt.Println("=====================================")
 	for _, diff := range diffs {
-		prefix, style := FormatChangeType(diff.ChangeType)
+		prefix, style := styles.FormatChangeType(diff.ChangeType)
 		fmt.Printf("%s %-6s %-20s -> %-30s (ttl: %d)\n",
 			style.Render(prefix),
 			style.Render(string(diff.Type)),
@@ -513,7 +514,7 @@ func (m PullModel) View() string {
 	if m.IsRecords {
 		title = "Select DNS Records to Sync"
 	}
-	b.WriteString(TitleStyle.Render(title))
+	b.WriteString(styles.TitleStyle.Render(title))
 	b.WriteString("\n\n")
 
 	if m.IsRecords {
@@ -527,7 +528,7 @@ func (m PullModel) View() string {
 				checked = "x"
 			}
 
-			prefix, style := FormatChangeType(diff.ChangeType)
+			prefix, style := styles.FormatChangeType(diff.ChangeType)
 
 			line := fmt.Sprintf("%s [%s] %s %-6s %-20s -> %-30s",
 				cursor, checked, prefix, diff.Type, diff.Name, diff.Value)
@@ -545,7 +546,7 @@ func (m PullModel) View() string {
 				checked = "x"
 			}
 
-			prefix, style := FormatChangeType(diff.ChangeType)
+			prefix, style := styles.FormatChangeType(diff.ChangeType)
 
 			line := fmt.Sprintf("%s [%s] %s %s", cursor, checked, prefix, diff.Name)
 			b.WriteString(style.Render(line))
@@ -554,7 +555,7 @@ func (m PullModel) View() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(HelpStyle.Render("↑/k: up  ↓/j: down  space: toggle  a: select all  n: deselect all  enter: confirm  q: quit"))
+	b.WriteString(styles.HelpStyle.Render("↑/k: up  ↓/j: down  space: toggle  a: select all  n: deselect all  enter: confirm  q: quit"))
 
 	return b.String()
 }

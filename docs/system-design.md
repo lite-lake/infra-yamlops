@@ -57,7 +57,7 @@ YAMLOps 是一个基于 Go 语言开发的基础设施即代码（IaC）管理�
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        Interface Layer                               │
-│                      (interfaces/cli/)                               │
+│                  (interfaces/cli/ + interfaces/tui/)                  │
 │    Cobra 命令 + BubbleTea TUI，处理用户输入输出                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                      Application Layer                               │
@@ -151,40 +151,43 @@ internal/
 │       ├── context.go              # 上下文日志
 │       └── metrics.go              # 指标记录
 ├── interfaces/                     # 接口层
-│   └── cli/                        # CLI 命令
-│       ├── root.go                 # 根命令
-│       ├── workflow.go             # CLI 工作流模块
-│       ├── context.go              # 执行上下文
-│       ├── plan.go                 # Plan 命令
-│       ├── apply.go                # Apply 命令
-│       ├── validate.go             # Validate 命令
-│       ├── list.go                 # List 命令
-│       ├── show.go                 # Show 命令
-│       ├── clean.go                # Clean 命令
-│       ├── confirm.go              # 确认对话框
-│       ├── env.go                  # Env 命令
-│       ├── dns.go                  # DNS 命令
-│       ├── dns_pull.go             # DNS Pull 命令
-│       ├── app.go                  # App 命令
-│       ├── server_cmd.go           # Server 命令
-│       ├── service_cmd.go          # Service 命令（deploy/stop/restart/cleanup）
-│       ├── config_cmd.go           # Config 命令
-│       ├── tui.go                  # TUI 主入口
-│       ├── tui_model.go            # TUI 数据模型
-│       ├── tui_view.go             # TUI 视图渲染
-│       ├── tui_render.go           # TUI 渲染逻辑
-│       ├── tui_actions.go          # TUI 操作处理
-│       ├── tui_keys.go             # TUI 按键处理
-│       ├── tui_styles.go           # TUI 样式定义
-│       ├── tui_menu.go             # TUI 菜单
-│       ├── tui_tree.go             # TUI 树形视图
-│       ├── tui_viewport.go         # TUI 视口滚动
-│       ├── tui_server.go           # TUI 服务器操作
-│       ├── tui_dns.go              # TUI DNS 操作
-│       ├── tui_service_common.go   # TUI 服务公共逻辑
-│       ├── tui_cleanup.go          # TUI 清理操作
-│       ├── tui_stop.go             # TUI 停止操作
-│       └── tui_restart.go          # TUI 重启操作
+│   ├── cli/                        # CLI 命令（Cobra）
+│   │   ├── root.go                 # 根命令
+│   │   ├── workflow.go             # CLI 工作流模块
+│   │   ├── context.go              # 执行上下文
+│   │   ├── plan.go                 # Plan 命令
+│   │   ├── apply.go                # Apply 命令
+│   │   ├── validate.go             # Validate 命令
+│   │   ├── list.go                 # List 命令
+│   │   ├── show.go                 # Show 命令
+│   │   ├── clean.go                # Clean 命令
+│   │   ├── confirm.go              # 确认对话框
+│   │   ├── env.go                  # Env 命令
+│   │   ├── dns.go                  # DNS 命令
+│   │   ├── dns_pull.go             # DNS Pull 命令
+│   │   ├── app.go                  # App 命令
+│   │   ├── server_cmd.go           # Server 命令
+│   │   ├── service_cmd.go          # Service 命令（deploy/stop/restart/cleanup）
+│   │   └── config_cmd.go           # Config 命令
+│   ├── tui/                        # BubbleTea TUI
+│   │   ├── tui.go                  # TUI 主入口
+│   │   ├── tui_model.go            # TUI 数据模型
+│   │   ├── tui_view.go             # TUI 视图渲染
+│   │   ├── tui_render.go           # TUI 渲染逻辑
+│   │   ├── tui_actions.go          # TUI 操作处理
+│   │   ├── tui_keys.go             # TUI 按键处理
+│   │   ├── tui_styles.go           # TUI 样式定义
+│   │   ├── tui_menu.go             # TUI 菜单
+│   │   ├── tui_tree.go             # TUI 树形视图
+│   │   ├── tui_viewport.go         # TUI 视口滚动
+│   │   ├── tui_server.go           # TUI 服务器操作
+│   │   ├── tui_dns.go              # TUI DNS 操作
+│   │   ├── tui_service_common.go   # TUI 服务公共逻辑
+│   │   ├── tui_cleanup.go          # TUI 清理操作
+│   │   ├── tui_stop.go             # TUI 停止操作
+│   │   └── tui_restart.go          # TUI 重启操作
+│   └── shared/
+│       └── styles/                 # 共享样式
 ├── constants/                      # 常量定义
 │   └── constants.go                # 路径、格式等常量
 ├── environment/                    # 服务器环境管理
@@ -922,41 +925,44 @@ func planSimpleEntity[T any](
 
 ```
 yamlops
-├── (TUI)                    # 默认，启动交互界面
-├── plan [scope]             # 生成执行计划
-├── apply [scope]            # 应用变更
-├── validate                 # 验证配置
-├── list <entity>            # 列出实体
-├── show <entity> <name>     # 显示详情
-├── clean                    # 清理孤立资源
-├── env
-│   ├── check                # 检查环境状态
-│   └── sync                 # 同步环境配置
-├── dns
-│   ├── plan                 # DNS 变更计划
-│   ├── apply                # 应用 DNS 变更
-│   ├── list [resource]      # 列出域名/记录
-│   ├── show <resource> <name>
-│   └── pull
-│       ├── domains          # 从 ISP 拉取域名
-│       └── records          # 从域名拉取记录
-├── server
-│   ├── setup                # 完整设置（check + sync）
-│   ├── check                # 检查服务器状态
-│   └── sync                 # 同步服务器配置
-├── service
-│   ├── deploy               # 部署服务
-│   ├── stop                 # 停止服务
-│   ├── restart              # 重启服务
-│   └── cleanup              # 清理孤立容器和目录
-├── config
-│   ├── list [type]          # 列出配置项
-│   └── show <type> <name>   # 显示配置详情
-└── app
-    ├── plan                 # 应用部署计划
-    ├── apply                # 应用部署
-    ├── list [resource]      # 列出资源
-    └── show <resource> <name>
+├── tui                        # 启动交互界面（默认）
+│   └── -e <env>               # 指定环境
+├── cli                        # CLI 命令
+│   ├── plan [scope]           # 生成执行计划
+│   ├── apply [scope]          # 应用变更
+│   ├── validate               # 验证配置
+│   ├── list <entity>          # 列出实体
+│   ├── show <entity> <name>   # 显示详情
+│   ├── clean                  # 清理孤立资源
+│   ├── env
+│   │   ├── check              # 检查环境状态
+│   │   └── sync               # 同步环境配置
+│   ├── dns
+│   │   ├── plan               # DNS 变更计划
+│   │   ├── apply              # 应用 DNS 变更
+│   │   ├── list [resource]    # 列出域名/记录
+│   │   ├── show <resource> <name>
+│   │   └── pull
+│   │       ├── domains        # 从 ISP 拉取域名
+│   │       └── records        # 从域名拉取记录
+│   ├── server
+│   │   ├── setup              # 完整设置（check + sync）
+│   │   ├── check              # 检查服务器状态
+│   │   └── sync               # 同步服务器配置
+│   ├── service
+│   │   ├── deploy             # 部署服务
+│   │   ├── stop               # 停止服务
+│   │   ├── restart            # 重启服务
+│   │   └── cleanup            # 清理孤立容器和目录
+│   ├── config
+│   │   ├── list [type]        # 列出配置项
+│   │   └── show <type> <name> # 显示配置详情
+│   └── app
+│       ├── plan               # 应用部署计划
+│       ├── apply              # 应用部署
+│       ├── list [resource]    # 列出资源
+│       └── show <resource> <name>
+└── api                        # API 服务（计划中）
 ```
 
 ### 7.3 过滤标志
@@ -1069,82 +1075,82 @@ password: {secret: db_password}
 
 ```bash
 # 1. 验证配置
-yamlops validate -e prod
+yamlops cli validate -e prod
 
 # 2. 生成执行计划
-yamlops plan -e prod
+yamlops cli plan -e prod
 
 # 3. 应用变更
-yamlops apply -e prod
+yamlops cli apply -e prod
 ```
 
 ### 10.2 服务器设置
 
 ```bash
 # 完整设置
-yamlops server setup -e prod --server prod-server-1
+yamlops cli server setup -e prod --server prod-server-1
 
 # 仅检查
-yamlops server check -e prod --zone cn-east
+yamlops cli server check -e prod --zone cn-east
 
 # 仅同步
-yamlops server sync -e prod --server prod-server-1
+yamlops cli server sync -e prod --server prod-server-1
 ```
 
 ### 10.3 DNS 管理
 
 ```bash
 # 从 ISP 拉取域名
-yamlops dns pull domains --isp aliyun
+yamlops cli dns pull domains --isp aliyun
 
 # 从域名拉取记录
-yamlops dns pull records --domain example.com
+yamlops cli dns pull records --domain example.com
 
 # 生成 DNS 变更计划
-yamlops dns plan -e prod
+yamlops cli dns plan -e prod
 
 # 应用 DNS 变更
-yamlops dns apply -e prod --auto-approve
+yamlops cli dns apply -e prod --auto-approve
 ```
 
 ### 10.4 应用部署
 
 ```bash
 # 生成部署计划
-yamlops app plan -e prod --server prod-server-1
+yamlops cli app plan -e prod --server prod-server-1
 
 # 应用部署
-yamlops app apply -e prod --server prod-server-1
+yamlops cli app apply -e prod --server prod-server-1
 ```
 
 ### 10.5 服务操作
 
 ```bash
 # 部署服务
-yamlops service deploy -e prod --service api-server
+yamlops cli service deploy -e prod --service api-server
 
 # 停止服务
-yamlops service stop -e prod --service api-server
+yamlops cli service stop -e prod --service api-server
 
 # 重启服务
-yamlops service restart -e prod --service api-server
+yamlops cli service restart -e prod --service api-server
 
 # 清理孤立资源
-yamlops service cleanup -e prod
+yamlops cli service cleanup -e prod
 ```
 
 ### 10.6 清理操作
 
 ```bash
 # 清理孤立资源
-yamlops clean -e prod
+yamlops cli clean -e prod
 ```
 
 ### 10.7 交互模式
 
 ```bash
 # 启动 TUI 界面
-yamlops -e prod
+yamlops tui -e prod
 ```
 
 ---
@@ -1459,7 +1465,7 @@ func (r *SecretResolver) ResolveAll(cfg *entity.Config) error
 
 #### D.9 TUI 模块拆分
 
-TUI 按功能拆分为独立文件，提高可维护性：
+TUI 已拆分为独立包 `internal/interfaces/tui/`，与 CLI 命令分离：
 
 | 文件 | 职责 |
 |------|------|
@@ -1473,6 +1479,8 @@ TUI 按功能拆分为独立文件，提高可维护性：
 | tui_cleanup.go | 服务清理（孤立资源） |
 | tui_stop.go | 服务停止 |
 | tui_restart.go | 服务重启 |
+
+共享样式定义在 `internal/interfaces/shared/styles/`。
 
 #### D.10 常量集中管理
 

@@ -1,8 +1,7 @@
-package cli
+package tui
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/charmbracelet/bubbletea"
@@ -508,11 +507,4 @@ func Run(env string, configDir string) error {
 	p := tea.NewProgram(NewModel(env, configDir), tea.WithAltScreen())
 	_, err := p.Run()
 	return err
-}
-
-func runTUI(ctx *Context) {
-	if err := Run(ctx.Env, ctx.ConfigDir); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
 }

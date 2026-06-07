@@ -1,4 +1,4 @@
-package cli
+package tui
 
 type CursorController interface {
 	GetCursor() int

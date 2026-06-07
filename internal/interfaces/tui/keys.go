@@ -1,4 +1,4 @@
-package cli
+package tui
 
 const (
 	KeyQuit             = "q"

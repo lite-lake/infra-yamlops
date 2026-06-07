@@ -7,7 +7,7 @@ YAMLOps 采用领域驱动设计（DDD）分层架构，实现关注点分离和
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
 │                        Interface Layer                               │
-│                      (interfaces/cli/)                               │
+│                  (interfaces/cli/ + interfaces/tui/)                  │
 │    Cobra 命令 + BubbleTea TUI，处理用户输入输出                        │
 ├─────────────────────────────────────────────────────────────────────┤
 │                      Application Layer                               │
@@ -47,19 +47,20 @@ Interface → Application → Domain ← Infrastructure
 
 ### 接口层 (Interface Layer)
 
-**位置：** `internal/interfaces/cli/`
+**位置：** `internal/interfaces/cli/` 和 `internal/interfaces/tui/`
 
 **职责：**
 - 处理用户输入输出
-- CLI 命令解析（Cobra）
-- TUI 交互界面（BubbleTea）
+- CLI 命令解析（Cobra）— `interfaces/cli/`
+- TUI 交互界面（BubbleTea）— `interfaces/tui/`
 - 参数验证和转换
 
 **组件：**
-- `root.go` - 根命令和全局标志
-- `plan.go`, `apply.go`, `validate.go` - 核心命令
-- `dns.go`, `server_cmd.go`, `app.go`, `service_cmd.go` - 领域命令
-- `tui*.go` - TUI 相关组件
+- `cli/root.go` - 根命令和全局标志
+- `cli/plan.go`, `cli/apply.go`, `cli/validate.go` - 核心命令
+- `cli/dns.go`, `cli/server_cmd.go`, `cli/app.go`, `cli/service_cmd.go` - 领域命令
+- `tui/*.go` - TUI 相关组件
+- `shared/styles/` - 共享样式定义
 
 ---
 
@@ -347,3 +348,8 @@ ISP (底层基础设施提供商)
 
 1. 在 `interfaces/cli/` 创建命令文件
 2. 在 `root.go` 注册命令
+
+### 添加新 TUI 功能
+
+1. 在 `interfaces/tui/` 创建或修改组件文件
+2. 共享样式放在 `interfaces/shared/styles/`
