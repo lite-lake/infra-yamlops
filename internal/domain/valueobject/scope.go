@@ -171,6 +171,8 @@ func (s *Scope) WithServiceType(serviceType string) *Scope {
 
 // Matches checks if the given parameters match the scope filters.
 // All dimensions use the same logic: len == 0 means wildcard, otherwise value must be in the list.
+// Special case: when bizServices == infraServices (set by --service flag without --type),
+// use OR logic so a change matches if the service name is in either list.
 func (s *Scope) Matches(zone, server, bizService, infraService, domain, record string) bool {
 	if len(s.zones) > 0 && !contains(s.zones, zone) {
 		return false
@@ -178,11 +180,19 @@ func (s *Scope) Matches(zone, server, bizService, infraService, domain, record s
 	if len(s.servers) > 0 && !contains(s.servers, server) {
 		return false
 	}
-	if len(s.bizServices) > 0 && !contains(s.bizServices, bizService) {
-		return false
-	}
-	if len(s.infraServices) > 0 && !contains(s.infraServices, infraService) {
-		return false
+	if len(s.bizServices) > 0 && len(s.infraServices) > 0 && slicesEqual(s.bizServices, s.infraServices) {
+		// OR logic: --service flag sets both lists to the same value.
+		// A change matches if the service name is in either list.
+		if !contains(s.bizServices, bizService) && !contains(s.infraServices, infraService) {
+			return false
+		}
+	} else {
+		if len(s.bizServices) > 0 && !contains(s.bizServices, bizService) {
+			return false
+		}
+		if len(s.infraServices) > 0 && !contains(s.infraServices, infraService) {
+			return false
+		}
 	}
 	if len(s.domains) > 0 && !contains(s.domains, domain) {
 		return false
