@@ -187,36 +187,68 @@ func (pv *ProgressView) Summary() string {
 	return "RESULT: " + strings.Join(parts, ", ")
 }
 
-// Render renders the progress view.
+// activeLineIndex returns the line index in the scrollable items section
+// corresponding to the currently running or most recently completed item.
+func (pv *ProgressView) activeLineIndex() int {
+	lineIdx := 0
+	for _, group := range pv.Groups {
+		lineIdx++ // group header line
+		for _, item := range group.Items {
+			if item.Status == ProgressStatusRunning {
+				return lineIdx
+			}
+			lineIdx++
+		}
+	}
+	// No running item — show last line
+	return max(0, lineIdx-1)
+}
+
+// Render renders the progress view with viewport-based scrolling.
 func (pv *ProgressView) Render(availableHeight int) string {
 	if availableHeight < styles.MinContentHeight {
 		availableHeight = styles.MinContentHeight
 	}
 
-	var lines []string
-
-	lines = append(lines, "")
+	// Build fixed header lines
+	var headerLines []string
+	headerLines = append(headerLines, "")
 	if pv.Interrupted {
-		lines = append(lines, styles.WarningStyle.Render("INTERRUPTED"))
-		lines = append(lines, "")
-		lines = append(lines, pv.Summary())
+		headerLines = append(headerLines, styles.WarningStyle.Render("INTERRUPTED"))
+		headerLines = append(headerLines, "")
+		headerLines = append(headerLines, pv.Summary())
 	} else {
-		lines = append(lines, styles.BrandStyle.Render("EXECUTING..."))
+		headerLines = append(headerLines, styles.BrandStyle.Render("EXECUTING..."))
 	}
-	lines = append(lines, "")
+	headerLines = append(headerLines, "")
+	headerCount := len(headerLines)
 
+	// Build footer lines
+	var footerLines []string
+	if pv.Total > 0 {
+		progress := float64(pv.Progress) / float64(pv.Total)
+		barWidth := styles.ProgressWidth
+		filled := int(progress * float64(barWidth))
+		bar := strings.Repeat(styles.ProgressFilled, filled) + strings.Repeat(styles.ProgressEmpty, barWidth-filled)
+		footerLines = append(footerLines, "")
+		footerLines = append(footerLines, fmt.Sprintf("  Progress: %s %.0f%%", styles.ProgressBarStyle.Render(bar), progress*100))
+	}
+	if pv.Elapsed != "" {
+		footerLines = append(footerLines, "")
+		footerLines = append(footerLines, styles.MutedStyle.Render(fmt.Sprintf("  Elapsed: %s", pv.Elapsed)))
+	}
+	footerCount := len(footerLines)
+
+	// Build scrollable content lines (group headers + items)
+	var contentLines []string
 	itemIndex := 0
 	for _, group := range pv.Groups {
-		// Server group header
-		lines = append(lines, fmt.Sprintf("  %s %s", styles.IconExpanded, group.ServerName))
-
+		contentLines = append(contentLines, fmt.Sprintf("  %s %s", styles.IconExpanded, group.ServerName))
 		for _, item := range group.Items {
 			icon := pv.statusIcon(item.Status)
 			iconStyle := pv.statusStyle(item.Status)
-
 			indexStr := fmt.Sprintf("[%d/%d]", itemIndex+1, pv.Total)
 			statusText := pv.statusText(item.Status, item.Action)
-
 			line := fmt.Sprintf("    %s %s %-8s %-16s %s",
 				iconStyle.Render(icon),
 				indexStr,
@@ -224,26 +256,40 @@ func (pv *ProgressView) Render(availableHeight int) string {
 				truncate(item.Name, 16),
 				statusText,
 			)
-			lines = append(lines, line)
+			contentLines = append(contentLines, line)
 			itemIndex++
 		}
 	}
 
-	// Progress bar
-	lines = append(lines, "")
-	if pv.Total > 0 {
-		progress := float64(pv.Progress) / float64(pv.Total)
-		barWidth := styles.ProgressWidth
-		filled := int(progress * float64(barWidth))
-		bar := strings.Repeat(styles.ProgressFilled, filled) + strings.Repeat(styles.ProgressEmpty, barWidth-filled)
-		lines = append(lines, fmt.Sprintf("  Progress: %s %.0f%%", styles.ProgressBarStyle.Render(bar), progress*100))
+	// Calculate content height available for scrollable items
+	contentHeight := availableHeight - headerCount - footerCount
+	if contentHeight < 1 {
+		contentHeight = 1
 	}
 
-	// Elapsed time
-	if pv.Elapsed != "" {
-		lines = append(lines, "")
-		lines = append(lines, styles.MutedStyle.Render(fmt.Sprintf("  Elapsed: %s", pv.Elapsed)))
+	totalContentLines := len(contentLines)
+
+	// Auto-scroll to the active item
+	activeIdx := pv.activeLineIndex()
+	viewport := NewComponentViewport(activeIdx, totalContentLines, contentHeight)
+	viewport.EnsureCursorVisible()
+
+	// Assemble final output
+	var lines []string
+	lines = append(lines, headerLines...)
+
+	start := viewport.VisibleStart()
+	end := viewport.VisibleEnd()
+	for i := start; i < end && i < totalContentLines; i++ {
+		lines = append(lines, contentLines[i])
 	}
+
+	// Scroll indicator
+	if viewport.TotalRows > viewport.VisibleRows {
+		lines = append(lines, viewport.RenderScrollIndicator())
+	}
+
+	lines = append(lines, footerLines...)
 
 	return strings.Join(lines, "\n")
 }

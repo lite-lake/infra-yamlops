@@ -52,34 +52,34 @@ func renderStatusBarSep(width int) string {
 // renderHelpBar renders the bottom help bar with current keyboard shortcuts.
 func (m Model) renderHelpBar() string {
 	if m.ShowHelp {
-		return styles.HelpBarStyle.Render("[?] 关闭帮助")
+		return styles.HelpBarStyle.Render("[?] Hide help")
 	}
 	var items []string
 	switch m.ViewState {
 	case ViewStateMainMenu:
-		items = []string{"↑↓ 导航", "Space 展开/折叠", "Enter 选择", "? 帮助", "q 退出"}
+		items = []string{"[↑↓] Navigate", "[Space] Expand/Collapse", "[Enter] Select", "[?] Help", "[q] Quit"}
 	case ViewStateServiceMenu, ViewStateServerMenu, ViewStateDNSMenu, ViewStateConfigMenu:
-		items = []string{"↑↓ 导航", "Enter 选择", "? 帮助", "q 退出"}
+		items = []string{"[↑↓] Navigate", "[Enter] Select", "[?] Help", "[q] Quit"}
 	case ViewStateTreeService, ViewStateTreeDNS:
-		items = []string{"Space 切换选中", "a 全选", "n 全不选", "Enter 确认", "/ 搜索", "? 帮助", "Esc 返回"}
+		items = []string{"[Space] Toggle", "[a] Select all", "[n] Select none", "[Enter] Confirm", "[/] Search", "[?] Help", "[Esc] Back"}
 	case ViewStateFilter:
-		items = []string{"Space 切换选中", "←→ 切换分组", "a 全选", "n 全不选", "Enter 确认", "? 帮助", "Esc 返回"}
+		items = []string{"[Space] Toggle", "[←→] Switch group", "[a] Select all", "[n] Select none", "[Enter] Confirm", "[?] Help", "[Esc] Back"}
 	case ViewStatePlan:
-		items = []string{"Space 切换选中", "a 全选", "n 全不选", "d 切换详情", "f 强制模式", "Enter 执行", "Esc 返回"}
+		items = []string{"[Space] Toggle", "[a] Select all", "[n] Select none", "[d] Toggle detail", "[f] Force mode", "[Enter] Execute", "[Esc] Back"}
 	case ViewStateProgress:
 		if m.Action.Interrupted {
-			items = []string{"Esc 返回主菜单", "? 帮助"}
+			items = []string{"[Esc] Back to main menu", "[?] Help"}
 		} else {
-			items = []string{"Ctrl+C 中断（已执行不回滚）", "? 帮助"}
+			items = []string{"[Ctrl+C] Interrupt (no rollback)", "[?] Help"}
 		}
 	case ViewStateComplete:
-		items = []string{"r 重新 Plan", "Esc 返回主菜单", "? 帮助"}
+		items = []string{"[r] Re-plan", "[Esc] Back to main menu", "[?] Help"}
 	case ViewStateInfoList, ViewStateInfoDetail:
-		items = []string{"d 切换详情/列表", "/ 搜索", "↑↓ 滚动", "? 帮助", "Esc 返回"}
+		items = []string{"[d] Toggle detail", "[/] Search", "[↑↓] Scroll", "[?] Help", "[Esc] Back"}
 	case ViewStateValidate:
-		items = []string{"↑↓ 滚动", "Esc 返回"}
+		items = []string{"[↑↓] Scroll", "[Esc] Back"}
 	default:
-		items = []string{"? 帮助", "Esc 返回"}
+		items = []string{"[?] Help", "[Esc] Back"}
 	}
 	return styles.HelpBarStyle.Render(strings.Join(items, styles.HelpKeySep))
 }
@@ -984,7 +984,7 @@ func (m Model) renderHelpContent() string {
 	}
 
 	b.WriteString("\n")
-	b.WriteString(styles.MutedStyle.Render("[?] 关闭帮助"))
+	b.WriteString(styles.MutedStyle.Render("[?] Hide help"))
 
 	return b.String()
 }
@@ -1815,9 +1815,23 @@ func (m Model) infoDetailMaxIndex() int {
 	switch m.Action.OperationType {
 	case "show":
 		showBiz, showInfra := m.getSelectedServiceTypes()
+		// Summary table: header + rows
+		bizCount := 0
+		infraCount := 0
+		if showBiz {
+			bizCount = len(m.Config.Services)
+		}
+		if showInfra {
+			infraCount = len(m.Config.InfraServices)
+		}
+		totalServices := bizCount + infraCount
+		if totalServices > 0 {
+			count++                  // summary header
+			count += totalServices   // summary rows
+		}
 		if showBiz {
 			for _, svc := range m.Config.Services {
-				count += 2 // title + blank
+				count += 2 // blank + title
 				if len(svc.ExternalBackends) > 0 {
 					count++ // Backends
 				} else {
@@ -1836,7 +1850,7 @@ func (m Model) infoDetailMaxIndex() int {
 		}
 		if showInfra {
 			for _, infra := range m.Config.InfraServices {
-				count += 2 // title + blank
+				count += 2 // blank + title
 				count += 3 // Type + Image + Server
 				if infra.GatewayPorts != nil {
 					var portCount int
@@ -1859,8 +1873,13 @@ func (m Model) infoDetailMaxIndex() int {
 			}
 		}
 	case "server_show":
+		// Summary table
+		if len(m.Config.Servers) > 0 {
+			count++                  // summary header
+			count += len(m.Config.Servers) // summary rows
+		}
 		for _, srv := range m.Config.Servers {
-			count += 2 // title + blank
+			count += 2 // blank + title
 			if srv.IP.Public != "" {
 				count++
 			}
@@ -1876,17 +1895,28 @@ func (m Model) infoDetailMaxIndex() int {
 			}
 		}
 	case "dns_show":
+		// Summary table
+		if len(m.Config.Domains) > 0 {
+			count++                  // summary header
+			count += len(m.Config.Domains) // summary rows
+		}
 		for _, domain := range m.Config.Domains {
-			count += 2 // title + blank
+			count += 2 // blank + title
 			count++    // ISP field
 			if len(domain.Records) > 0 {
 				count++                      // Records label
+				count += 1                   // table header (TYPE NAME VALUE TTL)
 				count += len(domain.Records) // record rows
 			}
 		}
 	case "config_show_isps":
+		// Summary table
+		if len(m.Config.ISPs) > 0 {
+			count++                // summary header
+			count += len(m.Config.ISPs) // summary rows
+		}
 		for _, isp := range m.Config.ISPs {
-			count += 2 // title + blank
+			count += 2 // blank + title
 			count += 2 // Type + Services
 			var regionZones []string
 			for _, z := range m.Config.Zones {
@@ -1905,18 +1935,24 @@ func (m Model) infoDetailMaxIndex() int {
 			}
 		}
 	case "config_show_registries":
+		// Summary table
+		if len(m.Config.Registries) > 0 {
+			count++                     // summary header
+			count += len(m.Config.Registries) // summary rows
+		}
 		for range m.Config.Registries {
-			count += 2 // title + blank
+			count += 2 // blank + title
 			count += 3 // URL + Namespace + Auth
 		}
 	case "config_show_secrets":
+		// Summary table (secrets uses InfoListView-style table, not summary)
 		if len(m.Config.Secrets) > 0 {
 			count++ // table header
 		}
 		count += len(m.Config.Secrets) // table rows
 		// 每个 Secret 的详情
 		for range m.Config.Secrets {
-			count += 2 // title + blank
+			count += 2 // blank + title
 			count += 2 // Source + Description fields
 		}
 	}
@@ -1931,21 +1967,43 @@ func (m Model) validateMaxIndex() int {
 	if m.UI.Validate == nil {
 		return 0
 	}
-	count := 4 // title + blank + result line + blank
-	if m.UI.Validate.Passed > 0 {
-		count++ // OK line
-	}
-	if m.UI.Validate.Failed > 0 {
-		count++ // Fail line
-	}
-	if m.UI.Validate.Warnings > 0 {
-		count++ // Warn line
-	}
+
+	// Count only scrollable content lines (errors/warnings section),
+	// matching the viewport logic in ValidateView.Render().
+	contentLines := 0
 	if m.UI.Validate.Failed > 0 || m.UI.Validate.Warnings > 0 {
-		count += len(m.UI.Validate.Errors) * 3 // message + suggestion + blank per error
+		errorIdx := 0
+		warnIdx := 0
+		for _, item := range m.UI.Validate.Errors {
+			if item.Level == "error" {
+				if errorIdx == 0 {
+					contentLines++ // section header "ERRORS:"
+				}
+				contentLines++ // message line
+				if item.Suggestion != "" {
+					contentLines++ // suggestion line
+				}
+				contentLines++ // blank line
+				errorIdx++
+			}
+		}
+		for _, item := range m.UI.Validate.Errors {
+			if item.Level == "warning" {
+				if warnIdx == 0 {
+					contentLines++ // section header "WARNINGS:"
+				}
+				contentLines++ // message line
+				if item.Suggestion != "" {
+					contentLines++ // suggestion line
+				}
+				contentLines++ // blank line
+				warnIdx++
+			}
+		}
 	}
-	if count > 0 {
-		return count - 1
+
+	if contentLines > 0 {
+		return contentLines - 1
 	}
 	return 0
 }

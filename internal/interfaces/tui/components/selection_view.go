@@ -156,26 +156,50 @@ func (sv *SelectionView) GetSelectedLabels(groupIndex int) []string {
 	return labels
 }
 
-// Render renders the selection view.
+// activeLineIndex returns the line index in the scrollable content section
+// corresponding to the current cursor position.
+func (sv *SelectionView) activeLineIndex() int {
+	lineIdx := 0
+	for gi, group := range sv.Groups {
+		lineIdx++ // group header
+		if gi == sv.SelectedGroup {
+			lineIdx += sv.Cursors[gi]
+			return lineIdx
+		}
+		lineIdx += len(group.Items)
+		lineIdx++ // blank line
+	}
+	return max(0, lineIdx-1)
+}
+
+// Render renders the selection view with viewport-based scrolling.
 func (sv *SelectionView) Render(availableHeight int) string {
 	if availableHeight < styles.MinContentHeight {
 		availableHeight = styles.MinContentHeight
 	}
 
-	var lines []string
+	// Fixed header: title + blank
+	var headerLines []string
+	headerLines = append(headerLines, sv.Title)
+	headerLines = append(headerLines, "")
+	headerCount := len(headerLines)
 
-	lines = append(lines, sv.Title)
-	lines = append(lines, "")
+	// Fixed footer: matched line
+	var footerLines []string
+	if sv.MatchedLine != "" {
+		footerLines = append(footerLines, sv.MatchedLine)
+	}
+	footerCount := len(footerLines)
 
+	// Build scrollable content lines: group headers + items + blank separators
+	var contentLines []string
 	for gi, group := range sv.Groups {
-		// Group header
 		groupIndicator := " "
 		if gi == sv.SelectedGroup {
 			groupIndicator = "▸"
 		}
-		lines = append(lines, fmt.Sprintf("  %s %s:", groupIndicator, group.Title))
+		contentLines = append(contentLines, fmt.Sprintf("  %s %s:", groupIndicator, group.Title))
 
-		// Items
 		for ii, item := range group.Items {
 			cursor := " "
 			if gi == sv.SelectedGroup && ii == sv.Cursors[gi] {
@@ -194,18 +218,43 @@ func (sv *SelectionView) Render(availableHeight int) string {
 
 			line := fmt.Sprintf("    %s %s %s%s", cursor, checkbox, item.Label, meta)
 			if gi == sv.SelectedGroup && ii == sv.Cursors[gi] {
-				lines = append(lines, styles.SelectedStyle.Render(line))
+				contentLines = append(contentLines, styles.SelectedStyle.Render(line))
 			} else {
-				lines = append(lines, line)
+				contentLines = append(contentLines, line)
 			}
 		}
-		lines = append(lines, "")
+		contentLines = append(contentLines, "")
 	}
 
-	// Matched line
-	if sv.MatchedLine != "" {
-		lines = append(lines, sv.MatchedLine)
+	// Calculate content height
+	contentHeight := availableHeight - headerCount - footerCount
+	if contentHeight < 1 {
+		contentHeight = 1
 	}
+
+	totalContentLines := len(contentLines)
+
+	// Auto-scroll to the active cursor position
+	activeIdx := sv.activeLineIndex()
+	viewport := NewComponentViewport(activeIdx, totalContentLines, contentHeight)
+	viewport.EnsureCursorVisible()
+
+	// Assemble final output
+	var lines []string
+	lines = append(lines, headerLines...)
+
+	start := viewport.VisibleStart()
+	end := viewport.VisibleEnd()
+	for i := start; i < end && i < totalContentLines; i++ {
+		lines = append(lines, contentLines[i])
+	}
+
+	// Scroll indicator
+	if viewport.TotalRows > viewport.VisibleRows {
+		lines = append(lines, viewport.RenderScrollIndicator())
+	}
+
+	lines = append(lines, footerLines...)
 
 	return strings.Join(lines, "\n")
 }

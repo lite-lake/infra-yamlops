@@ -105,7 +105,17 @@ func (cv *CompleteView) Summary() string {
 // TotalLines returns the total number of rendered lines (for scroll calculations).
 func (cv *CompleteView) TotalLines() int {
 	count := 2 // title + blank
-	count += len(cv.Items)
+	for _, item := range cv.Items {
+		count++ // item line
+		if !item.Success && !item.Skipped {
+			if item.Error != "" {
+				count++ // error detail line
+			}
+			if item.Suggestion != "" {
+				count++ // suggestion detail line
+			}
+		}
+	}
 	count += 2 // blank + summary
 	if cv.customSummary != "" {
 		// custom summary may contain multiple lines

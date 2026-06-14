@@ -102,7 +102,7 @@ func (vv *ValidateView) ResultString() string {
 	return "Result: FAILED"
 }
 
-// Render renders the validate view.
+// Render renders the validate view with viewport-based scrolling.
 func (vv *ValidateView) Render(availableHeight int) string {
 	if availableHeight < styles.MinContentHeight {
 		availableHeight = styles.MinContentHeight
@@ -126,44 +126,74 @@ func (vv *ValidateView) Render(availableHeight int) string {
 	}
 	lines = append(lines, "")
 
-	// Error and warning details
+	headerCount := len(lines)
+
+	// Footer: result line
+	var footerLines []string
+	if vv.Passed {
+		footerLines = append(footerLines, styles.SuccessStyle.Render(vv.ResultString()))
+	} else {
+		footerLines = append(footerLines, styles.ErrorStyle.Render(vv.ResultString()))
+	}
+
+	// Build scrollable content lines from errors/warnings
+	var contentLines []string
 	if vv.FailCount > 0 || vv.WarnCount > 0 {
 		errorIdx := 1
 		warnIdx := 1
 		for _, result := range vv.Results {
 			if result.Level == "error" {
 				if errorIdx == 1 {
-					lines = append(lines, styles.ErrorStyle.Render("  ERRORS:"))
+					contentLines = append(contentLines, styles.ErrorStyle.Render("  ERRORS:"))
 				}
-				lines = append(lines, styles.ErrorStyle.Render(fmt.Sprintf("    [%d] %s", errorIdx, result.Message)))
+				contentLines = append(contentLines, styles.ErrorStyle.Render(fmt.Sprintf("    [%d] %s", errorIdx, result.Message)))
 				if result.Suggestion != "" {
-					lines = append(lines, styles.MutedStyle.Render(fmt.Sprintf("        Suggestion: %s", result.Suggestion)))
+					contentLines = append(contentLines, styles.MutedStyle.Render(fmt.Sprintf("        Suggestion: %s", result.Suggestion)))
 				}
-				lines = append(lines, "")
+				contentLines = append(contentLines, "")
 				errorIdx++
 			}
 		}
 		for _, result := range vv.Results {
 			if result.Level == "warning" {
 				if warnIdx == 1 {
-					lines = append(lines, styles.WarningStyle.Render("  WARNINGS:"))
+					contentLines = append(contentLines, styles.WarningStyle.Render("  WARNINGS:"))
 				}
-				lines = append(lines, styles.WarningStyle.Render(fmt.Sprintf("    [%d] %s", warnIdx, result.Message)))
+				contentLines = append(contentLines, styles.WarningStyle.Render(fmt.Sprintf("    [%d] %s", warnIdx, result.Message)))
 				if result.Suggestion != "" {
-					lines = append(lines, styles.MutedStyle.Render(fmt.Sprintf("        Suggestion: %s", result.Suggestion)))
+					contentLines = append(contentLines, styles.MutedStyle.Render(fmt.Sprintf("        Suggestion: %s", result.Suggestion)))
 				}
-				lines = append(lines, "")
+				contentLines = append(contentLines, "")
 				warnIdx++
 			}
 		}
 	}
 
-	// Result
-	if vv.Passed {
-		lines = append(lines, styles.SuccessStyle.Render(vv.ResultString()))
-	} else {
-		lines = append(lines, styles.ErrorStyle.Render(vv.ResultString()))
+	// Calculate available height for scrollable content
+	contentHeight := availableHeight - headerCount - len(footerLines)
+	if contentHeight < 1 {
+		contentHeight = 1
 	}
+
+	totalContentLines := len(contentLines)
+	if totalContentLines > 0 {
+		viewport := NewComponentViewport(vv.Cursor, totalContentLines, contentHeight)
+		viewport.EnsureCursorVisible()
+
+		start := viewport.VisibleStart()
+		end := viewport.VisibleEnd()
+		for i := start; i < end && i < totalContentLines; i++ {
+			lines = append(lines, contentLines[i])
+		}
+
+		// Scroll indicator
+		if viewport.TotalRows > viewport.VisibleRows {
+			lines = append(lines, viewport.RenderScrollIndicator())
+		}
+	}
+
+	// Footer
+	lines = append(lines, footerLines...)
 
 	return strings.Join(lines, "\n")
 }
