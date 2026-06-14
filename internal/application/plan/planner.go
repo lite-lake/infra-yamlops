@@ -95,15 +95,17 @@ func (p *Planner) Plan(scope *valueobject.Scope) (*valueobject.Plan, error) {
 
 	// Plan biz services when:
 	// 1. Explicit biz services are selected, OR
-	// 2. No service filters AND not DNS-only mode
-	if len(scope.BizServices()) > 0 || (!scope.HasServices() && !scope.IsDNSOnly()) {
+	// 2. --type includes biz (but no explicit service names), OR
+	// 3. No service filters AND not DNS-only mode
+	if len(scope.BizServices()) > 0 || scope.ShouldProcessBiz() && len(scope.ServiceTypes()) > 0 && len(scope.BizServices()) == 0 || (!scope.HasServices() && !scope.IsDNSOnly()) {
 		p.differService.PlanServices(plan, p.config.GetServiceMap(), p.config.GetServerMap(), scope)
 	}
 
 	// Plan infra services when:
 	// 1. Explicit infra services are selected, OR
-	// 2. No service filters AND not DNS-only mode
-	if len(scope.InfraServices()) > 0 || (!scope.HasServices() && !scope.IsDNSOnly()) {
+	// 2. --type includes infra (but no explicit service names), OR
+	// 3. No service filters AND not DNS-only mode
+	if len(scope.InfraServices()) > 0 || scope.ShouldProcessInfra() && len(scope.ServiceTypes()) > 0 && len(scope.InfraServices()) == 0 || (!scope.HasServices() && !scope.IsDNSOnly()) {
 		p.differService.PlanInfraServices(plan, p.config.GetInfraServiceMap(), p.config.GetServerMap(), scope)
 	}
 

@@ -67,8 +67,8 @@ func (f *StateFetcher) FetchWithScope(ctx context.Context, cfg *entity.Config, s
 			if includeServer && scope.HasServices() {
 				hasRelevantService := false
 
-				// Check business services only if we have business service selections
-				if len(scope.BizServices()) > 0 {
+				// Check business services: explicit names OR --type includes biz
+				if len(scope.BizServices()) > 0 || scope.ShouldProcessBiz() {
 					for _, svc := range cfg.Services {
 						if svc.Server == srv.Name && scope.MatchesBizService(svc.Name) {
 							hasRelevantService = true
@@ -77,8 +77,8 @@ func (f *StateFetcher) FetchWithScope(ctx context.Context, cfg *entity.Config, s
 					}
 				}
 
-				// Check infra services only if we have infra service selections (and haven't found a match yet)
-				if !hasRelevantService && len(scope.InfraServices()) > 0 {
+				// Check infra services: explicit names OR --type includes infra
+				if !hasRelevantService && (len(scope.InfraServices()) > 0 || scope.ShouldProcessInfra()) {
 					for _, svc := range cfg.InfraServices {
 						if svc.Server == srv.Name && scope.MatchesInfraService(svc.Name) {
 							hasRelevantService = true
