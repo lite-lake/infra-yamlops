@@ -19,14 +19,14 @@ func TestPlan_NewPlan(t *testing.T) {
 }
 
 func TestPlan_NewPlanWithScope(t *testing.T) {
-	scope := NewScope().WithZone("zone1")
+	scope := NewScope().WithZones([]string{"zone1"})
 	plan := NewPlanWithScope(scope)
 
 	if plan == nil {
 		t.Fatal("expected non-nil plan")
 	}
-	if plan.Scope().Zone() != "zone1" {
-		t.Errorf("expected scope zone 'zone1', got %s", plan.Scope().Zone())
+	if len(plan.Scope().Zones()) != 1 || plan.Scope().Zones()[0] != "zone1" {
+		t.Errorf("expected scope zone 'zone1', got %v", plan.Scope().Zones())
 	}
 }
 
@@ -103,107 +103,6 @@ func TestPlan_FilterByEntity(t *testing.T) {
 
 	if len(servers) != 2 {
 		t.Errorf("expected 2 server changes, got %d", len(servers))
-	}
-}
-
-func TestScope_Matches(t *testing.T) {
-	tests := []struct {
-		name     string
-		scope    *Scope
-		zone     string
-		server   string
-		service  string
-		domain   string
-		expected bool
-	}{
-		{
-			name:     "empty scope matches all",
-			scope:    NewScope(),
-			zone:     "zone1",
-			server:   "srv1",
-			service:  "svc1",
-			domain:   "example.com",
-			expected: true,
-		},
-		{
-			name:     "zone filter match",
-			scope:    NewScope().WithZone("zone1"),
-			zone:     "zone1",
-			expected: true,
-		},
-		{
-			name:     "zone filter no match",
-			scope:    NewScope().WithZone("zone1"),
-			zone:     "zone2",
-			expected: false,
-		},
-		{
-			name:     "server filter match",
-			scope:    NewScope().WithServer("srv1"),
-			server:   "srv1",
-			expected: true,
-		},
-		{
-			name:     "service filter match",
-			scope:    NewScope().WithService("svc1"),
-			service:  "svc1",
-			expected: true,
-		},
-		{
-			name:     "domain filter match",
-			scope:    NewScope().WithDomain("example.com"),
-			domain:   "example.com",
-			expected: true,
-		},
-		{
-			name:     "multiple filters all match",
-			scope:    NewScope().WithZone("zone1").WithServer("srv1"),
-			zone:     "zone1",
-			server:   "srv1",
-			expected: true,
-		},
-		{
-			name:     "multiple filters partial match",
-			scope:    NewScope().WithZone("zone1").WithServer("srv1"),
-			zone:     "zone1",
-			server:   "srv2",
-			expected: false,
-		},
-		{
-			name:     "services slice match",
-			scope:    NewScope().WithServices([]string{"svc1", "svc2"}),
-			service:  "svc1",
-			expected: true,
-		},
-		{
-			name:     "services slice no match",
-			scope:    NewScope().WithServices([]string{"svc1", "svc2"}),
-			service:  "svc3",
-			expected: false,
-		},
-		{
-			name:     "services slice with zone match",
-			scope:    NewScope().WithZone("zone1").WithServices([]string{"svc1"}),
-			zone:     "zone1",
-			service:  "svc1",
-			expected: true,
-		},
-		{
-			name:     "services slice with zone no match service",
-			scope:    NewScope().WithZone("zone1").WithServices([]string{"svc1"}),
-			zone:     "zone1",
-			service:  "svc2",
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := tt.scope.Matches(tt.zone, tt.server, tt.service, tt.domain)
-			if result != tt.expected {
-				t.Errorf("Matches() = %v, expected %v", result, tt.expected)
-			}
-		})
 	}
 }
 

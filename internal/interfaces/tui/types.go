@@ -11,6 +11,18 @@ type DomainDiff struct {
 	DNSISP     string
 	Parent     string
 	ChangeType valueobject.ChangeType
+	Prefix     string
+}
+
+func NewDomainDiff(name, isp, dnsisp, parent string, changeType valueobject.ChangeType) DomainDiff {
+	prefix := "~"
+	switch changeType {
+	case valueobject.ChangeTypeCreate:
+		prefix = "+"
+	case valueobject.ChangeTypeDelete:
+		prefix = "-"
+	}
+	return DomainDiff{Name: name, ISP: isp, DNSISP: dnsisp, Parent: parent, ChangeType: changeType, Prefix: prefix}
 }
 
 type RecordDiff struct {
@@ -21,4 +33,16 @@ type RecordDiff struct {
 	Value      string
 	TTL        int
 	ChangeType valueobject.ChangeType
+	Prefix     string
+}
+
+func NewRecordDiff(domain, dnsisp string, recType entity.DNSRecordType, name, value string, ttl int, changeType valueobject.ChangeType) RecordDiff {
+	prefix := "~"
+	switch changeType {
+	case valueobject.ChangeTypeCreate:
+		prefix = "+"
+	case valueobject.ChangeTypeDelete:
+		prefix = "-"
+	}
+	return RecordDiff{Domain: domain, DNSISP: dnsisp, Type: recType, Name: name, Value: value, TTL: ttl, ChangeType: changeType, Prefix: prefix}
 }

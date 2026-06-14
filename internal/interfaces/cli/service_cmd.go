@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
 
@@ -16,310 +18,430 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/ssh"
 )
 
-type ServiceFilters struct {
+type ServiceCmdFilters struct {
+	Type   string
+	Zone   string
 	Server string
-	Infra  string
-	Biz    string
+}
+
+func buildServiceScope(filters ServiceCmdFilters, forceDeploy bool) (*valueobject.Scope, error) {
+	scope := valueobject.NewScope()
+	if filters.Zone != "" {
+		scope = scope.WithZones(splitAndTrim(filters.Zone, ","))
+	}
+	if filters.Server != "" {
+		scope = scope.WithServers(splitAndTrim(filters.Server, ","))
+	}
+	serviceTypes, err := parseServiceTypes(filters.Type)
+	if err != nil {
+		return nil, err
+	}
+	if len(serviceTypes) > 0 {
+		scope = scope.WithServiceTypes(serviceTypes)
+	}
+	if forceDeploy {
+		scope = scope.WithForceDeploy(true)
+	}
+	return scope, nil
 }
 
 func newServiceCommand(ctx *Context) *cobra.Command {
-	var filters ServiceFilters
-	var autoApprove bool
-	var forceDeploy bool
+	var filters ServiceCmdFilters
 
 	serviceCmd := &cobra.Command{
 		Use:   "service",
-		Short: "Manage services (deploy, stop, restart, cleanup)",
-		Long:  "Manage services: deploy new or updated services, stop, restart, and cleanup orphan resources.",
+		Short: "Service management commands",
+		Long: `Service management commands.
+
+Commands:
+  show      List services (use --detail for detailed view)
+  validate  Validate service configuration
+  deploy    Deploy services (Plan -> Confirm -> Execute)
+  stop      Stop services (Plan -> Confirm -> Execute)
+  restart   Restart services (Plan -> Confirm -> Execute)
+  cleanup   Clean up orphan resources (Plan -> Confirm -> Execute)
+
+Flags:
+  --type string         Service type filter: biz, infra, biz,infra (default: all)
+  --detail              Show detailed information (for show command)
+  --concurrency int     Concurrency for server operations (default: 5)
+
+Examples:
+  yamlops cli service show -e prod --type biz
+  yamlops cli service deploy -e prod --type biz --dry-run
+  yamlops cli service stop -e prod --type infra --yes
+  yamlops cli service cleanup -e prod --dry-run`,
 	}
 
-	serviceDeployCmd := &cobra.Command{
-		Use:   "deploy",
-		Short: "Deploy services",
-		Long:  "Deploy services. If services already exist, they will be restarted with updated files.",
-		Run: func(cmd *cobra.Command, args []string) {
-			runServiceDeploy(ctx, filters, autoApprove, forceDeploy)
-		},
-	}
+	serviceCmd.PersistentFlags().StringVar(&filters.Type, "type", "", "Service type filter: biz, infra, biz,infra (default: all)")
+	serviceCmd.PersistentFlags().StringVar(&filters.Zone, "zone", "", "Zone filter (comma-separated)")
+	serviceCmd.PersistentFlags().StringVar(&filters.Server, "server", "", "Server filter (comma-separated)")
 
-	serviceStopCmd := &cobra.Command{
-		Use:   "stop",
-		Short: "Stop services",
-		Long:  "Stop running services. Data is preserved.",
-		Run: func(cmd *cobra.Command, args []string) {
-			runServiceStop(ctx, filters, autoApprove)
-		},
-	}
-
-	serviceRestartCmd := &cobra.Command{
-		Use:   "restart",
-		Short: "Restart services",
-		Long:  "Restart services without pulling images or syncing files.",
-		Run: func(cmd *cobra.Command, args []string) {
-			runServiceRestart(ctx, filters, autoApprove)
-		},
-	}
-
-	serviceCleanupCmd := &cobra.Command{
-		Use:   "cleanup",
-		Short: "Cleanup orphan resources",
-		Long:  "Scan and remove orphan containers and directories that are not in the configuration.",
-		Run: func(cmd *cobra.Command, args []string) {
-			runServiceCleanup(ctx, filters, autoApprove)
-		},
-	}
-
-	serviceCmd.PersistentFlags().StringVarP(&filters.Server, "server", "s", "", "Filter by server")
-	serviceCmd.PersistentFlags().StringVarP(&filters.Infra, "infra", "i", "", "Filter by infra service")
-	serviceCmd.PersistentFlags().StringVarP(&filters.Biz, "biz", "b", "", "Filter by business service")
-
-	serviceDeployCmd.Flags().BoolVarP(&autoApprove, "yes", "y", false, "Auto approve without confirmation")
-	serviceDeployCmd.Flags().BoolVar(&forceDeploy, "force", false, "Force deploy even if no changes detected")
-	serviceStopCmd.Flags().BoolVarP(&autoApprove, "yes", "y", false, "Auto approve without confirmation")
-	serviceRestartCmd.Flags().BoolVarP(&autoApprove, "yes", "y", false, "Auto approve without confirmation")
-	serviceCleanupCmd.Flags().BoolVarP(&autoApprove, "yes", "y", false, "Auto approve without confirmation")
-
-	serviceCmd.AddCommand(serviceDeployCmd)
-	serviceCmd.AddCommand(serviceStopCmd)
-	serviceCmd.AddCommand(serviceRestartCmd)
-	serviceCmd.AddCommand(serviceCleanupCmd)
+	serviceCmd.AddCommand(newServiceShowCommand(ctx, &filters))
+	serviceCmd.AddCommand(newServiceValidateCommand(ctx, &filters))
+	serviceCmd.AddCommand(newServiceDeployCommand(ctx, &filters))
+	serviceCmd.AddCommand(newServiceStopCommand(ctx, &filters))
+	serviceCmd.AddCommand(newServiceRestartCommand(ctx, &filters))
+	serviceCmd.AddCommand(newServiceCleanupCommand(ctx, &filters))
 
 	return serviceCmd
 }
 
-func runServiceDeploy(ctx *Context, filters ServiceFilters, autoApprove bool, forceDeploy bool) {
+func newServiceDeployCommand(ctx *Context, filters *ServiceCmdFilters) *cobra.Command {
+	var dryRun, yes, force bool
+	cmd := &cobra.Command{
+		Use:   "deploy",
+		Short: "Deploy services",
+		Long: `Deploy services using unified execution mode: Plan -> Confirm -> Execute.
+
+Plan stage generates the deployment plan. --dry-run stops after Plan.
+--yes skips the Confirm stage and executes all changes immediately.
+--force generates a deployment plan even when configuration has no changes.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			runServiceDeployUnified(ctx, *filters, dryRun, yes, force, ctx.Concurrency)
+		},
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview changes without executing")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Skip confirmation, execute all changes")
+	cmd.Flags().BoolVar(&force, "force", false, "Force execution even without changes")
+	return cmd
+}
+
+func newServiceStopCommand(ctx *Context, filters *ServiceCmdFilters) *cobra.Command {
+	var dryRun, yes bool
+	cmd := &cobra.Command{
+		Use:   "stop",
+		Short: "Stop services",
+		Long: `Stop running services using unified execution mode: Plan -> Confirm -> Execute.
+
+Plan stage identifies running services to stop. --dry-run stops after Plan.
+--yes skips the Confirm stage and executes all changes immediately.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			runServiceStopUnified(ctx, *filters, dryRun, yes, ctx.Concurrency)
+		},
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview changes without executing")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Skip confirmation, execute all changes")
+	return cmd
+}
+
+func newServiceRestartCommand(ctx *Context, filters *ServiceCmdFilters) *cobra.Command {
+	var dryRun, yes bool
+	cmd := &cobra.Command{
+		Use:   "restart",
+		Short: "Restart services",
+		Long: `Restart services using unified execution mode: Plan -> Confirm -> Execute.
+
+Plan stage identifies services to restart. --dry-run stops after Plan.
+--yes skips the Confirm stage and executes all changes immediately.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			runServiceRestartUnified(ctx, *filters, dryRun, yes, ctx.Concurrency)
+		},
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview changes without executing")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Skip confirmation, execute all changes")
+	return cmd
+}
+
+func newServiceCleanupCommand(ctx *Context, filters *ServiceCmdFilters) *cobra.Command {
+	var dryRun, yes bool
+	cmd := &cobra.Command{
+		Use:   "cleanup",
+		Short: "Clean up orphan resources",
+		Long: `Scan and remove orphan containers and directories using unified execution mode:
+Plan -> Confirm -> Execute.
+
+Plan stage scans all servers for orphan resources (containers and directories
+prefixed with yo-{env}- whose service name no longer exists in config).
+--dry-run stops after Plan. --yes skips the Confirm stage and executes all
+changes immediately.
+
+Note: --type flag is ignored. Orphan resource names (yo-{env}-{name}) do not
+contain service type information, so Biz vs Infra cannot be distinguished.
+All orphan resources are scanned regardless of --type.`,
+		Run: func(cmd *cobra.Command, args []string) {
+			runServiceCleanupUnified(ctx, *filters, dryRun, yes, ctx.Concurrency)
+		},
+	}
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview changes without executing")
+	cmd.Flags().BoolVarP(&yes, "yes", "y", false, "Skip confirmation, execute all changes")
+	return cmd
+}
+
+// --- Service Deploy (unified execution mode) ---
+
+func runServiceDeployUnified(ctx *Context, filters ServiceCmdFilters, dryRun, yes, force bool, concurrency int) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
-
-	var bizServices []string
-	if filters.Biz != "" {
-		bizServices = strings.Split(filters.Biz, ",")
-	}
-
-	planScope := valueobject.NewScope().
-		WithServer(filters.Server).
-		WithService(filters.Biz).
-		WithServices(bizServices).
-		WithInfraServices(strings.Split(filters.Infra, ","))
-
-	// 如果指定了 --force 或者通过 -b/-i 选择了服务，则启用强制部署
-	if forceDeploy || filters.Biz != "" || filters.Infra != "" {
-		planScope = planScope.WithForceDeploy(true)
-	}
-
-	executionPlan, cfg, err := wf.Plan(context.Background(), "", planScope)
+	scope, err := buildServiceScope(filters, force)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Plan error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	var targetChanges []*valueobject.Change
+	executionPlan, cfg, err := wf.Plan(context.Background(), "", scope)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	var serviceChanges []*valueobject.Change
 	for _, ch := range executionPlan.Changes() {
-		if ch.Entity() != "service" && ch.Entity() != "infra_service" {
-			continue
-		}
-		if filters.Server != "" {
-			serverName := extractServerFromChange(ch, cfg)
-			if serverName != filters.Server {
-				continue
-			}
-		}
-		if filters.Biz != "" && ch.Entity() != "service" {
-			continue
-		}
-		if filters.Infra != "" && ch.Entity() != "infra_service" {
-			continue
-		}
-		targetChanges = append(targetChanges, ch)
-	}
-
-	if len(targetChanges) == 0 {
-		fmt.Println("No service changes to deploy.")
-		return
-	}
-
-	fmt.Println("Deploy Plan:")
-	fmt.Println("============")
-	for _, ch := range targetChanges {
-		fmt.Printf("  %s %s: %s\n", changeTypeIcon(ch.Type()), ch.Entity(), ch.Name())
-	}
-
-	if !autoApprove {
-		if !Confirm("Do you want to deploy these services?", false) {
-			fmt.Println("Cancelled.")
-			return
+		if ch.Entity() == "service" || ch.Entity() == "infra_service" {
+			serviceChanges = append(serviceChanges, ch)
 		}
 	}
 
-	executor := usecase.NewExecutor(&usecase.ExecutorConfig{
-		Plan: executionPlan,
-		Env:  ctx.Env,
+	DisplayPlanHeader(PlanHeader{
+		Title: buildPlanTitle("service deploy", dryRun, force),
+		Env:   ctx.Env,
+		Extra: planTypeExtra(filters.Type),
 	})
-	executor.SetSecrets(cfg.GetSecretsMap())
-	executor.SetServerEntities(cfg.GetServerMap())
-	executor.SetWorkDir(ctx.ConfigDir)
 
-	relevantServers := make(map[string]bool)
-	for _, svc := range cfg.Services {
-		if planScope.MatchesBizService(svc.Name) {
-			relevantServers[svc.Server] = true
+	if len(serviceChanges) == 0 {
+		DisplayNoChanges(dryRun, force)
+		if dryRun {
+			DisplayDryRun()
 		}
-	}
-	for _, svc := range cfg.InfraServices {
-		if planScope.MatchesInfraService(svc.Name) {
-			relevantServers[svc.Server] = true
-		}
-	}
-
-	for _, srv := range cfg.Servers {
-		if filters.Server != "" && srv.Name != filters.Server {
-			continue
-		}
-		if !relevantServers[srv.Name] && filters.Server == "" {
-			continue
-		}
-		password, err := srv.SSH.Password.Resolve(cfg.GetSecretsMap())
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error resolving password for server %s: %v\n", srv.Name, err)
-			continue
-		}
-		strictHostKeyChecking := true
-		if !srv.SSH.StrictHostKeyChecking {
-			strictHostKeyChecking = false
-		}
-		executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, strictHostKeyChecking)
-	}
-
-	results := executor.Apply()
-
-	hasError := false
-	for _, result := range results {
-		if result.Change.Entity() != "service" && result.Change.Entity() != "infra_service" {
-			continue
-		}
-		if filters.Server != "" {
-			serverName := extractServerFromChange(result.Change, cfg)
-			if serverName != filters.Server {
-				continue
-			}
-		}
-		if result.Success {
-			fmt.Printf("✓ %s: %s\n", result.Change.Entity(), result.Change.Name())
-			for _, w := range result.Warnings {
-				fmt.Printf("  ⚠ %s\n", w)
-			}
-		} else {
-			fmt.Printf("✗ %s: %s - %v\n", result.Change.Entity(), result.Change.Name(), result.Error)
-			hasError = true
-		}
-	}
-
-	if hasError {
-		os.Exit(1)
-	}
-}
-
-func runServiceStop(ctx *Context, filters ServiceFilters, autoApprove bool) {
-	cfg, err := loadConfig(ctx)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Load config error: %v\n", err)
-		os.Exit(1)
-	}
-
-	targetServices := collectTargetServices(cfg, filters)
-	if len(targetServices) == 0 {
-		fmt.Println("No services to stop.")
 		return
 	}
 
-	fmt.Println("Stop Plan:")
-	fmt.Println("==========")
-	for _, svc := range targetServices {
-		fmt.Printf("  Stop %s (%s)\n", svc.Name, svc.Server)
+	var rows []PlanRow
+	for _, ch := range serviceChanges {
+		rows = append(rows, PlanRow{
+			Action:  changeActionLabel(ch.Type()),
+			Name:    ch.Name(),
+			Server:  extractServerFromChange(ch, cfg),
+			Details: formatServiceDeployDetails(ch),
+		})
+	}
+	DisplayPlanTable4Col("ACTION", "NAME", "SERVER", "DETAILS", rows)
+
+	created, updated, deleted := countChanges(serviceChanges)
+	DisplaySummary(formatSummary(created, updated, deleted, force))
+
+	if dryRun {
+		DisplayDryRun()
+		return
 	}
 
-	if !autoApprove {
-		if !Confirm(fmt.Sprintf("Do you want to stop %d service(s)?", len(targetServices)), false) {
-			fmt.Println("Cancelled.")
+	if !yes {
+		if !Confirm("Continue?", false) {
+			DisplayCancelled()
 			return
 		}
 	}
 
-	executeServiceOperation(ctx, cfg, targetServices, stopServiceOperation, false)
+	filteredPlan := valueobject.NewPlan()
+	for _, ch := range serviceChanges {
+		filteredPlan.AddChange(ch)
+	}
+
+	DisplayExecuting()
+	executeServicePlan(ctx, cfg, filteredPlan, scope, concurrency)
 }
 
-func runServiceRestart(ctx *Context, filters ServiceFilters, autoApprove bool) {
-	cfg, err := loadConfig(ctx)
+// --- Service Stop (unified) ---
+
+func runServiceStopUnified(ctx *Context, filters ServiceCmdFilters, dryRun, yes bool, concurrency int) {
+	cfg, err := loadConfigFromContext(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Load config error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	targetServices := collectTargetServices(cfg, filters)
+	targetServices, err := collectTargetServicesUnified(cfg, filters)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 	if len(targetServices) == 0 {
-		fmt.Println("No services to restart.")
+		DisplayInfo("No services matched for stop.")
 		return
 	}
 
-	fmt.Println("Restart Plan:")
-	fmt.Println("=============")
+	DisplayPlanHeader(PlanHeader{
+		Title: buildPlanTitle("service stop", dryRun, false),
+		Env:   ctx.Env,
+		Extra: planTypeExtra(filters.Type),
+	})
+
+	var rows []PlanRow
 	for _, svc := range targetServices {
-		fmt.Printf("  Restart %s (%s)\n", svc.Name, svc.Server)
+		// NOTE: stop/restart uses collectTargetServicesUnified (config-only) rather than
+		// wf.Plan() which would query remote Docker state via SSH. The Details below
+		// reflect the *expected* state transition, not the actual remote container status.
+		// This is acceptable because docker compose stop/restart is idempotent (§6.6.7).
+		rows = append(rows, PlanRow{
+			Action:  "stop",
+			Name:    svc.Name,
+			Server:  svc.Server,
+			Details: "status: * -> stopped",
+		})
+	}
+	DisplayPlanTable4Col("ACTION", "NAME", "SERVER", "DETAILS", rows)
+	DisplaySummary(formatSummaryCount("stopped", len(targetServices)))
+
+	if dryRun {
+		DisplayDryRun()
+		return
 	}
 
-	if !autoApprove {
-		if !Confirm(fmt.Sprintf("Do you want to restart %d service(s)?", len(targetServices)), false) {
-			fmt.Println("Cancelled.")
+	if !yes {
+		if !Confirm("Continue?", false) {
+			DisplayCancelled()
 			return
 		}
 	}
 
-	executeServiceOperation(ctx, cfg, targetServices, restartServiceOperation, false)
+	DisplayExecuting()
+	executeServiceOperationUnified(ctx, cfg, targetServices, stopServiceOperation, "stop", "stopped", concurrency)
 }
 
-func runServiceCleanup(ctx *Context, filters ServiceFilters, autoApprove bool) {
-	cfg, err := loadConfig(ctx)
+// --- Service Restart (unified) ---
+
+func runServiceRestartUnified(ctx *Context, filters ServiceCmdFilters, dryRun, yes bool, concurrency int) {
+	cfg, err := loadConfigFromContext(ctx)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Load config error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
-	orphanResources, err := scanOrphanResourcesCLI(ctx, cfg)
+	targetServices, err := collectTargetServicesUnified(cfg, filters)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Scan error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	if len(targetServices) == 0 {
+		DisplayInfo("No services matched for restart.")
+		return
+	}
+
+	DisplayPlanHeader(PlanHeader{
+		Title: buildPlanTitle("service restart", dryRun, false),
+		Env:   ctx.Env,
+		Extra: planTypeExtra(filters.Type),
+	})
+
+	var rows []PlanRow
+	for _, svc := range targetServices {
+		// NOTE: restart uses collectTargetServicesUnified (config-only) rather than
+		// wf.Plan() which would query remote Docker state via SSH. The Details below
+		// reflect the *expected* state transition, not the actual remote container status.
+		// This is acceptable because docker compose restart is idempotent (§6.6.7).
+		rows = append(rows, PlanRow{
+			Action:  "restart",
+			Name:    svc.Name,
+			Server:  svc.Server,
+			Details: "status: * -> restarted",
+		})
+	}
+	DisplayPlanTable4Col("ACTION", "NAME", "SERVER", "DETAILS", rows)
+	DisplaySummary(formatSummaryCount("restarted", len(targetServices)))
+
+	if dryRun {
+		DisplayDryRun()
+		return
+	}
+
+	if !yes {
+		if !Confirm("Continue?", false) {
+			DisplayCancelled()
+			return
+		}
+	}
+
+	DisplayExecuting()
+	executeServiceOperationUnified(ctx, cfg, targetServices, restartServiceOperation, "restart", "restarted", concurrency)
+}
+
+// --- Service Cleanup (unified) ---
+
+func runServiceCleanupUnified(ctx *Context, filters ServiceCmdFilters, dryRun, yes bool, concurrency int) {
+	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
+	cfg, err := wf.LoadConfig(context.Background())
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	if filters.Type != "" {
+		fmt.Fprintln(os.Stderr, "Warning: --type is ignored for cleanup: orphan resource names (containers/directories) do not contain service type info, so Biz vs Infra cannot be determined. Scanning all orphan resources.")
+	}
+
+	orphanResources, err := scanOrphanResourcesCLIUnified(ctx, cfg)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
 
 	if len(orphanResources) == 0 {
-		fmt.Println("No orphan resources found.")
+		DisplayInfo("No orphan resources matched for cleanup.")
+		if dryRun {
+			DisplayDryRun()
+		}
 		return
 	}
 
-	fmt.Println("Orphan Resources:")
-	fmt.Println("==================")
 	totalCount := 0
 	for _, r := range orphanResources {
-		fmt.Printf("  [%s]\n", r.ServerName)
-		for _, c := range r.Containers {
-			fmt.Printf("    container: %s\n", c)
-			totalCount++
-		}
-		for _, d := range r.Dirs {
-			fmt.Printf("    directory: %s\n", d)
-			totalCount++
-		}
+		totalCount += len(r.Containers) + len(r.Dirs)
 	}
 
-	if !autoApprove {
-		if !Confirm(fmt.Sprintf("Do you want to remove %d orphan resource(s)?", totalCount), false) {
-			fmt.Println("Cancelled.")
+	DisplayPlanHeader(PlanHeader{
+		Title: buildPlanTitle("service cleanup", dryRun, false),
+		Env:   ctx.Env,
+		Extra: planTypeExtra(filters.Type),
+	})
+
+	envPrefix := "yo-" + ctx.Env + "-"
+	var rows []PlanRow
+	for _, r := range orphanResources {
+		for _, c := range r.Containers {
+			rows = append(rows, PlanRow{
+				Action:  "cleanup",
+				Name:    strings.TrimPrefix(c, envPrefix),
+				Server:  r.ServerName,
+				Details: fmt.Sprintf("container: %s", c),
+			})
+		}
+		for _, d := range r.Dirs {
+			rows = append(rows, PlanRow{
+				Action:  "cleanup",
+				Name:    strings.TrimPrefix(d, envPrefix),
+				Server:  r.ServerName,
+				Details: fmt.Sprintf("directory: /data/yamlops/%s", strings.TrimPrefix(d, envPrefix)),
+			})
+		}
+	}
+	DisplayPlanTable4Col("ACTION", "NAME", "SERVER", "DETAILS", rows)
+	DisplaySummary(formatSummaryCount("cleaned", totalCount))
+
+	if dryRun {
+		DisplayDryRun()
+		return
+	}
+
+	if !yes {
+		if !Confirm("Continue?", false) {
+			DisplayCancelled()
 			return
 		}
 	}
 
-	executeServiceCleanup(ctx, cfg, orphanResources)
+	DisplayExecuting()
+	executeServiceCleanupUnifiedExec(ctx, cfg, orphanResources, concurrency)
 }
 
-func loadConfig(ctx *Context) (*entity.Config, error) {
+// --- Helper functions ---
+
+func planTypeExtra(typeFilter string) []PlanHeaderExtra {
+	if typeFilter == "" {
+		return nil
+	}
+	return []PlanHeaderExtra{{Label: "TYPE", Value: typeFilter}}
+}
+
+func loadConfigFromContext(ctx *Context) (*entity.Config, error) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
 	cfg, err := wf.LoadConfig(context.Background())
 	if err != nil {
@@ -331,44 +453,114 @@ func loadConfig(ctx *Context) (*entity.Config, error) {
 	return cfg, nil
 }
 
-type targetService struct {
+type targetServiceUnified struct {
 	Name    string
 	Server  string
 	IsInfra bool
 }
 
-func collectTargetServices(cfg *entity.Config, filters ServiceFilters) []targetService {
-	var result []targetService
+func collectTargetServicesUnified(cfg *entity.Config, filters ServiceCmdFilters) ([]targetServiceUnified, error) {
+	var result []targetServiceUnified
+	serviceTypes, err := parseServiceTypes(filters.Type)
+	if err != nil {
+		return nil, err
+	}
+	showBiz := len(serviceTypes) == 0 || containsStr(serviceTypes, "biz")
+	showInfra := len(serviceTypes) == 0 || containsStr(serviceTypes, "infra")
 
+	if showBiz {
+		for _, svc := range cfg.Services {
+			if filters.Server != "" && !matchesFilter(svc.Server, filters.Server) {
+				continue
+			}
+			srv := cfg.GetServerMap()[svc.Server]
+			if srv != nil && filters.Zone != "" && !matchesFilter(srv.Zone, filters.Zone) {
+				continue
+			}
+			result = append(result, targetServiceUnified{Name: svc.Name, Server: svc.Server, IsInfra: false})
+		}
+	}
+	if showInfra {
+		for _, svc := range cfg.InfraServices {
+			if filters.Server != "" && !matchesFilter(svc.Server, filters.Server) {
+				continue
+			}
+			srv := cfg.GetServerMap()[svc.Server]
+			if srv != nil && filters.Zone != "" && !matchesFilter(srv.Zone, filters.Zone) {
+				continue
+			}
+			result = append(result, targetServiceUnified{Name: svc.Name, Server: svc.Server, IsInfra: true})
+		}
+	}
+	return result, nil
+}
+
+func executeServicePlan(ctx *Context, cfg *entity.Config, plan *valueobject.Plan, scope *valueobject.Scope, concurrency int) {
+	executor := usecase.NewExecutor(&usecase.ExecutorConfig{
+		Plan:        plan,
+		Env:         ctx.Env,
+		Concurrency: concurrency,
+	})
+	executor.SetSecrets(cfg.GetSecretsMap())
+	executor.SetServerEntities(cfg.GetServerMap())
+	executor.SetWorkDir(ctx.ConfigDir)
+
+	relevantServers := make(map[string]bool)
 	for _, svc := range cfg.Services {
-		if filters.Server != "" && svc.Server != filters.Server {
-			continue
+		if scope.MatchesBizService(svc.Name) {
+			relevantServers[svc.Server] = true
 		}
-		if filters.Biz != "" && svc.Name != filters.Biz {
-			continue
-		}
-		result = append(result, targetService{
-			Name:    svc.Name,
-			Server:  svc.Server,
-			IsInfra: false,
-		})
 	}
-
 	for _, svc := range cfg.InfraServices {
-		if filters.Server != "" && svc.Server != filters.Server {
-			continue
+		if scope.MatchesInfraService(svc.Name) {
+			relevantServers[svc.Server] = true
 		}
-		if filters.Infra != "" && svc.Name != filters.Infra {
-			continue
-		}
-		result = append(result, targetService{
-			Name:    svc.Name,
-			Server:  svc.Server,
-			IsInfra: true,
-		})
 	}
 
-	return result
+	for _, srv := range cfg.Servers {
+		if !relevantServers[srv.Name] && scope.HasServices() {
+			continue
+		}
+		password, err := srv.SSH.Password.Resolve(cfg.GetSecretsMap())
+		if err != nil {
+			continue
+		}
+		strictHostKeyChecking := true
+		if !srv.SSH.StrictHostKeyChecking {
+			strictHostKeyChecking = false
+		}
+		executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, strictHostKeyChecking)
+	}
+
+	results := executor.Apply(context.Background())
+	succeeded := 0
+	failed := 0
+	total := len(results)
+	for i, result := range results {
+		server := extractServerFromChange(result.Change, cfg)
+		action := changeActionLabel(result.Change.Type())
+		if result.Success {
+			DisplayExecuteStep(i+1, total, ExecuteItem{
+				Action:  action,
+				Name:    result.Change.Name(),
+				Server:  server,
+				Status:  "deployed",
+				Success: true,
+			})
+			succeeded++
+		} else {
+			DisplayExecuteStepWithError(i+1, total, ExecuteItem{
+				Action:  action,
+				Name:    result.Change.Name(),
+				Server:  server,
+				Status:  "failed",
+				Success: false,
+			}, fmt.Sprintf("%v", result.Error), "Check server and service configuration")
+			failed++
+		}
+	}
+
+	DisplayResult(succeeded, failed)
 }
 
 type serviceOperationFunc func(client *ssh.Client, remoteDir string) (string, error)
@@ -385,64 +577,99 @@ var restartServiceOperation serviceOperationFunc = func(client *ssh.Client, remo
 	return stderr, err
 }
 
-func executeServiceOperation(ctx *Context, cfg *entity.Config, services []targetService, opFunc serviceOperationFunc, withSync bool) {
-	hasError := false
+func executeServiceOperationUnified(ctx *Context, cfg *entity.Config, services []targetServiceUnified, opFunc serviceOperationFunc, actionLabel, statusLabel string, concurrency int) {
+	succeeded := 0
+	failed := 0
+	total := len(services)
 	serverMap := cfg.GetServerMap()
+	secrets := cfg.GetSecretsMap()
 
-	for _, svc := range services {
-		srv, ok := serverMap[svc.Server]
-		if !ok {
-			fmt.Printf("✗ %s: server not found: %s\n", svc.Name, svc.Server)
-			hasError = true
-			continue
-		}
+	if concurrency <= 0 {
+		concurrency = 5
+	}
 
-		password, err := srv.SSH.Password.Resolve(cfg.GetSecretsMap())
-		if err != nil {
-			fmt.Printf("✗ %s: cannot resolve password: %v\n", svc.Name, err)
-			hasError = true
-			continue
-		}
+	type serviceResult struct {
+		index   int
+		success bool
+		errMsg  string
+	}
 
-		strictHostKeyChecking := true
-		if !srv.SSH.StrictHostKeyChecking {
-			strictHostKeyChecking = false
-		}
-		sshCfg := &ssh.SSHConfig{
-			StrictHostKeyChecking: strictHostKeyChecking,
-		}
-		client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
-		if err != nil {
-			fmt.Printf("✗ %s: connection failed: %v\n", svc.Name, err)
-			hasError = true
-			continue
-		}
+	sem := make(chan struct{}, concurrency)
+	resultsCh := make(chan serviceResult, total)
+	var wg sync.WaitGroup
 
-		remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceNameFormat, ctx.Env, svc.Name))
-		stderr, err := opFunc(client, remoteDir)
+	for i, svc := range services {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(idx int, s targetServiceUnified) {
+			defer wg.Done()
+			defer func() { <-sem }()
 
-		client.Close()
+			srv, ok := serverMap[s.Server]
+			if !ok {
+				resultsCh <- serviceResult{index: idx, success: false, errMsg: fmt.Sprintf("server not found: %s", s.Server)}
+				return
+			}
 
-		if err != nil {
-			fmt.Printf("✗ %s: %s\n", svc.Name, stderr)
-			hasError = true
+			password, err := srv.SSH.Password.Resolve(secrets)
+			if err != nil {
+				resultsCh <- serviceResult{index: idx, success: false, errMsg: fmt.Sprintf("cannot resolve password: %v", err)}
+				return
+			}
+
+			strictHostKeyChecking := true
+			if !srv.SSH.StrictHostKeyChecking {
+				strictHostKeyChecking = false
+			}
+			sshCfg := &ssh.SSHConfig{
+				StrictHostKeyChecking: strictHostKeyChecking,
+			}
+			client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
+			if err != nil {
+				resultsCh <- serviceResult{index: idx, success: false, errMsg: fmt.Sprintf("connection failed: %v", err)}
+				return
+			}
+
+			remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, fmt.Sprintf(constants.ServiceNameFormat, ctx.Env, s.Name))
+			_, err = opFunc(client, remoteDir)
+			client.Close()
+
+			if err != nil {
+				resultsCh <- serviceResult{index: idx, success: false, errMsg: fmt.Sprintf("%v", err)}
+			} else {
+				resultsCh <- serviceResult{index: idx, success: true}
+			}
+		}(i, svc)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultsCh)
+	}()
+
+	var allResults []serviceResult
+	for r := range resultsCh {
+		allResults = append(allResults, r)
+	}
+	sort.Slice(allResults, func(i, j int) bool { return allResults[i].index < allResults[j].index })
+	for _, r := range allResults {
+		if r.success {
+			DisplayExecuteStep(r.index+1, total, ExecuteItem{
+				Action: actionLabel, Name: services[r.index].Name, Server: services[r.index].Server, Status: statusLabel, Success: true,
+			})
+			succeeded++
 		} else {
-			fmt.Printf("✓ %s\n", svc.Name)
+			DisplayExecuteStepWithError(r.index+1, total, ExecuteItem{
+				Action: actionLabel, Name: services[r.index].Name, Server: services[r.index].Server, Status: "failed", Success: false,
+			}, r.errMsg, "")
+			failed++
 		}
 	}
 
-	if hasError {
-		os.Exit(1)
-	}
+	DisplayResult(succeeded, failed)
 }
 
-type orphanResource struct {
-	ServerName string
-	Containers []string
-	Dirs       []string
-}
-
-func scanOrphanResourcesCLI(ctx *Context, cfg *entity.Config) ([]orphanResource, error) {
+func scanOrphanResourcesCLIUnified(ctx *Context, cfg *entity.Config) ([]orphanResource, error) {
 	var results []orphanResource
 	secrets := cfg.GetSecretsMap()
 	serviceMap := cfg.GetServiceMap()
@@ -528,76 +755,157 @@ func scanOrphanResourcesCLI(ctx *Context, cfg *entity.Config) ([]orphanResource,
 	return results, nil
 }
 
-func executeServiceCleanup(ctx *Context, cfg *entity.Config, resources []orphanResource) {
-	hasError := false
-	secrets := cfg.GetSecretsMap()
-
+func executeServiceCleanupUnifiedExec(ctx *Context, cfg *entity.Config, resources []orphanResource, concurrency int) {
+	total := 0
 	for _, r := range resources {
-		srv, ok := cfg.GetServerMap()[r.ServerName]
-		if !ok {
-			continue
-		}
-
-		password, err := srv.SSH.Password.Resolve(secrets)
-		if err != nil {
-			for _, c := range r.Containers {
-				fmt.Printf("✗ %s: cannot resolve password: %v\n", c, err)
-			}
-			for _, d := range r.Dirs {
-				fmt.Printf("✗ %s: cannot resolve password: %v\n", d, err)
-			}
-			hasError = true
-			continue
-		}
-
-		strictHostKeyChecking := true
-		if !srv.SSH.StrictHostKeyChecking {
-			strictHostKeyChecking = false
-		}
-		sshCfg := &ssh.SSHConfig{
-			StrictHostKeyChecking: strictHostKeyChecking,
-		}
-		client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
-		if err != nil {
-			for _, c := range r.Containers {
-				fmt.Printf("✗ %s: connection failed: %v\n", c, err)
-			}
-			for _, d := range r.Dirs {
-				fmt.Printf("✗ %s: connection failed: %v\n", d, err)
-			}
-			hasError = true
-			continue
-		}
-
-		for _, c := range r.Containers {
-			cmd := fmt.Sprintf("sudo docker rm -f %s", c)
-			_, stderr, err := client.Run(cmd)
-			if err != nil {
-				fmt.Printf("✗ %s: %s (stderr: %s)\n", c, err, stderr)
-				hasError = true
-			} else {
-				fmt.Printf("✓ removed container: %s\n", c)
-			}
-		}
-
-		for _, d := range r.Dirs {
-			remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, d)
-			cmd := fmt.Sprintf("sudo rm -rf %s", remoteDir)
-			_, stderr, err := client.Run(cmd)
-			if err != nil {
-				fmt.Printf("✗ %s: %s (stderr: %s)\n", d, err, stderr)
-				hasError = true
-			} else {
-				fmt.Printf("✓ removed directory: %s\n", d)
-			}
-		}
-
-		client.Close()
+		total += len(r.Containers) + len(r.Dirs)
+	}
+	if total == 0 {
+		DisplayResult(0, 0)
+		return
+	}
+	if concurrency <= 0 {
+		concurrency = 5
 	}
 
-	if hasError {
-		os.Exit(1)
+	secrets := cfg.GetSecretsMap()
+	serverMap := cfg.GetServerMap()
+
+	type cleanupItem struct {
+		action string
+		name   string
+		server string
 	}
+
+	type serverCleanupResult struct {
+		index int
+		items []cleanupItem
+		errs  []error
+	}
+
+	sem := make(chan struct{}, concurrency)
+	resultsCh := make(chan serverCleanupResult, len(resources))
+	var wg sync.WaitGroup
+
+	for idx, r := range resources {
+		sem <- struct{}{}
+		wg.Add(1)
+		go func(resIdx int, res orphanResource) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			var items []cleanupItem
+			var errs []error
+
+			srv, ok := serverMap[res.ServerName]
+			if !ok {
+				for _, c := range res.Containers {
+					items = append(items, cleanupItem{action: "cleanup", name: c, server: res.ServerName})
+					errs = append(errs, fmt.Errorf("server not found: %s", res.ServerName))
+				}
+				for _, d := range res.Dirs {
+					items = append(items, cleanupItem{action: "cleanup", name: d, server: res.ServerName})
+					errs = append(errs, fmt.Errorf("server not found: %s", res.ServerName))
+				}
+				resultsCh <- serverCleanupResult{index: resIdx, items: items, errs: errs}
+				return
+			}
+
+			password, err := srv.SSH.Password.Resolve(secrets)
+			if err != nil {
+				for _, c := range res.Containers {
+					items = append(items, cleanupItem{action: "cleanup", name: c, server: res.ServerName})
+					errs = append(errs, fmt.Errorf("cannot resolve password: %v", err))
+				}
+				for _, d := range res.Dirs {
+					items = append(items, cleanupItem{action: "cleanup", name: d, server: res.ServerName})
+					errs = append(errs, fmt.Errorf("cannot resolve password: %v", err))
+				}
+				resultsCh <- serverCleanupResult{index: resIdx, items: items, errs: errs}
+				return
+			}
+
+			strictHostKeyChecking := true
+			if !srv.SSH.StrictHostKeyChecking {
+				strictHostKeyChecking = false
+			}
+			sshCfg := &ssh.SSHConfig{
+				StrictHostKeyChecking: strictHostKeyChecking,
+			}
+			client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
+			if err != nil {
+				for _, c := range res.Containers {
+					items = append(items, cleanupItem{action: "cleanup", name: c, server: res.ServerName})
+					errs = append(errs, fmt.Errorf("connection failed: %v", err))
+				}
+				for _, d := range res.Dirs {
+					items = append(items, cleanupItem{action: "cleanup", name: d, server: res.ServerName})
+					errs = append(errs, fmt.Errorf("connection failed: %v", err))
+				}
+				resultsCh <- serverCleanupResult{index: resIdx, items: items, errs: errs}
+				return
+			}
+
+			for _, c := range res.Containers {
+				cmd := fmt.Sprintf("sudo docker rm -f %s", c)
+				_, stderr, err := client.Run(cmd)
+				items = append(items, cleanupItem{action: "cleanup", name: c, server: res.ServerName})
+				if err != nil {
+					errs = append(errs, fmt.Errorf("%s (stderr: %s)", err, stderr))
+				} else {
+					errs = append(errs, nil)
+				}
+			}
+
+			for _, d := range res.Dirs {
+				remoteDir := fmt.Sprintf("%s/%s", constants.RemoteBaseDir, d)
+				cmd := fmt.Sprintf("sudo rm -rf %s", remoteDir)
+				_, stderr, err := client.Run(cmd)
+				items = append(items, cleanupItem{action: "cleanup", name: d, server: res.ServerName})
+				if err != nil {
+					errs = append(errs, fmt.Errorf("%s (stderr: %s)", err, stderr))
+				} else {
+					errs = append(errs, nil)
+				}
+			}
+
+			client.Close()
+			resultsCh <- serverCleanupResult{index: resIdx, items: items, errs: errs}
+		}(idx, r)
+	}
+
+	go func() {
+		wg.Wait()
+		close(resultsCh)
+	}()
+
+	var allResults []serverCleanupResult
+	for r := range resultsCh {
+		allResults = append(allResults, r)
+	}
+	sort.Slice(allResults, func(i, j int) bool { return allResults[i].index < allResults[j].index })
+
+	succeeded := 0
+	failed := 0
+	current := 0
+	for _, r := range allResults {
+		for i, item := range r.items {
+			current++
+			if r.errs[i] != nil {
+				DisplayExecuteStepWithError(current, total, ExecuteItem{
+					Action: item.action, Name: item.name, Server: item.server, Status: "failed", Success: false,
+				}, fmt.Sprintf("%v", r.errs[i]), "")
+				failed++
+			} else {
+				DisplayExecuteStep(current, total, ExecuteItem{
+					Action: item.action, Name: item.name, Server: item.server, Status: "removed", Success: true,
+				})
+				succeeded++
+			}
+		}
+	}
+
+	DisplayResult(succeeded, failed)
 }
 
 func extractServerFromChange(change *valueobject.Change, cfg *entity.Config) string {
@@ -624,15 +932,132 @@ func extractServerFromChange(change *valueobject.Change, cfg *entity.Config) str
 	return ""
 }
 
-func changeTypeIcon(changeType valueobject.ChangeType) string {
+func changeActionLabel(changeType valueobject.ChangeType) string {
 	switch changeType {
 	case valueobject.ChangeTypeCreate:
-		return "+"
+		return "create"
 	case valueobject.ChangeTypeUpdate:
-		return "~"
+		return "update"
 	case valueobject.ChangeTypeDelete:
-		return "-"
+		return "delete"
 	default:
-		return " "
+		return ""
 	}
+}
+
+func formatServiceDeployDetails(ch *valueobject.Change) string {
+	var details string
+
+	switch {
+	case ch.Entity() == "service":
+		newSvc, newOk := ch.NewState().(*entity.BizService)
+		if !newOk {
+			break
+		}
+		if ch.Type() == valueobject.ChangeTypeUpdate && ch.OldState() != nil {
+			if oldSvc, ok := ch.OldState().(*entity.BizService); ok {
+				details = formatServiceChangedFields(oldSvc.Image, newSvc.Image, oldSvc.Ports, newSvc.Ports)
+			}
+		}
+		if details == "" {
+			details = formatServiceNewFields(newSvc.Image, newSvc.Ports)
+		}
+	case ch.Entity() == "infra_service":
+		newInfra, newOk := ch.NewState().(*entity.InfraService)
+		if !newOk {
+			break
+		}
+		if ch.Type() == valueobject.ChangeTypeUpdate && ch.OldState() != nil {
+			if oldInfra, ok := ch.OldState().(*entity.InfraService); ok {
+				details = formatInfraChangedFields(oldInfra.Image, newInfra.Image)
+			}
+		}
+		if details == "" && newInfra.Image != "" {
+			details = fmt.Sprintf("image: %s", newInfra.Image)
+		}
+	}
+
+	if details == "" {
+		details = "-"
+	}
+	if ch.ForcedNoChange() {
+		details += " (no change, forced)"
+	}
+	return details
+}
+
+func formatServiceChangedFields(oldImage, newImage string, oldPorts, newPorts []entity.ServicePort) string {
+	var parts []string
+	if newImage != "" {
+		if oldImage != "" && oldImage != newImage {
+			parts = append(parts, fmt.Sprintf("image: %s -> %s", oldImage, newImage))
+		} else {
+			parts = append(parts, fmt.Sprintf("image: %s", newImage))
+		}
+	}
+	newPortsStr := formatPorts(newPorts)
+	oldPortsStr := formatPorts(oldPorts)
+	if len(newPorts) > 0 {
+		if oldPortsStr != "" && oldPortsStr != newPortsStr {
+			parts = append(parts, fmt.Sprintf("ports: %s -> %s", oldPortsStr, newPortsStr))
+		} else {
+			parts = append(parts, fmt.Sprintf("ports: %s", newPortsStr))
+		}
+	}
+	if len(parts) > 0 {
+		return strings.Join(parts, ", ")
+	}
+	return ""
+}
+
+func formatServiceNewFields(image string, ports []entity.ServicePort) string {
+	var parts []string
+	if image != "" {
+		parts = append(parts, fmt.Sprintf("image: %s", image))
+	}
+	if len(ports) > 0 {
+		parts = append(parts, fmt.Sprintf("ports: %s", formatPorts(ports)))
+	}
+	if len(parts) > 0 {
+		return strings.Join(parts, ", ")
+	}
+	return ""
+}
+
+func formatInfraChangedFields(oldImage, newImage string) string {
+	if newImage == "" {
+		return ""
+	}
+	if oldImage != "" && oldImage != newImage {
+		return fmt.Sprintf("image: %s -> %s", oldImage, newImage)
+	}
+	return fmt.Sprintf("image: %s", newImage)
+}
+
+func formatPorts(ports []entity.ServicePort) string {
+	var parts []string
+	for _, p := range ports {
+		parts = append(parts, fmt.Sprintf("%d:%d", p.Host, p.Container))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func countChanges(changes []*valueobject.Change) (created, updated, deleted int) {
+	for _, ch := range changes {
+		switch ch.Type() {
+		case valueobject.ChangeTypeCreate:
+			created++
+		case valueobject.ChangeTypeUpdate:
+			updated++
+		case valueobject.ChangeTypeDelete:
+			deleted++
+		}
+	}
+	return
+}
+
+type orphanResource struct {
+	ServerName string
+	Containers []string
+	Dirs       []string
 }

@@ -88,7 +88,7 @@ func (w *Workflow) Plan(ctx context.Context, outputDir string, scope *valueobjec
 
 	var remoteState *repository.DeploymentState
 
-	if scope == nil || !scope.DNSOnly() {
+	if scope == nil || !scope.IsDNSOnly() {
 		if err := w.GenerateDeploymentsWithScope(cfg, outputDir, scope); err != nil {
 			return nil, nil, fmt.Errorf("generate deployments: %w", err)
 		}
@@ -182,8 +182,10 @@ func (w *Workflow) fetchDNSRemoteState(ctx context.Context, cfg *entity.Config, 
 	}
 
 	selectedDomains := make(map[string]bool)
-	if scope != nil && scope.Domain() != "" {
-		selectedDomains[scope.Domain()] = true
+	if scope != nil && len(scope.Domains()) > 0 {
+		for _, d := range scope.Domains() {
+			selectedDomains[d] = true
+		}
 	}
 
 	if len(selectedDomains) == 0 {

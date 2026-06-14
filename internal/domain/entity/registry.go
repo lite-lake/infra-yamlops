@@ -25,6 +25,7 @@ func (c *RegistryCredentials) Validate() error {
 type Registry struct {
 	Name        string              `yaml:"name"`
 	URL         string              `yaml:"url"`
+	Namespace   string              `yaml:"namespace,omitempty"`
 	Credentials RegistryCredentials `yaml:"credentials"`
 }
 

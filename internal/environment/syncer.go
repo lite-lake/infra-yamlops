@@ -45,6 +45,78 @@ func (s *Syncer) SyncAll() []SyncResult {
 	return results
 }
 
+func (s *Syncer) DryRun() []SyncResult {
+	var results []SyncResult
+
+	aptSource := s.server.Environment.APTSource
+	if aptSource == "" || aptSource == "official" {
+		results = append(results, SyncResult{
+			Name:    "apt_source",
+			Success: true,
+			Message: "[dry-run] would skip (using official or no change)",
+		})
+	} else {
+		results = append(results, SyncResult{
+			Name:    "apt_source",
+			Success: true,
+			Message: fmt.Sprintf("[dry-run] would configure apt source: %s", aptSource),
+		})
+	}
+
+	if len(s.server.Networks) == 0 {
+		results = append(results, SyncResult{
+			Name:    "docker_network",
+			Success: true,
+			Message: fmt.Sprintf("[dry-run] would create default network: yamlops-%s", s.env),
+		})
+	} else {
+		var names []string
+		for _, net := range s.server.Networks {
+			names = append(names, net.Name)
+		}
+		results = append(results, SyncResult{
+			Name:    "docker_network",
+			Success: true,
+			Message: fmt.Sprintf("[dry-run] would ensure networks: %s", strings.Join(names, ", ")),
+		})
+	}
+
+	if len(s.server.Environment.Registries) == 0 {
+		results = append(results, SyncResult{
+			Name:    "registries",
+			Success: true,
+			Message: "[dry-run] no registries to configure",
+		})
+	} else {
+		for _, regName := range s.server.Environment.Registries {
+			registry, ok := s.registries[regName]
+			if !ok {
+				results = append(results, SyncResult{
+					Name:    fmt.Sprintf("registry:%s", regName),
+					Success: false,
+					Message: fmt.Sprintf("[dry-run] registry not found in config: %s", regName),
+				})
+				continue
+			}
+			if IsRegistryLoggedIn(s.client, registry, false) {
+				results = append(results, SyncResult{
+					Name:    fmt.Sprintf("registry:%s", regName),
+					Success: true,
+					Message: fmt.Sprintf("[dry-run] already logged in to %s", registry.URL),
+				})
+			} else {
+				results = append(results, SyncResult{
+					Name:    fmt.Sprintf("registry:%s", regName),
+					Success: true,
+					Message: fmt.Sprintf("[dry-run] would login to %s", registry.URL),
+				})
+			}
+		}
+	}
+
+	return results
+}
+
 func (s *Syncer) SyncAPTSource() SyncResult {
 	aptSource := s.server.Environment.APTSource
 	if aptSource == "" || aptSource == "official" {

@@ -10,9 +10,9 @@ import (
 func Confirm(message string, defaultYes bool) bool {
 	prompt := message
 	if defaultYes {
-		prompt += " (Y/n): "
+		prompt += " [Y/n]: "
 	} else {
-		prompt += " (y/N): "
+		prompt += " [y/N]: "
 	}
 
 	fmt.Print(prompt)
@@ -29,7 +29,7 @@ func Confirm(message string, defaultYes bool) bool {
 		return defaultYes
 	}
 
-	return response == "y" || response == "yes"
+	return response == "y"
 }
 
 func ConfirmWithDefault(message string) bool {

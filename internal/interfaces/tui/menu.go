@@ -1,71 +1,87 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
-	"github.com/lite-lake/infra-yamlops/internal/version"
+	"github.com/lite-lake/infra-yamlops/internal/interfaces/tui/styles"
 )
 
-func (m Model) renderMainMenu() string {
-	items := []string{
-		"Service Management",
-		"Domain/DNS Management",
-		"Exit",
+// menuRow represents a single row in the flattened main menu.
+type menuRow struct {
+	isParent bool
+	parent   int // index into MenuNodes (only valid if isParent)
+	child    int // index into Children (only valid if !isParent)
+}
+
+// flattenMenuRows returns the visible rows of the main menu tree.
+func (m Model) flattenMenuRows() []menuRow {
+	var rows []menuRow
+	for pi, node := range m.UI.MenuNodes {
+		rows = append(rows, menuRow{isParent: true, parent: pi})
+		if node.Expanded {
+			for ci := range node.Children {
+				rows = append(rows, menuRow{isParent: false, parent: pi, child: ci})
+			}
+		}
+	}
+	return rows
+}
+
+// menuRowCount returns the total number of visible menu rows.
+func (m Model) menuRowCount() int {
+	return len(m.flattenMenuRows())
+}
+
+func (m Model) renderMainMenuContent() string {
+	rows := m.flattenMenuRows()
+	cursor := m.UI.MainMenuIndex
+	if cursor >= len(rows) {
+		cursor = len(rows) - 1
+	}
+	if cursor < 0 {
+		cursor = 0
 	}
 
-	availableHeight := m.UI.Height - 6
-	if availableHeight < 5 {
-		availableHeight = 5
+	availableHeight := m.UI.Height - styles.LayoutOverhead
+	if availableHeight < styles.MinContentHeight {
+		availableHeight = styles.MinContentHeight
 	}
 
-	viewport := NewViewport(0, len(items), availableHeight)
-	viewport.CursorIndex = m.UI.MainMenuIndex
+	viewport := NewViewport(cursor, len(rows), availableHeight)
 	viewport.EnsureCursorVisible()
 
 	var sb strings.Builder
-	title := TitleStyle.Render(fmt.Sprintf("  YAMLOps [%s]", strings.ToUpper(string(m.Environment))))
-	sb.WriteString(title + "\n\n")
 
-	for i := viewport.VisibleStart(); i < viewport.VisibleEnd() && i < len(items); i++ {
-		if i == m.UI.MainMenuIndex {
-			sb.WriteString(MenuSelectedStyle.Render("> "+items[i]) + "\n")
+	start := viewport.VisibleStart()
+	end := viewport.VisibleEnd()
+	for i := start; i < end && i < len(rows); i++ {
+		row := rows[i]
+		if row.isParent {
+			node := m.UI.MenuNodes[row.parent]
+			prefix := "▶ "
+			if node.Expanded {
+				prefix = "▼ "
+			}
+			if i == cursor {
+				sb.WriteString(styles.MenuSelectedStyle.Render(prefix+node.Label) + "\n")
+			} else {
+				sb.WriteString(styles.MenuItemStyle.Render("  "+prefix+node.Label) + "\n")
+			}
 		} else {
-			sb.WriteString(MenuItemStyle.Render("  "+items[i]) + "\n")
+			child := m.UI.MenuNodes[row.parent].Children[row.child]
+			if i == cursor {
+				sb.WriteString(styles.MenuSelectedStyle.Render("    ▶ "+child.Label) + "\n")
+			} else {
+				sb.WriteString(styles.MenuItemStyle.Render("      "+child.Label) + "\n")
+			}
 		}
 	}
 
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Enter select  q quit"))
-	sb.WriteString("\n" + HelpStyle.Render(fmt.Sprintf("  v%s", version.Version)))
-
-	return BaseStyle.Render(sb.String())
-}
-
-func (m Model) renderServiceManagement() string {
-	items := []string{
-		"Service Deploy",
-		"Service Stop",
-		"Service Restart",
-		"Service Cleanup",
-		"Server Environment",
-		"Back to Main Menu",
+	if viewport.TotalRows > viewport.VisibleRows {
+		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
 	}
 
-	var sb strings.Builder
-	title := TitleStyle.Render("  Service Management")
-	sb.WriteString(title + "\n\n")
-
-	for i, item := range items {
-		if i == m.Server.ServiceMenuIndex {
-			sb.WriteString(MenuSelectedStyle.Render("> "+item) + "\n")
-		} else {
-			sb.WriteString(MenuItemStyle.Render("  "+item) + "\n")
-		}
-	}
-
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Enter select  Esc back  q quit"))
-
-	return BaseStyle.Render(sb.String())
+	return sb.String()
 }
 
 func formatNodeStatus(status NodeStatus) string {

@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/lite-lake/infra-yamlops/internal/interfaces/tui/styles"
 )
 
 func renderNodeToLines(node *TreeNode, depth int, idx *int, lines *[]string, cursorIndex int, showInfo bool, isLastChild bool) {
@@ -19,18 +21,30 @@ func renderNodeToLines(node *TreeNode, depth int, idx *int, lines *[]string, cur
 	if *idx == cursorIndex {
 		cursor = "> "
 	}
-	selectIcon := "○"
-	if node.Selected {
-		selectIcon = "◉"
-	} else if node.IsPartiallySelected() {
-		selectIcon = "◐"
+	var selectIcon string
+	if len(node.Children) > 0 {
+		if !node.Expanded {
+			selectIcon = " "
+		} else if node.IsPartiallySelected() {
+			selectIcon = styles.IconPartial
+		} else if node.Selected {
+			selectIcon = styles.IconAllSelected
+		} else {
+			selectIcon = styles.IconUnchecked
+		}
+	} else {
+		if node.Selected {
+			selectIcon = styles.IconChecked
+		} else {
+			selectIcon = styles.IconUnchecked
+		}
 	}
 	expandIcon := " "
 	if len(node.Children) > 0 {
 		if node.Expanded {
-			expandIcon = "▾"
+			expandIcon = styles.IconExpanded
 		} else {
-			expandIcon = "▸"
+			expandIcon = styles.IconCollapsed
 		}
 	}
 	typePrefix := ""
@@ -40,7 +54,7 @@ func renderNodeToLines(node *TreeNode, depth int, idx *int, lines *[]string, cur
 	case NodeTypeBiz:
 		typePrefix = "[biz] "
 	}
-	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, selectIcon, expandIcon, typePrefix, node.Name)
+	line := fmt.Sprintf("%s%s%s %s%s%s", cursor, prefix, expandIcon, selectIcon, typePrefix, node.Name)
 	if statusStr := formatNodeStatus(node.Status); statusStr != "" {
 		line = fmt.Sprintf("%s %s", line, statusStr)
 	}
@@ -48,7 +62,7 @@ func renderNodeToLines(node *TreeNode, depth int, idx *int, lines *[]string, cur
 		line = fmt.Sprintf("%s  %s", line, node.Info)
 	}
 	if *idx == cursorIndex {
-		line = SelectedStyle.Render(line)
+		line = styles.SelectedStyle.Render(line)
 	}
 	*lines = append(*lines, line)
 	*idx++

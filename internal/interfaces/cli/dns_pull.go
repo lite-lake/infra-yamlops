@@ -21,9 +21,8 @@ import (
 
 func newDNSPullCommand(ctx *Context) *cobra.Command {
 	var (
-		pullISP         string
-		pullDomain      string
-		pullAutoApprove bool
+		pullISP      string
+		pullDomains  string
 	)
 
 	dnsPullCmd := &cobra.Command{
@@ -37,7 +36,10 @@ func newDNSPullCommand(ctx *Context) *cobra.Command {
 		Short: "Pull domains from ISP",
 		Long:  "Pull domain list from specified ISP and compare with local configuration.",
 		Run: func(cmd *cobra.Command, args []string) {
-			runDNSPullDomains(ctx, pullISP, pullAutoApprove)
+			yes, _ := cmd.Flags().GetBool("yes")
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			force, _ := cmd.Flags().GetBool("force")
+			runDNSPullDomains(ctx, pullISP, yes, dryRun, force)
 		},
 	}
 
@@ -46,15 +48,25 @@ func newDNSPullCommand(ctx *Context) *cobra.Command {
 		Short: "Pull DNS records from domain",
 		Long:  "Pull DNS records from specified domain and compare with local configuration.",
 		Run: func(cmd *cobra.Command, args []string) {
-			runDNSPullRecords(ctx, pullDomain, pullAutoApprove)
+			yes, _ := cmd.Flags().GetBool("yes")
+			dryRun, _ := cmd.Flags().GetBool("dry-run")
+			force, _ := cmd.Flags().GetBool("force")
+			isp, _ := cmd.Flags().GetString("isp")
+			runDNSPullRecords(ctx, pullDomains, yes, dryRun, force, isp)
 		},
 	}
 
 	dnsPullDomainsCmd.Flags().StringVarP(&pullISP, "isp", "i", "", "ISP name (e.g., aliyun, cloudflare, tencent)")
-	dnsPullDomainsCmd.Flags().BoolVar(&pullAutoApprove, "auto-approve", false, "Auto approve all changes")
+	dnsPullDomainsCmd.Flags().BoolP("yes", "y", false, "Skip confirmation, execute all changes")
+	dnsPullDomainsCmd.Flags().Bool("dry-run", false, "Preview changes without executing")
+	dnsPullDomainsCmd.Flags().Bool("force", false, "Force overwrite local data even if it already exists")
+	dnsPullDomainsCmd.MarkFlagRequired("isp")
 
-	dnsPullRecordsCmd.Flags().StringVarP(&pullDomain, "domain", "d", "", "Domain name to pull records from")
-	dnsPullRecordsCmd.Flags().BoolVar(&pullAutoApprove, "auto-approve", false, "Auto approve all changes")
+	dnsPullRecordsCmd.Flags().StringVarP(&pullDomains, "domain", "d", "", "Domain name(s) to pull records from (comma-separated)")
+	dnsPullRecordsCmd.Flags().String("isp", "", "ISP name filter (ignored when --domain is specified)")
+	dnsPullRecordsCmd.Flags().BoolP("yes", "y", false, "Skip confirmation, execute all changes")
+	dnsPullRecordsCmd.Flags().Bool("dry-run", false, "Preview changes without executing")
+	dnsPullRecordsCmd.Flags().Bool("force", false, "Force overwrite local data even if it already exists")
 
 	dnsPullCmd.AddCommand(dnsPullDomainsCmd)
 	dnsPullCmd.AddCommand(dnsPullRecordsCmd)
@@ -63,11 +75,12 @@ func newDNSPullCommand(ctx *Context) *cobra.Command {
 }
 
 type DomainDiff struct {
-	Name       string
-	ISP        string
-	DNSISP     string
-	Parent     string
-	ChangeType valueobject.ChangeType
+	Name        string
+	ISP         string
+	DNSISP      string
+	Parent      string
+	ChangeType  valueobject.ChangeType
+	RecordCount int
 }
 
 type RecordDiff struct {
@@ -80,45 +93,61 @@ type RecordDiff struct {
 	ChangeType valueobject.ChangeType
 }
 
-func runDNSPullDomains(ctx *Context, ispName string, autoApprove bool) {
+func runDNSPullDomains(ctx *Context, ispName string, yes, dryRun, force bool) {
 	loader := persistence.NewConfigLoader(ctx.ConfigDir)
 	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to load configuration\n")
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Suggestion: Check that the config directory '%s' and environment '%s' are correct\n", ctx.ConfigDir, ctx.Env)
 		os.Exit(1)
 	}
 
 	if ispName == "" {
-		fmt.Println("Available ISPs with DNS service:")
-		for _, isp := range cfg.ISPs {
-			if isp.HasService(entity.ISPServiceDNS) {
-				fmt.Printf("  - %s\n", isp.Name)
-			}
-		}
-		fmt.Println("\nUsage: yamlops dns pull domains --isp <isp_name>")
-		return
+		fmt.Fprintf(os.Stderr, "Error: --isp flag is required\n")
+		fmt.Fprintf(os.Stderr, "Details: ISP name is needed to pull domains from a specific provider\n")
+		fmt.Fprintf(os.Stderr, "Suggestion: Use --isp <isp_name> to specify ISP (e.g., aliyun, cloudflare)\n")
+		os.Exit(1)
 	}
 
 	isp := cfg.GetISPMap()[ispName]
 	if isp == nil {
-		fmt.Fprintf(os.Stderr, "ISP '%s' not found\n", ispName)
+		fmt.Fprintf(os.Stderr, "Error: ISP '%s' not found\n", ispName)
+		fmt.Fprintf(os.Stderr, "Details: No ISP with name '%s' exists in the configuration\n", ispName)
+		fmt.Fprintf(os.Stderr, "Suggestion: Run 'config show isps -e %s' to list available ISPs\n", ctx.Env)
 		os.Exit(1)
 	}
 	if !isp.HasService(entity.ISPServiceDNS) {
-		fmt.Fprintf(os.Stderr, "ISP '%s' does not have DNS service\n", ispName)
+		fmt.Fprintf(os.Stderr, "Error: ISP '%s' does not support DNS service\n", ispName)
+		fmt.Fprintf(os.Stderr, "Details: ISP '%s' does not have 'dns' in its services list\n", ispName)
+		fmt.Fprintf(os.Stderr, "Suggestion: Check ISP configuration in isps.yaml\n")
 		os.Exit(1)
 	}
 
 	provider, err := createDNSProvider(isp, cfg.GetSecretsMap())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating DNS provider: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to create DNS provider for ISP '%s'\n", ispName)
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Suggestion: Check ISP credentials and configuration in isps.yaml\n")
 		os.Exit(1)
 	}
 
 	remoteDomains, err := provider.ListDomains(context.Background())
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error listing domains from %s: %v\n", ispName, err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to list domains from ISP '%s'\n", ispName)
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Suggestion: Check network connectivity and ISP API credentials\n")
 		os.Exit(1)
+	}
+
+	remoteRecordCounts := make(map[string]int)
+	for _, domainName := range remoteDomains {
+		records, err := provider.ListRecords(context.Background(), domainName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to list records for %s: %v\n", domainName, err)
+			continue
+		}
+		remoteRecordCounts[domainName] = len(records)
 	}
 
 	localDomainMap := make(map[string]*entity.Domain)
@@ -128,26 +157,40 @@ func runDNSPullDomains(ctx *Context, ispName string, autoApprove bool) {
 
 	var diffs []DomainDiff
 	for _, domainName := range remoteDomains {
-		if _, exists := localDomainMap[domainName]; !exists {
-			diffs = append(diffs, DomainDiff{
-				Name:       domainName,
-				DNSISP:     ispName,
-				ChangeType: valueobject.ChangeTypeCreate,
-			})
-		} else {
+		if local, exists := localDomainMap[domainName]; exists {
+			if force {
+				diffs = append(diffs, DomainDiff{
+					Name:        domainName,
+					DNSISP:      ispName,
+					ISP:         local.ISP,
+					Parent:      local.Parent,
+					ChangeType:  valueobject.ChangeTypeUpdate,
+					RecordCount: remoteRecordCounts[domainName],
+				})
+			}
 			delete(localDomainMap, domainName)
+		} else {
+			diffs = append(diffs, DomainDiff{
+				Name:        domainName,
+				DNSISP:      ispName,
+				ChangeType:  valueobject.ChangeTypeCreate,
+				RecordCount: remoteRecordCounts[domainName],
+			})
 		}
 	}
 
-	for _, localDomain := range localDomainMap {
-		if localDomain.DNSISP == ispName {
-			diffs = append(diffs, DomainDiff{
-				Name:       localDomain.Name,
-				DNSISP:     localDomain.DNSISP,
-				ISP:        localDomain.ISP,
-				Parent:     localDomain.Parent,
-				ChangeType: valueobject.ChangeTypeDelete,
-			})
+	if !force {
+		for _, localDomain := range localDomainMap {
+			if localDomain.DNSISP == ispName {
+				diffs = append(diffs, DomainDiff{
+					Name:        localDomain.Name,
+					DNSISP:      localDomain.DNSISP,
+					ISP:         localDomain.ISP,
+					Parent:      localDomain.Parent,
+					ChangeType:  valueobject.ChangeTypeDelete,
+					RecordCount: len(localDomain.Records),
+				})
+			}
 		}
 	}
 
@@ -160,160 +203,316 @@ func runDNSPullDomains(ctx *Context, ispName string, autoApprove bool) {
 		return
 	}
 
-	fmt.Printf("Domain Differences (ISP: %s):\n", ispName)
-	fmt.Println("=================================")
+	title := buildPlanTitle("dns pull domains", dryRun, force)
+	DisplayPlanHeader(PlanHeader{
+		Title: title,
+		Env:   ctx.Env,
+		Extra: []PlanHeaderExtra{{Label: "ISP", Value: ispName}},
+	})
+
+	var rows []PlanRow
 	for _, diff := range diffs {
-		prefix, style := styles.FormatChangeType(diff.ChangeType)
-		fmt.Printf("%s %s\n", style.Render(prefix), style.Render(diff.Name))
+		rows = append(rows, PlanRow{
+			Action:  formatDomainDiffAction(diff.ChangeType),
+			Name:    diff.Name,
+			Details: formatDomainDiffDetails(diff),
+		})
+	}
+	DisplayPlanTable3Col("ACTION", "DOMAIN", "DETAILS", rows)
+	DisplaySummary(formatSummaryCount("imported", len(diffs)))
+
+	if dryRun {
+		DisplayDryRun()
+		return
 	}
 
-	if autoApprove {
+	if yes {
+		DisplayExecuting()
+		total := len(diffs)
 		if err := saveDomainDiffs(ctx, diffs, cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "Error saving domains: %v\n", err)
-			os.Exit(1)
+			for i, diff := range diffs {
+				DisplayExecuteStepWithError(i+1, total, ExecuteItem{
+					Action: formatDomainDiffAction(diff.ChangeType),
+					Name:   diff.Name,
+				}, fmt.Sprintf("Failed to save domains: %v", err), "")
+			}
+			DisplayResult(0, total)
+			return
 		}
-		fmt.Println("Domains synced to local configuration.")
+		for i, diff := range diffs {
+			DisplayExecuteStep(i+1, total, ExecuteItem{
+				Action:  formatDomainDiffAction(diff.ChangeType),
+				Name:    diff.Name,
+				Status:  "saved",
+				Success: true,
+			})
+		}
+		DisplayResult(total, 0)
 		return
 	}
 
 	if err := runDomainPullTUI(ctx, diffs, cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: TUI interaction failed\n")
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Suggestion: Try using --yes flag to skip TUI and execute directly\n")
 		os.Exit(1)
 	}
 }
 
-func runDNSPullRecords(ctx *Context, domainName string, autoApprove bool) {
+func runDNSPullRecords(ctx *Context, domainName string, yes, dryRun, force bool, ispFilter string) {
 	loader := persistence.NewConfigLoader(ctx.ConfigDir)
 	cfg, err := loader.Load(nil, ctx.Env)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: Failed to load configuration\n")
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Suggestion: Check that the config directory '%s' and environment '%s' are correct\n", ctx.ConfigDir, ctx.Env)
 		os.Exit(1)
 	}
 
-	if domainName == "" {
-		fmt.Println("Available domains:")
-		for _, d := range cfg.Domains {
-			fmt.Printf("  - %s (dns_isp: %s)\n", d.Name, d.DNSISP)
+	var domainsToProcess []entity.Domain
+	if domainName != "" {
+		domainNames := strings.Split(domainName, ",")
+		for _, name := range domainNames {
+			name = strings.TrimSpace(name)
+			if name == "" {
+				continue
+			}
+			domain := cfg.GetDomainMap()[name]
+			if domain == nil {
+				fmt.Fprintf(os.Stderr, "Error: Domain '%s' not found in local configuration\n", name)
+				fmt.Fprintf(os.Stderr, "Details: The specified domain does not exist in the current environment's dns.yaml\n")
+				fmt.Fprintf(os.Stderr, "Suggestion: Run 'dns show -e %s' to list available domains\n", ctx.Env)
+				os.Exit(1)
+			}
+			domainsToProcess = append(domainsToProcess, *domain)
 		}
-		fmt.Println("\nUsage: yamlops dns pull records --domain <domain_name>")
+		if len(domainsToProcess) == 0 {
+			fmt.Fprintf(os.Stderr, "Error: No valid domains specified\n")
+			fmt.Fprintf(os.Stderr, "Details: All domain names provided via --domain were empty after trimming\n")
+			fmt.Fprintf(os.Stderr, "Suggestion: Provide valid domain names separated by commas (e.g., --domain example.com,api.example.com)\n")
+			os.Exit(1)
+		}
+	} else if ispFilter != "" {
+		for _, d := range cfg.Domains {
+			if d.DNSISP == ispFilter {
+				domainsToProcess = append(domainsToProcess, d)
+			}
+		}
+		if len(domainsToProcess) == 0 {
+			fmt.Fprintf(os.Stderr, "Error: No domains found with dns_isp '%s'\n", ispFilter)
+			fmt.Fprintf(os.Stderr, "Details: No domain in the current environment is configured to use ISP '%s' as its DNS provider\n", ispFilter)
+			fmt.Fprintf(os.Stderr, "Suggestion: Run 'dns show -e %s' to list available domains and their ISPs\n", ctx.Env)
+			os.Exit(1)
+		}
+	} else {
+		domainsToProcess = cfg.Domains
+	}
+
+	if len(domainsToProcess) == 0 {
+		fmt.Println("No domains to pull records from.")
 		return
 	}
 
-	domain := cfg.GetDomainMap()[domainName]
-	if domain == nil {
-		fmt.Fprintf(os.Stderr, "Domain '%s' not found in local configuration\n", domainName)
-		os.Exit(1)
-	}
-
-	isp := cfg.GetISPMap()[domain.DNSISP]
-	if isp == nil {
-		fmt.Fprintf(os.Stderr, "DNS ISP '%s' not found\n", domain.DNSISP)
-		os.Exit(1)
-	}
-
-	provider, err := createDNSProvider(isp, cfg.GetSecretsMap())
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating DNS provider: %v\n", err)
-		os.Exit(1)
-	}
-
-	remoteRecords, err := provider.ListRecords(context.Background(), domainName)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error listing records from %s: %v\n", domain.DNSISP, err)
-		os.Exit(1)
-	}
-
-	localRecordMap := make(map[string]*entity.DNSRecord)
-	for i := range domain.Records {
-		key := fmt.Sprintf("%s:%s:%s", domain.Records[i].Type, domain.Records[i].Name, domain.Records[i].Value)
-		localRecordMap[key] = &domain.Records[i]
-		localRecordMap[key].Domain = domain.Name
-	}
-
-	var diffs []RecordDiff
-	for _, remote := range remoteRecords {
-		recordName := remote.Name
-		if recordName == domainName || recordName == "" {
-			recordName = "@"
-		} else if strings.HasSuffix(remote.Name, "."+domainName) {
-			recordName = strings.TrimSuffix(remote.Name, "."+domainName)
+	var allDiffs []RecordDiff
+	for _, domain := range domainsToProcess {
+		isp := cfg.GetISPMap()[domain.DNSISP]
+		if isp == nil {
+			fmt.Fprintf(os.Stderr, "Warning: DNS ISP '%s' not found for domain '%s'\n", domain.DNSISP, domain.Name)
+			fmt.Fprintf(os.Stderr, "Details: ISP '%s' referenced in dns.yaml does not exist in isps.yaml\n", domain.DNSISP)
+			fmt.Fprintf(os.Stderr, "Suggestion: Add ISP '%s' to isps.yaml or update the domain's dns_isp field\n", domain.DNSISP)
+			continue
 		}
 
-		key := fmt.Sprintf("%s:%s:%s", remote.Type, recordName, remote.Value)
-		if local, exists := localRecordMap[key]; exists {
-			if local.TTL != remote.TTL {
-				diffs = append(diffs, RecordDiff{
-					Domain:     domainName,
+		provider, err := createDNSProvider(isp, cfg.GetSecretsMap())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to create DNS provider for '%s'\n", domain.DNSISP)
+			fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Suggestion: Check ISP credentials for '%s' in isps.yaml\n", domain.DNSISP)
+			continue
+		}
+
+		remoteRecords, err := provider.ListRecords(context.Background(), domain.Name)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to list records from ISP '%s' for domain '%s'\n", domain.DNSISP, domain.Name)
+			fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Suggestion: Check network connectivity and ISP API credentials for '%s'\n", domain.DNSISP)
+			continue
+		}
+
+		localRecordMap := make(map[string]*entity.DNSRecord)
+		for i := range domain.Records {
+			key := fmt.Sprintf("%s:%s:%s", domain.Records[i].Type, domain.Records[i].Name, domain.Records[i].Value)
+			localRecordMap[key] = &domain.Records[i]
+			localRecordMap[key].Domain = domain.Name
+		}
+
+		for _, remote := range remoteRecords {
+			recordName := remote.Name
+			if recordName == domain.Name || recordName == "" {
+				recordName = "@"
+			} else if strings.HasSuffix(remote.Name, "."+domain.Name) {
+				recordName = strings.TrimSuffix(remote.Name, "."+domain.Name)
+			}
+
+			key := fmt.Sprintf("%s:%s:%s", remote.Type, recordName, remote.Value)
+			if local, exists := localRecordMap[key]; exists {
+				if local.TTL != remote.TTL {
+					allDiffs = append(allDiffs, RecordDiff{
+						Domain:     domain.Name,
+						DNSISP:     domain.DNSISP,
+						Type:       entity.DNSRecordType(remote.Type),
+						Name:       recordName,
+						Value:      remote.Value,
+						TTL:        remote.TTL,
+						ChangeType: valueobject.ChangeTypeUpdate,
+					})
+				}
+				delete(localRecordMap, key)
+			} else {
+				allDiffs = append(allDiffs, RecordDiff{
+					Domain:     domain.Name,
 					DNSISP:     domain.DNSISP,
 					Type:       entity.DNSRecordType(remote.Type),
 					Name:       recordName,
 					Value:      remote.Value,
 					TTL:        remote.TTL,
-					ChangeType: valueobject.ChangeTypeUpdate,
+					ChangeType: valueobject.ChangeTypeCreate,
 				})
 			}
-			delete(localRecordMap, key)
-		} else {
-			diffs = append(diffs, RecordDiff{
-				Domain:     domainName,
-				DNSISP:     domain.DNSISP,
-				Type:       entity.DNSRecordType(remote.Type),
-				Name:       recordName,
-				Value:      remote.Value,
-				TTL:        remote.TTL,
-				ChangeType: valueobject.ChangeTypeCreate,
-			})
+		}
+
+		if !force {
+			for _, local := range localRecordMap {
+				allDiffs = append(allDiffs, RecordDiff{
+					Domain:     local.Domain,
+					DNSISP:     domain.DNSISP,
+					Type:       local.Type,
+					Name:       local.Name,
+					Value:      local.Value,
+					TTL:        local.TTL,
+					ChangeType: valueobject.ChangeTypeDelete,
+				})
+			}
 		}
 	}
 
-	for _, local := range localRecordMap {
-		diffs = append(diffs, RecordDiff{
-			Domain:     local.Domain,
-			DNSISP:     domain.DNSISP,
-			Type:       local.Type,
-			Name:       local.Name,
-			Value:      local.Value,
-			TTL:        local.TTL,
-			ChangeType: valueobject.ChangeTypeDelete,
-		})
-	}
-
-	sort.Slice(diffs, func(i, j int) bool {
-		if diffs[i].Name != diffs[j].Name {
-			return diffs[i].Name < diffs[j].Name
+	sort.Slice(allDiffs, func(i, j int) bool {
+		if allDiffs[i].Domain != allDiffs[j].Domain {
+			return allDiffs[i].Domain < allDiffs[j].Domain
 		}
-		return diffs[i].Type < diffs[j].Type
+		if allDiffs[i].Name != allDiffs[j].Name {
+			return allDiffs[i].Name < allDiffs[j].Name
+		}
+		return allDiffs[i].Type < allDiffs[j].Type
 	})
 
-	if len(diffs) == 0 {
+	if len(allDiffs) == 0 {
 		fmt.Println("No DNS record differences detected.")
 		return
 	}
 
-	fmt.Printf("DNS Record Differences (Domain: %s):\n", domainName)
-	fmt.Println("=====================================")
-	for _, diff := range diffs {
-		prefix, style := styles.FormatChangeType(diff.ChangeType)
-		fmt.Printf("%s %-6s %-20s -> %-30s (ttl: %d)\n",
-			style.Render(prefix),
-			style.Render(string(diff.Type)),
-			style.Render(diff.Name),
-			style.Render(diff.Value),
-			diff.TTL)
+	domainRecordCount := make(map[string]int)
+	for _, diff := range allDiffs {
+		domainRecordCount[diff.Domain]++
 	}
 
-	if autoApprove {
-		if err := saveRecordDiffs(ctx, diffs, cfg); err != nil {
-			fmt.Fprintf(os.Stderr, "Error saving records: %v\n", err)
-			os.Exit(1)
-		}
-		fmt.Println("DNS records synced to local configuration.")
+	domainDisplay := domainName
+	if domainDisplay == "" {
+		domainDisplay = "all"
+	}
+
+	title := buildPlanTitle("dns pull records", dryRun, force)
+	DisplayPlanHeader(PlanHeader{
+		Title: title,
+		Env:   ctx.Env,
+		Extra: []PlanHeaderExtra{{Label: "DOMAIN", Value: domainDisplay}},
+	})
+
+	var rows []PlanRow
+	for domain, count := range domainRecordCount {
+		rows = append(rows, PlanRow{
+			Action:  "import",
+			Name:    domain,
+			Details: fmt.Sprintf("%d records", count),
+		})
+	}
+	sort.Slice(rows, func(i, j int) bool { return rows[i].Name < rows[j].Name })
+	DisplayPlanTable3Col("ACTION", "DOMAIN", "DETAILS", rows)
+
+	DisplaySummary(formatSummaryCount("imported", len(domainRecordCount)))
+
+	if dryRun {
+		DisplayDryRun()
 		return
 	}
 
-	if err := runRecordPullTUI(ctx, diffs, cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	if yes {
+		sortedDomains := make([]string, 0, len(domainRecordCount))
+		for domain := range domainRecordCount {
+			sortedDomains = append(sortedDomains, domain)
+		}
+		sort.Strings(sortedDomains)
+
+		DisplayExecuting()
+		total := len(sortedDomains)
+		if err := saveRecordDiffs(ctx, allDiffs, cfg); err != nil {
+			for i, domain := range sortedDomains {
+				DisplayExecuteStepWithError(i+1, total, ExecuteItem{
+					Action: "import",
+					Name:   domain,
+				}, fmt.Sprintf("Failed to save records: %v", err), "")
+			}
+			DisplayResult(0, total)
+			return
+		}
+		for i, domain := range sortedDomains {
+			DisplayExecuteStep(i+1, total, ExecuteItem{
+				Action:  "import",
+				Name:    domain,
+				Details: fmt.Sprintf("%d records", domainRecordCount[domain]),
+				Status:  "saved",
+				Success: true,
+			})
+		}
+		DisplayResult(total, 0)
+		return
+	}
+
+	if err := runRecordPullTUI(ctx, allDiffs, cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: TUI interaction failed\n")
+		fmt.Fprintf(os.Stderr, "Details: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Suggestion: Try using --yes flag to skip TUI and execute directly\n")
 		os.Exit(1)
+	}
+}
+
+func formatDomainDiffAction(changeType valueobject.ChangeType) string {
+	switch changeType {
+	case valueobject.ChangeTypeCreate:
+		return "import"
+	case valueobject.ChangeTypeUpdate:
+		return "update"
+	case valueobject.ChangeTypeDelete:
+		return "delete"
+	default:
+		return "import"
+	}
+}
+
+func formatDomainDiffDetails(diff DomainDiff) string {
+	return fmt.Sprintf("%d records", diff.RecordCount)
+}
+
+func formatRecordDiffAction(changeType valueobject.ChangeType) string {
+	switch changeType {
+	case valueobject.ChangeTypeCreate:
+		return "import"
+	case valueobject.ChangeTypeUpdate:
+		return "update"
+	case valueobject.ChangeTypeDelete:
+		return "delete"
+	default:
+		return "import"
 	}
 }
 

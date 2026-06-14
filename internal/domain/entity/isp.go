@@ -27,6 +27,7 @@ type ISP struct {
 	Name        string                           `yaml:"name"`
 	Type        ISPType                          `yaml:"type"`
 	Services    []ISPService                     `yaml:"services"`
+	Regions     []string                         `yaml:"regions,omitempty"`
 	Credentials map[string]valueobject.SecretRef `yaml:"credentials"`
 }
 

@@ -84,7 +84,8 @@ func (p *Planner) Plan(scope *valueobject.Scope) (*valueobject.Plan, error) {
 
 	plan := valueobject.NewPlanWithScope(scope)
 
-	if !scope.HasAnyServiceSelection() {
+	// When no service-specific filters are set, plan all base entities
+	if !scope.HasServices() {
 		p.differService.PlanISPs(plan, p.config.GetISPMap(), scope)
 		p.differService.PlanZones(plan, p.config.GetZoneMap(), scope)
 		p.differService.PlanDomains(plan, p.config.GetDomainMap(), scope)
@@ -92,11 +93,17 @@ func (p *Planner) Plan(scope *valueobject.Scope) (*valueobject.Plan, error) {
 		p.differService.PlanServers(plan, p.config.GetServerMap(), p.config.GetZoneMap(), scope)
 	}
 
-	if len(scope.Services()) > 0 || (!scope.HasAnyServiceSelection() && !scope.DNSOnly()) {
+	// Plan biz services when:
+	// 1. Explicit biz services are selected, OR
+	// 2. No service filters AND not DNS-only mode
+	if len(scope.BizServices()) > 0 || (!scope.HasServices() && !scope.IsDNSOnly()) {
 		p.differService.PlanServices(plan, p.config.GetServiceMap(), p.config.GetServerMap(), scope)
 	}
 
-	if len(scope.InfraServices()) > 0 || (!scope.HasAnyServiceSelection() && !scope.DNSOnly()) {
+	// Plan infra services when:
+	// 1. Explicit infra services are selected, OR
+	// 2. No service filters AND not DNS-only mode
+	if len(scope.InfraServices()) > 0 || (!scope.HasServices() && !scope.IsDNSOnly()) {
 		p.differService.PlanInfraServices(plan, p.config.GetInfraServiceMap(), p.config.GetServerMap(), scope)
 	}
 

@@ -49,6 +49,7 @@ func (m *Model) fetchDomainDiffs(ispName string) {
 				Name:       domainName,
 				DNSISP:     ispName,
 				ChangeType: valueobject.ChangeTypeCreate,
+				Prefix:     "+",
 			})
 		} else {
 			delete(localDomainMap, domainName)
@@ -63,6 +64,7 @@ func (m *Model) fetchDomainDiffs(ispName string) {
 				ISP:        localDomain.ISP,
 				Parent:     localDomain.Parent,
 				ChangeType: valueobject.ChangeTypeDelete,
+				Prefix:     "-",
 			})
 		}
 	}
@@ -101,6 +103,7 @@ func (m *Model) fetchDomainDiffsAsync(ispName string) tea.Cmd {
 					Name:       domainName,
 					DNSISP:     ispName,
 					ChangeType: valueobject.ChangeTypeCreate,
+					Prefix:     "+",
 				})
 			} else {
 				delete(localDomainMap, domainName)
@@ -115,6 +118,7 @@ func (m *Model) fetchDomainDiffsAsync(ispName string) tea.Cmd {
 					ISP:        localDomain.ISP,
 					Parent:     localDomain.Parent,
 					ChangeType: valueobject.ChangeTypeDelete,
+					Prefix:     "-",
 				})
 			}
 		}
@@ -180,6 +184,7 @@ func (m *Model) fetchRecordDiffs(domainName string) {
 					Value:      remote.Value,
 					TTL:        remote.TTL,
 					ChangeType: valueobject.ChangeTypeUpdate,
+					Prefix:     "~",
 				})
 			}
 			delete(localRecordMap, key)
@@ -191,6 +196,7 @@ func (m *Model) fetchRecordDiffs(domainName string) {
 				Value:      remote.Value,
 				TTL:        remote.TTL,
 				ChangeType: valueobject.ChangeTypeCreate,
+				Prefix:     "+",
 			})
 		}
 	}
@@ -203,6 +209,7 @@ func (m *Model) fetchRecordDiffs(domainName string) {
 			Value:      local.Value,
 			TTL:        local.TTL,
 			ChangeType: valueobject.ChangeTypeDelete,
+			Prefix:     "-",
 		})
 	}
 
@@ -262,6 +269,7 @@ func (m *Model) fetchRecordDiffsAsync(domainName string) tea.Cmd {
 						Value:      remote.Value,
 						TTL:        remote.TTL,
 						ChangeType: valueobject.ChangeTypeUpdate,
+						Prefix:     "~",
 					})
 				}
 				delete(localRecordMap, key)
@@ -273,6 +281,7 @@ func (m *Model) fetchRecordDiffsAsync(domainName string) tea.Cmd {
 					Value:      remote.Value,
 					TTL:        remote.TTL,
 					ChangeType: valueobject.ChangeTypeCreate,
+					Prefix:     "+",
 				})
 			}
 		}
@@ -285,6 +294,7 @@ func (m *Model) fetchRecordDiffsAsync(domainName string) tea.Cmd {
 				Value:      local.Value,
 				TTL:        local.TTL,
 				ChangeType: valueobject.ChangeTypeDelete,
+				Prefix:     "-",
 			})
 		}
 

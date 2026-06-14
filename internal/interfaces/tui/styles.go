@@ -3,90 +3,60 @@ package tui
 import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/interfaces/tui/styles"
 )
 
+// Re-export color constants from styles package for backward compatibility.
 const (
-	ColorPrimary    = "#7C3AED"
-	ColorSuccess    = "#10B981"
-	ColorWarning    = "#F59E0B"
-	ColorError      = "#EF4444"
-	ColorSecondary  = "#6B7280"
-	ColorBgSelected = "#1E1B4B"
+	ColorPrimary    = styles.ColorBrand
+	ColorSuccess    = styles.ColorSuccess
+	ColorWarning    = styles.ColorWarning
+	ColorError      = styles.ColorError
+	ColorSecondary  = styles.ColorMuted
+	ColorBgSelected = styles.ColorBgDark
 )
 
-var SpinnerFrames = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+// Re-export spinner frames from styles package.
+var SpinnerFrames = styles.SpinnerFrames
 
+// Re-export lipgloss styles from styles package for backward compatibility.
 var (
-	BaseStyle = lipgloss.NewStyle().Padding(1, 2)
+	BaseStyle = styles.BasePaddingStyle
 
 	TitleStyle = lipgloss.NewStyle().
 			Bold(true).
-			Foreground(lipgloss.Color(ColorPrimary)).
+			Foreground(lipgloss.Color(styles.ColorBrand)).
 			Padding(0, 1)
 
 	EnvStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorSuccess)).
+			Foreground(lipgloss.Color(styles.ColorSuccess)).
 			Bold(true)
 
-	SelectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorPrimary)).
-			Bold(true)
+	SelectedStyle = styles.SelectedStyle
 
-	HelpStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorSecondary))
+	HelpStyle = styles.MutedStyle
 
-	ChangeCreateStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(ColorSuccess))
+	ChangeCreateStyle = styles.CreateStyle
+	ChangeUpdateStyle = styles.UpdateStyle
+	ChangeDeleteStyle = styles.DeleteStyle
+	ChangeNoopStyle   = styles.NoopStyle
 
-	ChangeUpdateStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(ColorWarning))
+	WarningStyle     = styles.WarningStyle
+	ProgressBarStyle = styles.ProgressBarStyle
+	SuccessStyle     = styles.SuccessStyle
 
-	ChangeDeleteStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(ColorError))
+	TabActiveStyle   = styles.TabActiveStyle
+	TabInactiveStyle = styles.TabInactiveStyle
 
-	ChangeNoopStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorSecondary))
+	MenuStyle         = styles.MenuStyle
+	MenuItemStyle     = styles.MenuItemStyle
+	MenuSelectedStyle = styles.MenuSelectedStyle
 
-	WarningStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorWarning))
-
-	ProgressBarStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(ColorPrimary))
-
-	SuccessStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorSuccess))
-
-	TabActiveStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(lipgloss.Color(ColorPrimary)).
-			Underline(true)
-
-	TabInactiveStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(ColorSecondary))
-
-	MenuStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color(ColorPrimary)).
-			Bold(true)
-
-	MenuItemStyle = lipgloss.NewStyle().
-			Padding(0, 2)
-
-	MenuSelectedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(ColorPrimary)).
-				Background(lipgloss.Color(ColorBgSelected)).
-				Padding(0, 2).
-				Bold(true)
-
-	ScrollIndicatorStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(ColorSecondary)).
-				Padding(0, 1)
-
-	LoadingOverlayStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color(ColorPrimary)).
-				Bold(true).
-				Padding(1, 2)
+	ScrollIndicatorStyle = styles.ScrollIndicatorStyle
+	LoadingOverlayStyle  = styles.LoadingOverlayStyle
 )
 
+// FormatChangeType returns the prefix and style for a given change type.
 func FormatChangeType(changeType valueobject.ChangeType) (prefix string, style lipgloss.Style) {
 	switch changeType {
 	case valueobject.ChangeTypeCreate:

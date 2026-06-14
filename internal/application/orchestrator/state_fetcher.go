@@ -59,16 +59,16 @@ func (f *StateFetcher) FetchWithScope(ctx context.Context, cfg *entity.Config, s
 
 		if scope != nil {
 			// First check if we have a specific server filter
-			if scope.Server() != "" && scope.Server() != srv.Name {
+			if len(scope.Servers()) > 0 && !scope.MatchesServer(srv.Name) {
 				includeServer = false
 			}
 
 			// If we have service selection, only include relevant servers
-			if includeServer && scope.HasAnyServiceSelection() {
+			if includeServer && scope.HasServices() {
 				hasRelevantService := false
 
 				// Check business services only if we have business service selections
-				if scope.Service() != "" || len(scope.Services()) > 0 {
+				if len(scope.BizServices()) > 0 {
 					for _, svc := range cfg.Services {
 						if svc.Server == srv.Name && scope.MatchesBizService(svc.Name) {
 							hasRelevantService = true
@@ -183,8 +183,22 @@ func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serve
 		if scope != nil && !scope.MatchesBizService(svc.Name) {
 			continue
 		}
-		// 如果启用了强制部署，不要设置状态，这样 differ 会认为这是一个新服务
 		if scope != nil && scope.ForceDeploy() {
+			// ForceDeploy: still check if service exists remotely so differ
+			// generates ChangeTypeUpdate (not ChangeTypeCreate), but skip
+			// the detailed hash/config comparison.
+			f.processService(client, serverName, svc.Name, deployedServices, func(exists bool, _, _ string) {
+				if exists {
+					mu.Lock()
+					state.Services[svc.Name] = &entity.BizService{
+						ServiceBase: entity.ServiceBase{
+							Server: svc.ServiceBase.Server,
+						},
+						Name: svc.Name,
+					}
+					mu.Unlock()
+				}
+			})
 			continue
 		}
 		f.processService(client, serverName, svc.Name, deployedServices, func(exists bool, remoteHash, localHash string) {
@@ -221,8 +235,22 @@ func (f *StateFetcher) fetchServerServicesState(client contract.SSHClient, serve
 		if scope != nil && !scope.MatchesInfraService(infra.Name) {
 			continue
 		}
-		// 如果启用了强制部署，不要设置状态，这样 differ 会认为这是一个新服务
 		if scope != nil && scope.ForceDeploy() {
+			// ForceDeploy: still check if service exists remotely so differ
+			// generates ChangeTypeUpdate (not ChangeTypeCreate), but skip
+			// the detailed hash/config comparison.
+			f.processService(client, serverName, infra.Name, deployedServices, func(exists bool, _, _ string) {
+				if exists {
+					mu.Lock()
+					state.InfraServices[infra.Name] = &entity.InfraService{
+						ServiceBase: entity.ServiceBase{
+							Server: infra.ServiceBase.Server,
+						},
+						Name: infra.Name,
+					}
+					mu.Unlock()
+				}
+			})
 			continue
 		}
 		f.processService(client, serverName, infra.Name, deployedServices, func(exists bool, remoteHash, localHash string) {

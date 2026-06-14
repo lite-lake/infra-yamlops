@@ -5,6 +5,7 @@ import (
 	"net"
 
 	"github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 )
 
 type InfraServiceType string
@@ -77,22 +78,30 @@ type InfraService struct {
 	Type  InfraServiceType `yaml:"type"`
 	Image string           `yaml:"image"`
 
+	Secrets []string                         `yaml:"secrets,omitempty"`
+	Env     map[string]valueobject.SecretRef `yaml:"env,omitempty"`
+
 	GatewayPorts        *GatewayPorts        `yaml:"ports,omitempty"`
 	GatewaySSL          *GatewaySSLConfig    `yaml:"ssl,omitempty"`
 	GatewayWAF          *GatewayWAFConfig    `yaml:"waf,omitempty"`
 	GatewayLogLevel     int                  `yaml:"log_level,omitempty"`
 	GatewayNotification *GatewayNotification `yaml:"notification,omitempty"`
+
+	Ports []ServicePort `yaml:"extra_ports,omitempty"`
 }
 
 type infraServiceAlias InfraService
 
 func (s *InfraService) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var raw struct {
-		Name     string           `yaml:"name"`
-		Type     InfraServiceType `yaml:"type"`
-		Server   string           `yaml:"server"`
-		Image    string           `yaml:"image"`
-		Networks []string         `yaml:"networks"`
+		Name       string                           `yaml:"name"`
+		Type       InfraServiceType                 `yaml:"type"`
+		Server     string                           `yaml:"server"`
+		Image      string                           `yaml:"image"`
+		Networks   []string                         `yaml:"networks"`
+		Secrets    []string                         `yaml:"secrets"`
+		Env        map[string]valueobject.SecretRef `yaml:"env"`
+		ExtraPorts []ServicePort                    `yaml:"extra_ports"`
 	}
 	if err := unmarshal(&raw); err != nil {
 		return err
@@ -103,6 +112,9 @@ func (s *InfraService) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	s.ServiceBase.Server = raw.Server
 	s.ServiceBase.Networks = raw.Networks
 	s.Image = raw.Image
+	s.Secrets = raw.Secrets
+	s.Env = raw.Env
+	s.Ports = raw.ExtraPorts
 
 	switch s.Type {
 	case InfraServiceTypeGateway:
@@ -131,27 +143,33 @@ func (s *InfraService) MarshalYAML() (interface{}, error) {
 	switch s.Type {
 	case InfraServiceTypeGateway:
 		return struct {
-			Name         string               `yaml:"name"`
-			Type         InfraServiceType     `yaml:"type"`
-			Server       string               `yaml:"server"`
-			Image        string               `yaml:"image"`
-			Ports        *GatewayPorts        `yaml:"ports,omitempty"`
-			SSL          *GatewaySSLConfig    `yaml:"ssl,omitempty"`
-			WAF          *GatewayWAFConfig    `yaml:"waf,omitempty"`
-			LogLevel     int                  `yaml:"log_level,omitempty"`
-			Notification *GatewayNotification `yaml:"notification,omitempty"`
-			Networks     []string             `yaml:"networks,omitempty"`
+			Name         string                           `yaml:"name"`
+			Type         InfraServiceType                 `yaml:"type"`
+			Server       string                           `yaml:"server"`
+			Image        string                           `yaml:"image"`
+			Secrets      []string                         `yaml:"secrets,omitempty"`
+			Env          map[string]valueobject.SecretRef `yaml:"env,omitempty"`
+			Ports        *GatewayPorts                    `yaml:"ports,omitempty"`
+			SSL          *GatewaySSLConfig                `yaml:"ssl,omitempty"`
+			WAF          *GatewayWAFConfig                `yaml:"waf,omitempty"`
+			LogLevel     int                              `yaml:"log_level,omitempty"`
+			Notification *GatewayNotification             `yaml:"notification,omitempty"`
+			Networks     []string                         `yaml:"networks,omitempty"`
+			ExtraPorts   []ServicePort                    `yaml:"extra_ports,omitempty"`
 		}{
 			Name:         s.Name,
 			Type:         s.Type,
 			Server:       s.ServiceBase.Server,
 			Image:        s.Image,
+			Secrets:      s.Secrets,
+			Env:          s.Env,
 			Ports:        s.GatewayPorts,
 			SSL:          s.GatewaySSL,
 			WAF:          s.GatewayWAF,
 			LogLevel:     s.GatewayLogLevel,
 			Notification: s.GatewayNotification,
 			Networks:     s.ServiceBase.Networks,
+			ExtraPorts:   s.Ports,
 		}, nil
 	}
 	return (*infraServiceAlias)(s), nil

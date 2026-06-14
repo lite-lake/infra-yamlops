@@ -1,6 +1,8 @@
 package usecase
 
 import (
+	"context"
+
 	"github.com/lite-lake/infra-yamlops/internal/domain/contract"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
@@ -22,11 +24,12 @@ type DNSFactoryInterface interface {
 }
 
 type ExecutorConfig struct {
-	Registry   RegistryInterface
-	SSHPool    SSHPoolInterface
-	DNSFactory DNSFactoryInterface
-	Plan       *valueobject.Plan
-	Env        string
+	Registry    RegistryInterface
+	SSHPool     SSHPoolInterface
+	DNSFactory  DNSFactoryInterface
+	Plan        *valueobject.Plan
+	Env         string
+	Concurrency int
 }
 
 type Executor struct {
@@ -62,10 +65,11 @@ func NewExecutor(cfg *ExecutorConfig) *Executor {
 	}
 
 	changeExecutorCfg := &ChangeExecutorConfig{
-		Plan:       cfg.Plan,
-		SSHPool:    sshPool,
-		DNSFactory: dnsFactory,
-		Env:        cfg.Env,
+		Plan:        cfg.Plan,
+		SSHPool:     sshPool,
+		DNSFactory:  dnsFactory,
+		Env:         cfg.Env,
+		Concurrency: cfg.Concurrency,
 	}
 
 	return &Executor{
@@ -100,9 +104,19 @@ func (e *Executor) RegisterServer(name, host string, port int, user, password st
 	e.changeExecutor.RegisterServer(name, host, port, user, password, strictHostKeyChecking)
 }
 
-func (e *Executor) Apply() []*Result {
+// SetProgressCallback sets a callback invoked after each change is applied.
+func (e *Executor) SetProgressCallback(cb func(change *valueobject.Change, serverName string, success bool, errMsg string)) {
+	e.changeExecutor.SetProgressCallback(cb)
+}
+
+// SetStartCallback sets a callback invoked before each change is applied.
+func (e *Executor) SetStartCallback(cb func(change *valueobject.Change, serverName string)) {
+	e.changeExecutor.SetStartCallback(cb)
+}
+
+func (e *Executor) Apply(ctx context.Context) []*Result {
 	e.RegisterDefaults()
-	return e.changeExecutor.Apply(e.handlerRegistry)
+	return e.changeExecutor.Apply(ctx, e.handlerRegistry)
 }
 
 func (e *Executor) FilterPlanByServer(serverName string) *valueobject.Plan {

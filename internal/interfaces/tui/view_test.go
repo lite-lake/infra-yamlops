@@ -6,7 +6,7 @@ import (
 )
 
 func TestModel_RenderLoading(t *testing.T) {
-	m := NewModel("demo", "../../..")
+	m := NewModel("demo", "../../..", 5)
 	m.UI.Width = 80
 	m.UI.Height = 24
 	m.Loading.Active = true
@@ -25,7 +25,7 @@ func TestModel_RenderLoading(t *testing.T) {
 }
 
 func TestModel_RenderMainMenu(t *testing.T) {
-	m := NewModel("demo", "../../..")
+	m := NewModel("demo", "../../..", 5)
 	m.UI.Width = 80
 	m.UI.Height = 24
 	m.ViewState = ViewStateMainMenu
@@ -39,8 +39,8 @@ func TestModel_RenderMainMenu(t *testing.T) {
 }
 
 func TestModel_TabSwitch(t *testing.T) {
-	m := NewModel("demo", "../../..")
-	m.ViewState = ViewStateTree
+	m := NewModel("demo", "../../..", 5)
+	m.ViewState = ViewStateTreeService
 	m.Loading.Active = false
 
 	if m.ViewMode != ViewModeApp {
@@ -58,55 +58,55 @@ func TestModel_TabSwitch(t *testing.T) {
 	}
 }
 
-func TestModel_RenderApplyConfirm(t *testing.T) {
-	m := NewModel("demo", "../../..")
+func TestModel_RenderPlanView(t *testing.T) {
+	m := NewModel("demo", "../../..", 5)
 	m.UI.Width = 80
 	m.UI.Height = 24
-	m.ViewState = ViewStateApplyConfirm
+	m.ViewState = ViewStatePlan
 	m.Loading.Active = false
 	m.Action.ConfirmSelected = 0
 
 	view := m.View()
 
-	if !strings.Contains(view, "Confirm Apply") {
-		t.Error("Apply confirm view should contain 'Confirm Apply'")
+	if !strings.Contains(view, "Plan") {
+		t.Error("Plan view should contain 'Plan'")
 	}
 }
 
-func TestModel_RenderApplyProgress(t *testing.T) {
-	m := NewModel("demo", "../../..")
+func TestModel_RenderProgressView(t *testing.T) {
+	m := NewModel("demo", "../../..", 5)
 	m.UI.Width = 80
 	m.UI.Height = 24
-	m.ViewState = ViewStateApplyProgress
+	m.ViewState = ViewStateProgress
 	m.Loading.Active = false
 	m.Action.ApplyProgress = 5
 	m.Action.ApplyTotal = 10
 
 	view := m.View()
 
-	if !strings.Contains(view, "Applying") {
-		t.Error("Apply progress view should contain 'Applying'")
+	if !strings.Contains(view, "EXECUTING") {
+		t.Error("Progress view should contain 'EXECUTING'")
 	}
 }
 
-func TestModel_RenderApplyComplete(t *testing.T) {
-	m := NewModel("demo", "../../..")
+func TestModel_RenderCompleteView(t *testing.T) {
+	m := NewModel("demo", "../../..", 5)
 	m.UI.Width = 80
 	m.UI.Height = 24
-	m.ViewState = ViewStateApplyComplete
+	m.ViewState = ViewStateComplete
 	m.Loading.Active = false
 	m.Action.ApplyComplete = true
 
 	view := m.View()
 
-	if !strings.Contains(view, "Complete") {
-		t.Error("Apply complete view should contain 'Complete'")
+	if !strings.Contains(view, "SUMMARY") && !strings.Contains(view, "Completed") {
+		t.Error("Complete view should contain 'SUMMARY' or 'Completed'")
 	}
 }
 
 func TestModel_HandleEscape(t *testing.T) {
-	m := NewModel("demo", "../../..")
-	m.ViewState = ViewStateTree
+	m := NewModel("demo", "../../..", 5)
+	m.ViewState = ViewStateTreeService
 	m.Loading.Active = false
 	m.UI.ErrorMessage = "test error"
 
@@ -131,7 +131,7 @@ func TestSpinnerFrames(t *testing.T) {
 }
 
 func TestLoadingState(t *testing.T) {
-	m := NewModel("demo", "../../..")
+	m := NewModel("demo", "../../..", 5)
 
 	m.Loading.Active = true
 	m.Loading.Message = "Testing"
@@ -147,15 +147,20 @@ func TestLoadingState(t *testing.T) {
 }
 
 func TestModel_HandleEnter_MainMenu(t *testing.T) {
-	m := NewModel("demo", "../../..")
+	m := NewModel("demo", "../../..", 5)
 	m.ViewState = ViewStateMainMenu
 	m.Loading.Active = false
 	m.UI.MainMenuIndex = 0
 
+	// Index 0 is the "Service Management" parent node (expanded by default).
+	// Enter on a parent node should toggle expand/collapse, not navigate.
 	newModel, _ := m.handleEnter()
 	model := newModel.(Model)
 
-	if model.ViewState != ViewStateServiceManagement {
-		t.Errorf("Expected ViewStateServiceManagement, got %d", model.ViewState)
+	if model.ViewState != ViewStateMainMenu {
+		t.Errorf("Expected ViewStateMainMenu (parent toggle), got %d", model.ViewState)
+	}
+	if model.UI.MenuNodes[0].Expanded {
+		t.Error("Expected 'Service Management' to be collapsed after Enter on parent")
 	}
 }

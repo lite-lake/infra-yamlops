@@ -7,8 +7,9 @@ import (
 )
 
 type Secret struct {
-	Name  string `yaml:"name"`
-	Value string `yaml:"value"`
+	Name   string `yaml:"name"`
+	Value  string `yaml:"value"`
+	Source string `yaml:"-"`
 }
 
 func (s *Secret) Validate() error {

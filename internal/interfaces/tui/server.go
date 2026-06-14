@@ -3,351 +3,91 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/charmbracelet/bubbletea"
+	"github.com/lite-lake/infra-yamlops/internal/application/usecase"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
 	serverpkg "github.com/lite-lake/infra-yamlops/internal/environment"
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/ssh"
+	"github.com/lite-lake/infra-yamlops/internal/interfaces/tui/components"
 )
 
-var serverEnvOperations = []string{"Check", "Sync", "Full Setup"}
-
-func (m *Model) initServerEnvNodes() {
-	m.ServerEnv.Nodes = nil
+// generateServerSetupPlan creates a PlanView for server setup.
+// All servers are included with "sync" action. Users select/deselect in the Plan view.
+// This follows the unified execution mode: Plan → Confirm → Execute.
+func (m *Model) generateServerSetupPlan() {
+	var items []components.PlanItem
 	for _, srv := range m.Server.ServerList {
-		m.ServerEnv.Nodes = append(m.ServerEnv.Nodes, &ServerEnvNode{
-			Name:     srv.Name,
-			Zone:     srv.Zone,
-			Selected: false,
-			Expanded: false,
-			Server:   srv,
+		items = append(items, components.PlanItem{
+			Action:     "sync",
+			Name:       srv.Name,
+			Server:     srv.Name,
+			Details:    fmt.Sprintf("packages: %s (installed)", strings.Join(getServerPackages(srv), ", ")),
+			ChangeType: "~",
+			Selected:   true,
 		})
 	}
-	m.ServerEnv.CursorIndex = 0
-	m.ServerEnv.OperationIndex = 0
-	m.ServerEnv.Results = nil
-	m.ServerEnv.SyncResults = nil
+
+	if len(items) == 0 {
+		return
+	}
+
+	pv := components.NewPlanView("PLAN: server setup", string(m.Environment), "", "server_setup", false)
+	pv.EnvWarning = true
+	pv.SetItems(items)
+	m.Action.PlanComponent = pv
+	m.Action.PlanResult = valueobject.NewPlan()
+	m.Action.ApplyTotal = len(items)
 }
 
-func (m Model) renderServerEnvSetup() string {
-	availableHeight := m.UI.Height - 12
-	if availableHeight < 5 {
-		availableHeight = 5
-	}
-
-	treeHeight := availableHeight - 2
-	if treeHeight < 3 {
-		treeHeight = 3
-	}
-
-	var lines []string
-	for _, node := range m.ServerEnv.Nodes {
-		m.renderServerEnvNode(node, &lines)
-	}
-
-	totalLines := len(lines)
-	viewport := NewViewport(m.ServerEnv.CursorIndex, totalLines, treeHeight)
-	viewport.EnsureCursorVisible()
-
-	var sb strings.Builder
-	sb.WriteString(TitleStyle.Render("  Server Environment Setup") + "\n\n")
-
-	sb.WriteString(TabActiveStyle.Render("  ▸ Select Servers:") + "\n")
-
-	start := viewport.VisibleStart()
-	end := viewport.VisibleEnd()
-	for i := start; i < end && i < len(lines); i++ {
-		sb.WriteString("  " + lines[i] + "\n")
-	}
-
-	if viewport.TotalRows > viewport.VisibleRows {
-		sb.WriteString("  " + viewport.RenderSimpleScrollIndicator() + "\n")
-	}
-
-	sb.WriteString("\n")
-	sb.WriteString("  " + strings.Repeat("─", 40) + "\n")
-
-	sb.WriteString("\n" + TabActiveStyle.Render("  ▸ Operation:") + "  ")
-
-	for i, op := range serverEnvOperations {
-		if i == m.ServerEnv.OperationIndex {
-			sb.WriteString(SelectedStyle.Render("["+op+"]") + "  ")
-		} else {
-			sb.WriteString(MenuItemStyle.Render(op) + "  ")
+func getServerPackages(srv *entity.Server) []string {
+	packages := []string{}
+	if srv != nil {
+		if srv.OS != "" {
+			packages = append(packages, srv.OS)
+		}
+		if len(srv.Environment.Registries) > 0 {
+			packages = append(packages, "registries: "+strings.Join(srv.Environment.Registries, ", "))
 		}
 	}
-	sb.WriteString("\n")
-
-	selectedCount := m.ServerEnv.CountSelected()
-	sb.WriteString(fmt.Sprintf("\n  Selected: %d server(s)\n", selectedCount))
-
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ navigate  Space select  Enter expand/execute  Tab operation  a all  n none  Esc back  q quit"))
-
-	return BaseStyle.Render(sb.String())
+	if len(packages) == 0 {
+		packages = append(packages, "base")
+	}
+	return packages
 }
 
-func (m Model) renderServerEnvNode(node *ServerEnvNode, lines *[]string) {
-	cursor := " "
-	lineIdx := len(*lines)
-	if lineIdx == m.ServerEnv.CursorIndex {
-		cursor = ">"
-	}
-
-	selectIcon := "○"
-	if node.Selected {
-		selectIcon = "◉"
-	}
-
-	expandIcon := "▸"
-	if node.Expanded {
-		expandIcon = "▾"
-	}
-
-	line := fmt.Sprintf("%s %s %s %s (%s)", cursor, selectIcon, expandIcon, node.Name, node.Zone)
-	if lineIdx == m.ServerEnv.CursorIndex {
-		line = SelectedStyle.Render(line)
-	}
-	*lines = append(*lines, line)
-
-	if node.Expanded && m.ServerEnv.Results != nil {
-		if results, ok := m.ServerEnv.Results[node.Name]; ok {
-			for _, r := range results {
-				icon := "✓"
-				style := SuccessStyle
-				if r.Status != serverpkg.CheckStatusOK {
-					icon = "✗"
-					style = ChangeDeleteStyle
-				}
-				detailLine := fmt.Sprintf("      %s %s: %s", icon, r.Name, r.Message)
-				*lines = append(*lines, style.Render(detailLine))
-			}
-		}
-	}
-}
-
-func (m Model) renderServerEnvResults() string {
-	var lines []string
-
-	checkResults := m.ServerEnv.Results
-	syncResults := m.ServerEnv.SyncResults
-
-	if len(checkResults) > 0 {
-		lines = append(lines, "")
-		for _, node := range m.ServerEnv.Nodes {
-			results, ok := checkResults[node.Name]
-			if !ok {
-				continue
-			}
-			lines = append(lines, fmt.Sprintf("  [%s]", node.Name))
-			for _, r := range results {
-				icon := "✓"
-				style := SuccessStyle
-				if r.Status != serverpkg.CheckStatusOK {
-					icon = "✗"
-					style = ChangeDeleteStyle
-				}
-				lines = append(lines, style.Render(fmt.Sprintf("    %s %s: %s", icon, r.Name, r.Message)))
-			}
-			lines = append(lines, "")
-		}
-	}
-
-	if len(syncResults) > 0 {
-		lines = append(lines, "  --- Sync Results ---")
-		for _, node := range m.ServerEnv.Nodes {
-			results, ok := syncResults[node.Name]
-			if !ok {
-				continue
-			}
-			lines = append(lines, fmt.Sprintf("  [%s]", node.Name))
-			for _, r := range results {
-				icon := "✓"
-				style := SuccessStyle
-				if !r.Success {
-					icon = "✗"
-					style = ChangeDeleteStyle
-				}
-				lines = append(lines, style.Render(fmt.Sprintf("    %s %s: %s", icon, r.Name, r.Message)))
-			}
-			lines = append(lines, "")
-		}
-	}
-
-	totalChecks := 0
-	passedChecks := 0
-	for _, results := range checkResults {
-		for _, r := range results {
-			totalChecks++
-			if r.Status == serverpkg.CheckStatusOK {
-				passedChecks++
-			}
-		}
-	}
-	totalSyncs := 0
-	passedSyncs := 0
-	for _, results := range syncResults {
-		for _, r := range results {
-			totalSyncs++
-			if r.Success {
-				passedSyncs++
-			}
-		}
-	}
-
-	summaryParts := []string{}
-	if totalChecks > 0 {
-		summaryParts = append(summaryParts, fmt.Sprintf("Check: %d/%d passed", passedChecks, totalChecks))
-	}
-	if totalSyncs > 0 {
-		summaryParts = append(summaryParts, fmt.Sprintf("Sync: %d/%d passed", passedSyncs, totalSyncs))
-	}
-	if len(summaryParts) > 0 {
-		lines = append(lines, fmt.Sprintf("  Summary: %s", strings.Join(summaryParts, ", ")))
-	}
-
-	availableHeight := m.UI.Height - 8
-	if availableHeight < 5 {
-		availableHeight = 5
-	}
-
-	totalLines := len(lines)
-	viewport := NewViewport(0, totalLines, availableHeight)
-	viewport.Offset = m.ServerEnv.ResultsScrollY
-	maxOffset := max(0, totalLines-viewport.VisibleRows)
-	if viewport.Offset > maxOffset {
-		viewport.Offset = maxOffset
-		m.ServerEnv.ResultsScrollY = viewport.Offset
-	}
-	if viewport.Offset < 0 {
-		viewport.Offset = 0
-		m.ServerEnv.ResultsScrollY = 0
-	}
-
-	var sb strings.Builder
-	sb.WriteString(TitleStyle.Render("  Environment Results") + "\n")
-
-	for i := viewport.VisibleStart(); i < viewport.VisibleEnd() && i < len(lines); i++ {
-		sb.WriteString(lines[i] + "\n")
-	}
-
-	if viewport.TotalRows > viewport.VisibleRows {
-		sb.WriteString("\n" + viewport.RenderSimpleScrollIndicator())
-	}
-
-	sb.WriteString("\n" + HelpStyle.Render("  ↑/↓ scroll  Enter back  r re-check  s sync selected  Esc back  q quit"))
-
-	return BaseStyle.Render(sb.String())
-}
-
-func (m Model) countServerEnvLines() int {
-	count := 0
-	for _, node := range m.ServerEnv.Nodes {
-		count++
-		if node.Expanded && m.ServerEnv.Results != nil {
-			if results, ok := m.ServerEnv.Results[node.Name]; ok {
-				count += len(results)
-			}
-		}
-	}
-	return count
-}
-
-func (m Model) countServerEnvResultLines() int {
-	count := 0
-
-	checkResults := m.ServerEnv.Results
-	syncResults := m.ServerEnv.SyncResults
-
-	if len(checkResults) > 0 {
-		count++
-		for _, node := range m.ServerEnv.Nodes {
-			results, ok := checkResults[node.Name]
-			if !ok {
-				continue
-			}
-			count++
-			count += len(results)
-			count++
-		}
-	}
-
-	if len(syncResults) > 0 {
-		count++
-		for _, node := range m.ServerEnv.Nodes {
-			results, ok := syncResults[node.Name]
-			if !ok {
-				continue
-			}
-			count++
-			count += len(results)
-			count++
-		}
-	}
-
-	count++
-	return count
-}
-
-func (m *Model) executeServerEnvCheckAsync() tea.Cmd {
-	return func() tea.Msg {
-		servers := m.ServerEnv.GetSelectedServers()
-		if len(servers) == 0 {
-			return serverEnvCheckAllMsg{}
-		}
-
-		results := make(map[string][]serverpkg.CheckResult)
-		secrets := m.Config.GetSecretsMap()
-
-		registries := make([]entity.Registry, 0, len(m.Config.Registries))
-		for i := range m.Config.Registries {
-			registries = append(registries, m.Config.Registries[i])
-		}
-
-		for _, srv := range servers {
-			password, err := srv.SSH.Password.Resolve(secrets)
-			if err != nil {
-				results[srv.Name] = []serverpkg.CheckResult{{
-					Name:    "Connection",
-					Status:  serverpkg.CheckStatusError,
-					Message: fmt.Sprintf("Cannot resolve password: %v", err),
-				}}
-				continue
-			}
-
-			strictHostKeyChecking := true
-			if !srv.SSH.StrictHostKeyChecking {
-				strictHostKeyChecking = false
-			}
-			sshCfg := &ssh.SSHConfig{
-				StrictHostKeyChecking: strictHostKeyChecking,
-			}
-			client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
-			if err != nil {
-				results[srv.Name] = []serverpkg.CheckResult{{
-					Name:    "Connection",
-					Status:  serverpkg.CheckStatusError,
-					Message: fmt.Sprintf("Connection failed: %v", err),
-				}}
-				continue
-			}
-
-			checker := serverpkg.NewChecker(client, srv, registries, secrets)
-			results[srv.Name] = checker.CheckAll()
-			client.Close()
-		}
-
-		return serverEnvCheckAllMsg{results: results}
-	}
-}
-
+// executeServerEnvSyncAsync runs server environment sync for selected servers in the Plan view.
+// Returns applyCompleteAsyncMsg with unified result format (compatible with ViewStateComplete).
 func (m *Model) executeServerEnvSyncAsync() tea.Cmd {
 	return func() tea.Msg {
-		servers := m.ServerEnv.GetSelectedServers()
-		if len(servers) == 0 {
-			return serverEnvSyncAllMsg{}
+		selectedItems := m.Action.PlanComponent.GetSelectedItems()
+		if len(selectedItems) == 0 {
+			return applyCompleteAsyncMsg{results: nil}
 		}
 
-		results := make(map[string][]serverpkg.SyncResult)
+		selectedSet := make(map[string]bool)
+		for _, item := range selectedItems {
+			selectedSet[item.Server] = true
+		}
+
+		var servers []*entity.Server
+		for _, srv := range m.Server.ServerList {
+			if selectedSet[srv.Name] {
+				servers = append(servers, srv)
+			}
+		}
+
+		if len(servers) == 0 {
+			return applyCompleteAsyncMsg{results: nil}
+		}
+
+		concurrency := m.Concurrency
+		if concurrency <= 0 {
+			concurrency = 5
+		}
+
 		secrets := m.Config.GetSecretsMap()
 
 		registries := make([]entity.Registry, 0, len(m.Config.Registries))
@@ -355,119 +95,82 @@ func (m *Model) executeServerEnvSyncAsync() tea.Cmd {
 			registries = append(registries, m.Config.Registries[i])
 		}
 
-		for _, srv := range servers {
-			password, err := srv.SSH.Password.Resolve(secrets)
-			if err != nil {
-				results[srv.Name] = []serverpkg.SyncResult{{
-					Name:    "Connection",
-					Success: false,
-					Message: fmt.Sprintf("Cannot resolve password: %v", err),
-				}}
-				continue
-			}
-
-			strictHostKeyChecking := true
-			if !srv.SSH.StrictHostKeyChecking {
-				strictHostKeyChecking = false
-			}
-			sshCfg := &ssh.SSHConfig{
-				StrictHostKeyChecking: strictHostKeyChecking,
-			}
-			client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
-			if err != nil {
-				results[srv.Name] = []serverpkg.SyncResult{{
-					Name:    "Connection",
-					Success: false,
-					Message: fmt.Sprintf("Connection failed: %v", err),
-				}}
-				continue
-			}
-
-			syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), secrets, registries)
-			results[srv.Name] = syncer.SyncAll()
-			client.Close()
+		type serverResult struct {
+			results []*usecase.Result
 		}
 
-		return serverEnvSyncAllMsg{results: results}
-	}
-}
-
-func (m *Model) executeServerEnvFullSetupAsync() tea.Cmd {
-	return func() tea.Msg {
-		servers := m.ServerEnv.GetSelectedServers()
-		if len(servers) == 0 {
-			return serverEnvCheckAllMsg{}
-		}
-
-		checkResults := make(map[string][]serverpkg.CheckResult)
-		syncResults := make(map[string][]serverpkg.SyncResult)
-		secrets := m.Config.GetSecretsMap()
-
-		registries := make([]entity.Registry, 0, len(m.Config.Registries))
-		for i := range m.Config.Registries {
-			registries = append(registries, m.Config.Registries[i])
-		}
+		sem := make(chan struct{}, concurrency)
+		resultsCh := make(chan serverResult, len(servers))
+		var wg sync.WaitGroup
 
 		for _, srv := range servers {
-			password, err := srv.SSH.Password.Resolve(secrets)
-			if err != nil {
-				checkResults[srv.Name] = []serverpkg.CheckResult{{
-					Name:    "Connection",
-					Status:  serverpkg.CheckStatusError,
-					Message: fmt.Sprintf("Cannot resolve password: %v", err),
-				}}
-				continue
-			}
+			sem <- struct{}{}
+			wg.Add(1)
+			go func(s *entity.Server) {
+				defer wg.Done()
+				defer func() { <-sem }()
 
-			strictHostKeyChecking := true
-			if !srv.SSH.StrictHostKeyChecking {
-				strictHostKeyChecking = false
-			}
-			sshCfg := &ssh.SSHConfig{
-				StrictHostKeyChecking: strictHostKeyChecking,
-			}
-			client, err := ssh.NewClientWithConfig(srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, sshCfg)
-			if err != nil {
-				checkResults[srv.Name] = []serverpkg.CheckResult{{
-					Name:    "Connection",
-					Status:  serverpkg.CheckStatusError,
-					Message: fmt.Sprintf("Connection failed: %v", err),
-				}}
-				continue
-			}
+				var serverResults []*usecase.Result
 
-			checker := serverpkg.NewChecker(client, srv, registries, secrets)
-			checkResults[srv.Name] = checker.CheckAll()
-
-			syncer := serverpkg.NewSyncer(client, srv, string(m.Environment), secrets, registries)
-			syncResults[srv.Name] = syncer.SyncAll()
-
-			client.Close()
-		}
-
-		return serverEnvCheckAllMsg{results: checkResults, syncResults: syncResults}
-	}
-}
-
-func (m *Model) getServerEnvNodeAtIndex(idx int) *ServerEnvNode {
-	currentIdx := 0
-	for _, node := range m.ServerEnv.Nodes {
-		if currentIdx == idx {
-			return node
-		}
-		currentIdx++
-		if node.Expanded && m.ServerEnv.Results != nil {
-			if results, ok := m.ServerEnv.Results[node.Name]; ok {
-				if currentIdx+len(results) > idx {
-					return node
+				password, err := s.SSH.Password.Resolve(secrets)
+				if err != nil {
+					serverResults = append(serverResults, &usecase.Result{
+						Success: false,
+						Error:   fmt.Errorf("cannot resolve password for %s: %w", s.Name, err),
+						Change:  valueobject.NewChange(valueobject.ChangeTypeUpdate, "server_env", s.Name).WithOldState(map[string]interface{}{"server": s.Name}),
+					})
+					resultsCh <- serverResult{results: serverResults}
+					return
 				}
-				currentIdx += len(results)
-			}
-		}
-	}
-	return nil
-}
 
-func (m *Model) countServerEnvNodes() int {
-	return m.countServerEnvLines()
+				strictHostKeyChecking := true
+				if !s.SSH.StrictHostKeyChecking {
+					strictHostKeyChecking = false
+				}
+				sshCfg := &ssh.SSHConfig{
+					StrictHostKeyChecking: strictHostKeyChecking,
+				}
+				client, err := ssh.NewClientWithConfig(s.SSH.Host, s.SSH.Port, s.SSH.User, password, sshCfg)
+				if err != nil {
+					serverResults = append(serverResults, &usecase.Result{
+						Success: false,
+						Error:   fmt.Errorf("connection to %s failed: %w", s.Name, err),
+						Change:  valueobject.NewChange(valueobject.ChangeTypeUpdate, "server_env", s.Name).WithOldState(map[string]interface{}{"server": s.Name}),
+					})
+					resultsCh <- serverResult{results: serverResults}
+					return
+				}
+
+				syncer := serverpkg.NewSyncer(client, s, string(m.Environment), secrets, registries)
+				syncResults := syncer.SyncAll()
+				client.Close()
+
+				for _, sr := range syncResults {
+					var syncErr error
+					if !sr.Success {
+						syncErr = fmt.Errorf("%s: %s", sr.Name, sr.Message)
+						if sr.Error != nil {
+							syncErr = sr.Error
+						}
+					}
+					serverResults = append(serverResults, &usecase.Result{
+						Success: sr.Success,
+						Error:   syncErr,
+						Change:  valueobject.NewChange(valueobject.ChangeTypeUpdate, "server_env", sr.Name).WithOldState(map[string]interface{}{"server": s.Name}),
+					})
+				}
+				resultsCh <- serverResult{results: serverResults}
+			}(srv)
+		}
+
+		wg.Wait()
+		close(resultsCh)
+
+		var results []*usecase.Result
+		for r := range resultsCh {
+			results = append(results, r.results...)
+		}
+
+		return applyCompleteAsyncMsg{results: results}
+	}
 }

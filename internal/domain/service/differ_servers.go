@@ -52,7 +52,7 @@ func (s *DifferService) PlanServers(plan *valueobject.Plan, cfgMap map[string]*e
 			if state.Zone != "" {
 				zoneName = state.Zone
 			}
-			if scope.Matches(zoneName, name, "", "") {
+			if scope.Matches(zoneName, name, "", "", "", "") {
 				plan.AddChange(valueobject.NewChangeFull(
 					valueobject.ChangeTypeDelete,
 					"server",
@@ -75,7 +75,7 @@ func (s *DifferService) PlanServers(plan *valueobject.Plan, cfgMap map[string]*e
 		}
 		if state, exists := s.state.Servers[name]; exists {
 			if !ServerEquals(state, cfg) {
-				if scope.Matches(zoneName, name, "", "") {
+				if scope.Matches(zoneName, name, "", "", "", "") {
 					plan.AddChange(valueobject.NewChangeFull(
 						valueobject.ChangeTypeUpdate,
 						"server",
@@ -88,7 +88,7 @@ func (s *DifferService) PlanServers(plan *valueobject.Plan, cfgMap map[string]*e
 				}
 			}
 		} else {
-			if scope.Matches(zoneName, name, "", "") {
+			if scope.Matches(zoneName, name, "", "", "", "") {
 				plan.AddChange(valueobject.NewChangeFull(
 					valueobject.ChangeTypeCreate,
 					"server",
@@ -196,9 +196,7 @@ func planServiceUpdatesAndCreates[T serviceEntity](
 		if state, exists := stateMap[name]; exists {
 			if scope.ForceDeploy() || !equals(state, cfg) {
 				changeType := valueobject.ChangeTypeUpdate
-				if scope.ForceDeploy() && equals(state, cfg) {
-					changeType = valueobject.ChangeTypeCreate
-				}
+				isForcedNoChange := scope.ForceDeploy() && equals(state, cfg)
 				plan.AddChange(valueobject.NewChangeFull(
 					changeType,
 					entityType,
@@ -207,7 +205,7 @@ func planServiceUpdatesAndCreates[T serviceEntity](
 					cfg,
 					[]string{fmt.Sprintf("deploy %s %s", entityType, name)},
 					true,
-				))
+				).WithForcedNoChange(isForcedNoChange))
 			}
 		} else {
 			plan.AddChange(valueobject.NewChangeFull(
@@ -231,7 +229,7 @@ func (s *DifferService) PlanServices(plan *valueobject.Plan, cfgMap map[string]*
 		serverMap,
 		scope,
 		func(zoneName, serverName, serviceName string) bool {
-			return scope.Matches(zoneName, serverName, serviceName, "")
+			return scope.Matches(zoneName, serverName, serviceName, "", "", "")
 		},
 		"service",
 	)
@@ -242,7 +240,7 @@ func (s *DifferService) PlanServices(plan *valueobject.Plan, cfgMap map[string]*
 		serverMap,
 		scope,
 		func(zoneName, serverName, serviceName string) bool {
-			return scope.Matches(zoneName, serverName, serviceName, "")
+			return scope.Matches(zoneName, serverName, serviceName, "", "", "")
 		},
 		"service",
 		ServiceEquals,
@@ -302,7 +300,7 @@ func (s *DifferService) PlanInfraServices(plan *valueobject.Plan, cfgMap map[str
 		serverMap,
 		scope,
 		func(zoneName, serverName, serviceName string) bool {
-			return scope.MatchesInfra(zoneName, serverName, serviceName)
+			return scope.Matches(zoneName, serverName, "", serviceName, "", "")
 		},
 		"infra_service",
 	)
@@ -313,7 +311,7 @@ func (s *DifferService) PlanInfraServices(plan *valueobject.Plan, cfgMap map[str
 		serverMap,
 		scope,
 		func(zoneName, serverName, serviceName string) bool {
-			return scope.MatchesInfra(zoneName, serverName, serviceName)
+			return scope.Matches(zoneName, serverName, "", serviceName, "", "")
 		},
 		"infra_service",
 		InfraServiceEquals,

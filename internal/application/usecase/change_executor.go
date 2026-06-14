@@ -13,24 +13,28 @@ import (
 
 // ChangeExecutorConfig 变更执行器配置
 type ChangeExecutorConfig struct {
-	Plan       *valueobject.Plan
-	SSHPool    SSHPoolInterface
-	DNSFactory DNSFactoryInterface
-	Env        string
+	Plan        *valueobject.Plan
+	SSHPool     SSHPoolInterface
+	DNSFactory  DNSFactoryInterface
+	Env         string
+	Concurrency int
 }
 
 // ChangeExecutor 负责执行计划中的变更
 type ChangeExecutor struct {
-	plan           *valueobject.Plan
-	sshPool        SSHPoolInterface
-	secrets        map[string]string
-	servers        map[string]*ServerInfo
-	serverEntities map[string]*entity.Server
-	env            string
-	domains        map[string]*entity.Domain
-	isps           map[string]*entity.ISP
-	workDir        string
-	dnsFactory     DNSFactoryInterface
+	plan             *valueobject.Plan
+	sshPool          SSHPoolInterface
+	secrets          map[string]string
+	servers          map[string]*ServerInfo
+	serverEntities   map[string]*entity.Server
+	env              string
+	domains          map[string]*entity.Domain
+	isps             map[string]*entity.ISP
+	workDir          string
+	dnsFactory       DNSFactoryInterface
+	concurrency      int
+	progressCallback func(change *valueobject.Change, serverName string, success bool, errMsg string)
+	startCallback    func(change *valueobject.Change, serverName string)
 }
 
 // handlerRegistry 处理器注册表接口
@@ -53,6 +57,10 @@ func NewChangeExecutor(cfg *ChangeExecutorConfig) *ChangeExecutor {
 	if cfg.DNSFactory == nil {
 		cfg.DNSFactory = infra.NewFactory()
 	}
+	concurrency := cfg.Concurrency
+	if concurrency <= 0 {
+		concurrency = 5
+	}
 
 	return &ChangeExecutor{
 		plan:           cfg.Plan,
@@ -65,6 +73,7 @@ func NewChangeExecutor(cfg *ChangeExecutorConfig) *ChangeExecutor {
 		env:            cfg.Env,
 		workDir:        ".",
 		dnsFactory:     cfg.DNSFactory,
+		concurrency:    concurrency,
 	}
 }
 
@@ -88,9 +97,19 @@ func (e *ChangeExecutor) RegisterServer(name, host string, port int, user, passw
 	e.servers[name] = &ServerInfo{Host: host, Port: port, User: user, Password: password, StrictHostKeyChecking: strictHostKeyChecking}
 }
 
+// SetProgressCallback sets a callback that is invoked after each change is applied.
+func (e *ChangeExecutor) SetProgressCallback(cb func(change *valueobject.Change, serverName string, success bool, errMsg string)) {
+	e.progressCallback = cb
+}
+
+// SetStartCallback sets a callback that is invoked before each change is applied.
+func (e *ChangeExecutor) SetStartCallback(cb func(change *valueobject.Change, serverName string)) {
+	e.startCallback = cb
+}
+
 // Apply 执行所有变更，对独立变更进行并行执行
-func (e *ChangeExecutor) Apply(registry handlerRegistry) []*Result {
-	ctx := logger.WithOperation(context.Background(), "apply")
+func (e *ChangeExecutor) Apply(ctx context.Context, registry handlerRegistry) []*Result {
+	ctx = logger.WithOperation(ctx, "apply")
 	log := logger.FromContext(ctx)
 
 	log.Info("starting apply", "changes", len(e.plan.Changes()))
@@ -119,13 +138,17 @@ func (e *ChangeExecutor) Apply(registry handlerRegistry) []*Result {
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	results := make([]*Result, 0, len(e.plan.Changes()))
+	cancelled := false
+	sem := make(chan struct{}, e.concurrency)
 
-	// 为每个组启动一个 goroutine
+	// 为每个组启动一个 goroutine，使用信号量限制并发数
 	for groupName, changes := range serverGroups {
+		sem <- struct{}{}
 		wg.Add(1)
 		go func(name string, groupChanges []*valueobject.Change) {
 			defer wg.Done()
-			groupResults := e.applyChangesGroup(ctx, name, groupChanges, registry)
+			defer func() { <-sem }()
+			groupResults := e.applyChangesGroup(ctx, name, groupChanges, registry, &cancelled, &mu)
 			mu.Lock()
 			results = append(results, groupResults...)
 			mu.Unlock()
@@ -155,7 +178,7 @@ func (e *ChangeExecutor) Apply(registry handlerRegistry) []*Result {
 }
 
 // applyChangesGroup 顺序执行一组变更
-func (e *ChangeExecutor) applyChangesGroup(ctx context.Context, groupName string, changes []*valueobject.Change, registry handlerRegistry) []*Result {
+func (e *ChangeExecutor) applyChangesGroup(ctx context.Context, groupName string, changes []*valueobject.Change, registry handlerRegistry, cancelled *bool, mu *sync.Mutex) []*Result {
 	log := logger.FromContext(ctx)
 	log.Debug("processing change group", "group", groupName, "changes", len(changes))
 
@@ -168,6 +191,32 @@ func (e *ChangeExecutor) applyChangesGroup(ctx context.Context, groupName string
 
 	results := make([]*Result, 0, len(sortedChanges))
 	for i, ch := range sortedChanges {
+		// 检查是否已取消
+		mu.Lock()
+		if *cancelled {
+			mu.Unlock()
+			// 标记剩余变更 as skipped
+			for j := i; j < len(sortedChanges); j++ {
+				results = append(results, &Result{Change: sortedChanges[j], Error: fmt.Errorf("skipped: context cancelled")})
+			}
+			return results
+		}
+		mu.Unlock()
+
+		// 检查 context 是否已取消
+		select {
+		case <-ctx.Done():
+			mu.Lock()
+			*cancelled = true
+			mu.Unlock()
+			// 标记剩余变更 as skipped
+			for j := i; j < len(sortedChanges); j++ {
+				results = append(results, &Result{Change: sortedChanges[j], Error: fmt.Errorf("skipped: context cancelled")})
+			}
+			return results
+		default:
+		}
+
 		log.Debug("applying change",
 			"group", groupName,
 			"index", i+1,
@@ -211,17 +260,44 @@ func (e *ChangeExecutor) applyChange(ctx context.Context, ch *valueobject.Change
 	h, ok := registry.Get(ch.Entity())
 	if !ok {
 		log.Error("no handler found", "entity", ch.Entity())
-		return &Result{Change: ch, Error: fmt.Errorf("no handler for: %s", ch.Entity())}
+		result := &Result{Change: ch, Error: fmt.Errorf("no handler for: %s", ch.Entity())}
+		e.reportProgress(ch, result)
+		return result
 	}
 
+	e.reportStart(ch)
 	result, err := h.Apply(ctx, ch, e.buildDeps(ch))
 	if err != nil {
 		log.Error("change failed", "entity", ch.Entity(), "name", ch.Name(), "error", err)
-		return &Result{Change: ch, Error: err}
+		result = &Result{Change: ch, Error: err}
+		e.reportProgress(ch, result)
+		return result
 	}
 
 	log.Debug("change applied", "entity", ch.Entity(), "name", ch.Name())
+	e.reportProgress(ch, result)
 	return result
+}
+
+// reportProgress calls the progress callback if set.
+func (e *ChangeExecutor) reportProgress(ch *valueobject.Change, result *Result) {
+	if e.progressCallback != nil {
+		serverName := ExtractServerFromChange(ch)
+		success := result.Error == nil
+		errMsg := ""
+		if result.Error != nil {
+			errMsg = result.Error.Error()
+		}
+		e.progressCallback(ch, serverName, success, errMsg)
+	}
+}
+
+// reportStart calls the start callback if set.
+func (e *ChangeExecutor) reportStart(ch *valueobject.Change) {
+	if e.startCallback != nil {
+		serverName := ExtractServerFromChange(ch)
+		e.startCallback(ch, serverName)
+	}
 }
 
 // buildDeps 构建变更处理器依赖

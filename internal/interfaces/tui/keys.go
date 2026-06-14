@@ -1,22 +1,22 @@
 package tui
 
 const (
-	KeyQuit             = "q"
-	KeyCancel           = "x"
-	KeyEscape           = "esc"
-	KeyUp               = "up"
-	KeyUpAlt            = "k"
-	KeyDown             = "down"
-	KeyDownAlt          = "j"
-	KeySpace            = " "
-	KeyEnter            = "enter"
-	KeyTab              = "tab"
-	KeySelectAll        = "a"
-	KeySelectAllUpper   = "A"
-	KeyDeselectAll      = "n"
-	KeyDeselectAllUpper = "N"
-	KeyPlan             = "p"
-	KeyRefresh          = "r"
+	KeyQuit        = "q"
+	KeyCancel      = "x"
+	KeyEscape      = "esc"
+	KeyUp          = "up"
+	KeyUpAlt       = "k"
+	KeyDown        = "down"
+	KeyDownAlt     = "j"
+	KeySpace       = " "
+	KeyEnter       = "enter"
+	KeyTab         = "tab"
+	KeySelectAll   = "a"
+	KeyDeselectAll = "n"
+	KeyPlan        = "p"
+	KeyRefresh     = "r"
+	KeyDetail      = "d"
+	KeySearch      = "/"
 )
 
 type HelpItem struct {
@@ -56,6 +56,7 @@ var (
 	HelpRefresh     = HelpItem{Key: "r", Desc: "refresh"}
 	HelpCurrent     = HelpItem{Key: "a", Desc: "current"}
 	HelpCancel      = HelpItem{Key: "n", Desc: "cancel"}
+	HelpSearch      = HelpItem{Key: "/", Desc: "search"}
 )
 
 func HelpMenu() string {
@@ -69,24 +70,15 @@ func HelpMenuWithEsc() string {
 func HelpTree() string {
 	return BuildHelpText([]HelpItem{
 		HelpSpace,
-		{Key: "Enter", Desc: "expand"},
-		{Key: "a", Desc: "current"},
-		{Key: "n", Desc: "cancel"},
-		{Key: "A", Desc: "all"},
-		{Key: "N", Desc: "none"},
+		{Key: "←/h", Desc: "collapse"},
+		{Key: "→/l", Desc: "expand"},
+		{Key: "a", Desc: "all"},
+		{Key: "n", Desc: "none"},
 		HelpPlanItem,
 		HelpRefresh,
 		HelpTab,
+		HelpSearch,
 		{Key: "Esc", Desc: "menu"},
-		HelpQuit,
-	})
-}
-
-func HelpPlan() string {
-	return BuildHelpText([]HelpItem{
-		{Key: "Enter", Desc: "apply"},
-		HelpEsc,
-		HelpQuit,
 	})
 }
 
@@ -95,14 +87,6 @@ func HelpConfirm() string {
 		HelpNavUp,
 		HelpEnter,
 		{Key: "Esc", Desc: "cancel"},
-		HelpQuit,
-	})
-}
-
-func HelpComplete() string {
-	return BuildHelpText([]HelpItem{
-		{Key: "Enter", Desc: "back"},
-		HelpQuit,
 	})
 }
 
@@ -114,7 +98,6 @@ func HelpSelectList() string {
 		HelpDeselectAll,
 		HelpEnter,
 		{Key: "Esc", Desc: "cancel"},
-		HelpQuit,
 	})
 }
 
@@ -122,16 +105,13 @@ func HelpStop() string {
 	return BuildHelpText([]HelpItem{
 		HelpSpace,
 		{Key: "Enter", Desc: "expand"},
-		{Key: "a", Desc: "current"},
-		{Key: "n", Desc: "cancel"},
-		{Key: "A", Desc: "all"},
-		{Key: "N", Desc: "none"},
+		{Key: "a", Desc: "all"},
+		{Key: "n", Desc: "none"},
 		{Key: "p", Desc: "stop"},
 		HelpEsc,
-		HelpQuit,
 	})
 }
 
 func HelpEscQuit() string {
-	return BuildHelpText([]HelpItem{HelpEsc, HelpQuit})
+	return BuildHelpText([]HelpItem{HelpEsc})
 }

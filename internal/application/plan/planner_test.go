@@ -79,7 +79,7 @@ func TestPlanner_Plan_WithScope(t *testing.T) {
 	}
 
 	planner := NewPlanner(WithConfig(cfg), WithEnv("dev"))
-	scope := valueobject.NewScope().WithZone("zone1")
+	scope := valueobject.NewScope().WithZones([]string{"zone1"})
 	plan, err := planner.Plan(scope)
 
 	if err != nil {
@@ -88,8 +88,8 @@ func TestPlanner_Plan_WithScope(t *testing.T) {
 	if plan == nil {
 		t.Fatal("expected non-nil plan")
 	}
-	if plan.Scope().Zone() != "zone1" {
-		t.Errorf("expected scope zone 'zone1', got %s", plan.Scope().Zone())
+	if len(plan.Scope().Zones()) != 1 || plan.Scope().Zones()[0] != "zone1" {
+		t.Errorf("expected scope zones ['zone1'], got %v", plan.Scope().Zones())
 	}
 }
 

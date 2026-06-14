@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewModel_InitializesLoading(t *testing.T) {
-	m := NewModel("demo", "../../..")
+	m := NewModel("demo", "../../..", 5)
 
 	if m.Loading == nil {
 		t.Error("Loading state should be initialized")
@@ -17,7 +17,7 @@ func TestNewModel_InitializesLoading(t *testing.T) {
 }
 
 func TestNewModel_AsyncLoadConfig(t *testing.T) {
-	m := NewModel("demo", "../../..")
+	m := NewModel("demo", "../../..", 5)
 
 	cmd := m.Init()
 	if cmd == nil {

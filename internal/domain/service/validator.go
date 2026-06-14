@@ -201,6 +201,12 @@ func (v *Validator) validatePortConflicts() error {
 				serverPorts[key][infra.GatewayPorts.HTTPS] = infra.Name
 			}
 		}
+		for _, port := range infra.Ports {
+			if existing, ok := serverPorts[key][port.Host]; ok {
+				return fmt.Errorf("%w: host port %d on server '%s' is used by both '%s' and '%s'", domain.ErrPortConflict, port.Host, infra.Server, existing, infra.Name)
+			}
+			serverPorts[key][port.Host] = infra.Name
+		}
 	}
 
 	for _, service := range v.cfg.Services {

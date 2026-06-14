@@ -163,6 +163,9 @@ func loadSecrets(fp string, cfg *entity.Config) error {
 	if err != nil {
 		return fmt.Errorf("loading secrets from %s: %w", fp, err)
 	}
+	for i := range items {
+		items[i].Source = fp
+	}
 	cfg.Secrets = items
 	return nil
 }

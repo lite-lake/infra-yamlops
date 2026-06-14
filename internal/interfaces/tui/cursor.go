@@ -95,110 +95,90 @@ func (c *scrollCursor) MaxValue() int {
 
 func init() {
 	RegisterCursorController(ViewStateMainMenu, func(m *Model) CursorController {
-		return &simpleCursor{cursor: &m.UI.MainMenuIndex, maxValue: 2}
-	})
-
-	RegisterCursorController(ViewStateServiceManagement, func(m *Model) CursorController {
-		return &simpleCursor{cursor: &m.Server.ServiceMenuIndex, maxValue: 5}
-	})
-
-	RegisterCursorController(ViewStateServerSetup, func(m *Model) CursorController {
 		return &dynamicCursor{
-			cursor:  &m.ServerEnv.CursorIndex,
-			maxFunc: func() int { return m.countServerEnvNodes() - 1 },
+			cursor:  &m.UI.MainMenuIndex,
+			maxFunc: func() int { return m.menuRowCount() - 1 },
 		}
 	})
 
-	RegisterCursorController(ViewStateServerCheck, func(m *Model) CursorController {
-		return &scrollCursor{
-			scroll: &m.ServerEnv.ResultsScrollY,
-			maxFunc: func() int {
-				totalLines := m.countServerEnvResultLines()
-				availableHeight := m.UI.Height - 8
-				if availableHeight < 5 {
-					availableHeight = 5
-				}
-				maxScroll := totalLines - availableHeight
-				if maxScroll < 0 {
-					maxScroll = 0
-				}
-				return maxScroll
-			},
-		}
+	RegisterCursorController(ViewStateServiceMenu, func(m *Model) CursorController {
+		return &simpleCursor{cursor: &m.Server.ServiceMenuIndex, maxValue: 6} // 7 items (0-6)
 	})
 
-	RegisterCursorController(ViewStateDNSManagement, func(m *Model) CursorController {
-		return &simpleCursor{cursor: &m.DNS.DNSMenuIndex, maxValue: 3}
+	RegisterCursorController(ViewStateServerMenu, func(m *Model) CursorController {
+		return &simpleCursor{cursor: &m.Server.ServiceMenuIndex, maxValue: 3} // 4 items (0-3)
 	})
 
-	RegisterCursorController(ViewStateDNSPullDomains, func(m *Model) CursorController {
-		return &dynamicCursor{
-			cursor:  &m.DNS.DNSISPIndex,
-			maxFunc: func() int { return len(m.getDNSISPs()) - 1 },
-		}
+	RegisterCursorController(ViewStateDNSMenu, func(m *Model) CursorController {
+		return &simpleCursor{cursor: &m.DNS.DNSMenuIndex, maxValue: 5} // 6 items (0-5)
 	})
 
-	RegisterCursorController(ViewStateDNSPullRecords, func(m *Model) CursorController {
-		return &dynamicCursor{
-			cursor:  &m.DNS.DNSDomainIndex,
-			maxFunc: func() int { return len(m.getDNSDomains()) - 1 },
-		}
+	RegisterCursorController(ViewStateConfigMenu, func(m *Model) CursorController {
+		return &simpleCursor{cursor: &m.UI.ConfigMenuIndex, maxValue: 4} // 5 items (0-4)
 	})
 
-	RegisterCursorController(ViewStateDNSPullDiff, func(m *Model) CursorController {
-		return &dynamicCursor{
-			cursor: &m.DNS.DNSPullCursor,
-			maxFunc: func() int {
-				maxIdx := len(m.DNS.DNSPullDiffs) - 1
-				if len(m.DNS.DNSRecordDiffs) > 0 {
-					maxIdx = len(m.DNS.DNSRecordDiffs) - 1
-				}
-				return maxIdx
-			},
-		}
-	})
-
-	RegisterCursorController(ViewStateTree, func(m *Model) CursorController {
+	RegisterCursorController(ViewStateTreeService, func(m *Model) CursorController {
 		return &dynamicCursor{
 			cursor:  &m.Tree.CursorIndex,
 			maxFunc: func() int { return m.countVisibleNodes() - 1 },
 		}
 	})
 
-	RegisterCursorController(ViewStateApplyConfirm, func(m *Model) CursorController {
-		return &simpleCursor{cursor: &m.Action.ConfirmSelected, maxValue: 1}
-	})
-
-	RegisterCursorController(ViewStateServiceCleanup, func(m *Model) CursorController {
-		return &dynamicCursor{
-			cursor:  &m.Cleanup.CleanupCursor,
-			maxFunc: func() int { return m.countCleanupItems() - 1 },
-		}
-	})
-
-	RegisterCursorController(ViewStateServiceCleanupConfirm, func(m *Model) CursorController {
-		return &simpleCursor{cursor: &m.Action.ConfirmSelected, maxValue: 1}
-	})
-
-	RegisterCursorController(ViewStateServiceStop, func(m *Model) CursorController {
+	RegisterCursorController(ViewStateTreeDNS, func(m *Model) CursorController {
 		return &dynamicCursor{
 			cursor:  &m.Tree.CursorIndex,
 			maxFunc: func() int { return m.countVisibleNodes() - 1 },
 		}
 	})
 
-	RegisterCursorController(ViewStateServiceStopConfirm, func(m *Model) CursorController {
-		return &simpleCursor{cursor: &m.Action.ConfirmSelected, maxValue: 1}
+	RegisterCursorController(ViewStatePlan, func(m *Model) CursorController {
+		if m.Action.PlanComponent != nil {
+			return &dynamicCursor{
+				cursor:  &m.Action.PlanComponent.Cursor,
+				maxFunc: func() int { return m.Action.PlanComponent.MaxCursor() },
+			}
+		}
+		return &simpleCursor{cursor: &m.Action.ConfirmSelected, maxValue: 0}
 	})
 
-	RegisterCursorController(ViewStateServiceRestart, func(m *Model) CursorController {
+	RegisterCursorController(ViewStateFilter, func(m *Model) CursorController {
+		if m.Action.FilterView != nil {
+			gi := m.Action.FilterView.SelectedGroup
+			return &dynamicCursor{
+				cursor: &m.Action.FilterView.Cursors[gi],
+				maxFunc: func() int {
+					if gi >= 0 && gi < len(m.Action.FilterView.Groups) {
+						items := m.Action.FilterView.Groups[gi].Items
+						if len(items) == 0 {
+							return 0
+						}
+						return len(items) - 1
+					}
+					return 0
+				},
+			}
+		}
+		return nil
+	})
+
+	RegisterCursorController(ViewStateInfoList, func(m *Model) CursorController {
 		return &dynamicCursor{
-			cursor:  &m.Tree.CursorIndex,
-			maxFunc: func() int { return m.countVisibleNodes() - 1 },
+			cursor:  &m.UI.InfoListIndex,
+			maxFunc: func() int { return m.infoListMaxIndex() },
 		}
 	})
 
-	RegisterCursorController(ViewStateServiceRestartConfirm, func(m *Model) CursorController {
-		return &simpleCursor{cursor: &m.Action.ConfirmSelected, maxValue: 1}
+	RegisterCursorController(ViewStateInfoDetail, func(m *Model) CursorController {
+		return &dynamicCursor{
+			cursor:  &m.UI.InfoDetailCursor,
+			maxFunc: func() int { return m.infoDetailMaxIndex() },
+		}
+	})
+
+	RegisterCursorController(ViewStateValidate, func(m *Model) CursorController {
+		return &dynamicCursor{
+			cursor:  &m.UI.ValidateCursor,
+			maxFunc: func() int { return m.validateMaxIndex() },
+		}
 	})
 }

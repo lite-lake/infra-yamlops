@@ -68,7 +68,7 @@ func (m *Model) buildAppTree() []*TreeNode {
 			Type:     NodeTypeZone,
 			Name:     z.Name,
 			Info:     z.Description,
-			Expanded: true,
+			Expanded: false,
 		}
 		zoneMap[z.Name] = zoneNode
 	}
@@ -78,7 +78,7 @@ func (m *Model) buildAppTree() []*TreeNode {
 			Type:     NodeTypeServer,
 			Name:     srv.Name,
 			Info:     srv.IP.Public,
-			Expanded: true,
+			Expanded: false,
 		}
 		if zNode, ok := zoneMap[srv.Zone]; ok {
 			serverNode.Parent = zNode
@@ -92,7 +92,7 @@ func (m *Model) buildAppTree() []*TreeNode {
 			ID:   fmt.Sprintf("infra:%s", infra.Name),
 			Type: NodeTypeInfra,
 			Name: infra.Name,
-			Info: m.getServicePortsInfo(infra.Server),
+			Info: m.getServicePortsInfo(infra),
 		}
 		for _, sn := range serverByZone {
 			for _, s := range sn {
@@ -134,13 +134,18 @@ func (m *Model) buildAppTree() []*TreeNode {
 	return roots
 }
 
-func (m *Model) getServicePortsInfo(serverName string) string {
-	for _, srv := range m.Config.Servers {
-		if srv.Name == serverName {
-			return ""
-		}
+func (m *Model) getServicePortsInfo(infra entity.InfraService) string {
+	if infra.GatewayPorts == nil {
+		return ""
 	}
-	return ""
+	var ports []string
+	if infra.GatewayPorts.HTTP > 0 {
+		ports = append(ports, fmt.Sprintf(":%d", infra.GatewayPorts.HTTP))
+	}
+	if infra.GatewayPorts.HTTPS > 0 {
+		ports = append(ports, fmt.Sprintf(":%d", infra.GatewayPorts.HTTPS))
+	}
+	return strings.Join(ports, ",")
 }
 
 func (m *Model) getBizServicePortsInfo(svc entity.BizService) string {
@@ -164,7 +169,7 @@ func (m *Model) buildDNSTree() []*TreeNode {
 			ID:       fmt.Sprintf("domain:%s", d.Name),
 			Type:     NodeTypeDomain,
 			Name:     d.Name,
-			Info:     d.DNSISP,
+			Info:     fmt.Sprintf("(ISP: %s)", d.DNSISP),
 			Expanded: false,
 		}
 		domainMap[d.Name] = domainNode
@@ -247,7 +252,7 @@ func (m *Model) generatePlanAsync() tea.Cmd {
 			m.Config = cfg
 		}
 
-		scope := valueobject.NewScope().WithDNSOnly(m.ViewMode == ViewModeDNS)
+		scope := valueobject.NewScope()
 		services := make(map[string]bool)
 		infraServices := make(map[string]bool)
 		domains := make(map[string]bool)
@@ -260,6 +265,8 @@ func (m *Model) generatePlanAsync() tea.Cmd {
 					infraServices[leaf.Name] = true
 				case NodeTypeBiz:
 					services[leaf.Name] = true
+				case NodeTypeDomain:
+					domains[leaf.Name] = true
 				case NodeTypeDNSRecord:
 					parts := strings.Split(leaf.ID, ":")
 					if len(parts) >= 2 {
@@ -276,13 +283,16 @@ func (m *Model) generatePlanAsync() tea.Cmd {
 		for infra := range infraServices {
 			infraList = append(infraList, infra)
 		}
-		scope = scope.WithServices(svcList).WithInfraServices(infraList)
+		scope = scope.WithBizServices(svcList).WithInfraServices(infraList)
 		if len(svcList) > 0 || len(infraList) > 0 {
 			scope = scope.WithForceDeploy(true)
 		}
+		var domainList []string
 		for d := range domains {
-			scope = scope.WithDomain(d)
-			break
+			domainList = append(domainList, d)
+		}
+		if len(domainList) > 0 {
+			scope = scope.WithDomains(domainList)
 		}
 
 		var state *plan.DeploymentState
@@ -391,7 +401,7 @@ func (m *Model) getSelectedDomains() []string {
 }
 
 func (m *Model) buildScopeFromSelection() {
-	m.Action.PlanScope = valueobject.NewScope().WithDNSOnly(m.ViewMode == ViewModeDNS)
+	m.Action.PlanScope = valueobject.NewScope()
 	services := make(map[string]bool)
 	infraServices := make(map[string]bool)
 	domains := make(map[string]bool)
@@ -404,6 +414,8 @@ func (m *Model) buildScopeFromSelection() {
 				infraServices[leaf.Name] = true
 			case NodeTypeBiz:
 				services[leaf.Name] = true
+			case NodeTypeDomain:
+				domains[leaf.Name] = true
 			case NodeTypeDNSRecord:
 				parts := strings.Split(leaf.ID, ":")
 				if len(parts) >= 2 {
@@ -420,18 +432,191 @@ func (m *Model) buildScopeFromSelection() {
 	for infra := range infraServices {
 		infraList = append(infraList, infra)
 	}
-	m.Action.PlanScope = m.Action.PlanScope.WithServices(svcList).WithInfraServices(infraList)
+	m.Action.PlanScope = m.Action.PlanScope.WithBizServices(svcList).WithInfraServices(infraList)
 	if len(svcList) > 0 || len(infraList) > 0 {
 		m.Action.PlanScope = m.Action.PlanScope.WithForceDeploy(true)
 	}
+	var domainList []string
 	for d := range domains {
-		m.Action.PlanScope = m.Action.PlanScope.WithDomain(d)
-		break
+		domainList = append(domainList, d)
+	}
+	if len(domainList) > 0 {
+		m.Action.PlanScope = m.Action.PlanScope.WithDomains(domainList)
+	}
+}
+
+func (m *Model) generateForcePlanAsync() tea.Cmd {
+	return func() tea.Msg {
+		// Handle DNS pull force: re-fetch from ISP and treat all remote items as changes
+		if m.Action.OperationType == "dns_pull_domains" {
+			return m.generateDNSPullDomainsForcePlan()()
+		}
+		if m.Action.OperationType == "dns_pull_records" {
+			return m.generateDNSPullRecordsForcePlan()()
+		}
+
+		if m.Config == nil {
+			loader := persistence.NewConfigLoader(m.ConfigDir)
+			cfg, err := loader.Load(nil, string(m.Environment))
+			if err != nil {
+				return planGeneratedMsg{err: err}
+			}
+			if err := loader.Validate(cfg); err != nil {
+				return planGeneratedMsg{err: err}
+			}
+			m.Config = cfg
+		}
+
+		scope := valueobject.NewScope()
+		services := make(map[string]bool)
+		infraServices := make(map[string]bool)
+		currentTree := m.getCurrentTree()
+		for _, node := range currentTree {
+			leaves := node.GetSelectedLeaves()
+			for _, leaf := range leaves {
+				switch leaf.Type {
+				case NodeTypeInfra:
+					infraServices[leaf.Name] = true
+				case NodeTypeBiz:
+					services[leaf.Name] = true
+				}
+			}
+		}
+		var svcList []string
+		for svc := range services {
+			svcList = append(svcList, svc)
+		}
+		var infraList []string
+		for infra := range infraServices {
+			infraList = append(infraList, infra)
+		}
+
+		// If no services selected from tree, use all services from config
+		if len(svcList) == 0 && len(infraList) == 0 {
+			for _, svc := range m.Config.Services {
+				svcList = append(svcList, svc.Name)
+			}
+			for _, infra := range m.Config.InfraServices {
+				infraList = append(infraList, infra.Name)
+			}
+		}
+
+		scope = scope.WithBizServices(svcList).WithInfraServices(infraList).WithForceDeploy(true)
+
+		var state *plan.DeploymentState
+		if m.ViewMode == ViewModeDNS {
+			state = m.fetchDNSRemoteState()
+		} else {
+			fetcher := orchestrator.NewStateFetcher(string(m.Environment), m.ConfigDir)
+			state = fetcher.FetchWithScope(context.Background(), m.Config, scope)
+		}
+
+		planner := plan.NewPlanner(
+			plan.WithConfig(m.Config),
+			plan.WithEnv(string(m.Environment)),
+			plan.WithState(state),
+		)
+		executionPlan, err := planner.Plan(scope)
+		if err != nil {
+			return planGeneratedMsg{err: err}
+		}
+		return planGeneratedMsg{plan: executionPlan}
+	}
+}
+
+// generateDNSPullDomainsForcePlan re-fetches domains from ISP(s) and generates a force plan.
+// In force mode, all remote domains are treated as creates regardless of local state.
+func (m *Model) generateDNSPullDomainsForcePlan() tea.Cmd {
+	return func() tea.Msg {
+		ispNames := m.getDNSISPs()
+		var allDiffs []DomainDiff
+		for _, ispName := range ispNames {
+			isp := m.Config.GetISPMap()[ispName]
+			if isp == nil {
+				continue
+			}
+			provider, err := createDNSProviderFromConfig(isp, m.Config.GetSecretsMap())
+			if err != nil {
+				continue
+			}
+			remoteDomains, err := provider.ListDomains(context.Background())
+			if err != nil {
+				continue
+			}
+			for _, domainName := range remoteDomains {
+				allDiffs = append(allDiffs, DomainDiff{
+					Name:       domainName,
+					DNSISP:     ispName,
+					ChangeType: valueobject.ChangeTypeCreate,
+					Prefix:     "+",
+				})
+			}
+		}
+		diffs := deduplicateDomainDiffs(allDiffs)
+		return planGeneratedMsg{
+			plan:             valueobject.NewPlan(),
+			isDNSPullForce:   true,
+			forceDomainDiffs: diffs,
+		}
+	}
+}
+
+// generateDNSPullRecordsForcePlan re-fetches records from ISP(s) and generates a force plan.
+// In force mode, all remote records are treated as creates regardless of local state.
+func (m *Model) generateDNSPullRecordsForcePlan() tea.Cmd {
+	return func() tea.Msg {
+		domainObjs := m.getDNSDomainObjects()
+		var allDiffs []RecordDiff
+		for _, d := range domainObjs {
+			isp := m.Config.GetISPMap()[d.DNSISP]
+			if isp == nil {
+				continue
+			}
+			provider, err := createDNSProviderFromConfig(isp, m.Config.GetSecretsMap())
+			if err != nil {
+				continue
+			}
+			remoteRecords, err := provider.ListRecords(context.Background(), d.Name)
+			if err != nil {
+				continue
+			}
+			for _, rr := range remoteRecords {
+				recordName := rr.Name
+				if recordName == d.Name || recordName == "" {
+					recordName = "@"
+				} else if strings.HasSuffix(rr.Name, "."+d.Name) {
+					recordName = strings.TrimSuffix(rr.Name, "."+d.Name)
+				}
+				allDiffs = append(allDiffs, RecordDiff{
+					Domain:     d.Name,
+					Type:       entity.DNSRecordType(rr.Type),
+					Name:       recordName,
+					Value:      rr.Value,
+					TTL:        rr.TTL,
+					ChangeType: valueobject.ChangeTypeCreate,
+					Prefix:     "+",
+				})
+			}
+		}
+		return planGeneratedMsg{
+			plan:             valueobject.NewPlan(),
+			isDNSPullForce:   true,
+			forceRecordDiffs: allDiffs,
+		}
 	}
 }
 
 func (m *Model) executeApplyAsync() tea.Cmd {
 	return func() tea.Msg {
+		// 创建可取消的 context
+		ctx, cancel := context.WithCancel(context.Background())
+		m.Action.CancelFunc = cancel
+
+		// Handle server_setup operation: delegate to executeServerEnvSyncAsync
+		if m.Action.OperationType == "server_setup" {
+			return m.executeServerEnvSyncAsync()()
+		}
+
 		if m.Action.PlanResult == nil || !m.Action.PlanResult.HasChanges() {
 			return applyCompleteAsyncMsg{}
 		}
@@ -451,14 +636,19 @@ func (m *Model) executeApplyAsync() tea.Cmd {
 			return applyCompleteAsyncMsg{err: err}
 		}
 		executor := usecase.NewExecutor(&usecase.ExecutorConfig{
-			Plan: m.Action.PlanResult,
-			Env:  string(m.Environment),
+			Plan:        m.Action.PlanResult,
+			Env:         string(m.Environment),
+			Concurrency: m.Concurrency,
 		})
 		executor.SetSecrets(m.Config.GetSecretsMap())
 		executor.SetDomains(m.Config.GetDomainMap())
 		executor.SetISPs(m.Config.GetISPMap())
 		executor.SetServerEntities(m.Config.GetServerMap())
 		executor.SetWorkDir(m.ConfigDir)
+		if m.Action.ProgressTracker != nil {
+			executor.SetProgressCallback(m.Action.ProgressTracker.OnChangeApplied)
+			executor.SetStartCallback(m.Action.ProgressTracker.OnChangeStart)
+		}
 		secrets := m.Config.GetSecretsMap()
 
 		scope := m.Action.PlanScope
@@ -475,7 +665,7 @@ func (m *Model) executeApplyAsync() tea.Cmd {
 		}
 
 		for _, srv := range m.Config.Servers {
-			if !relevantServers[srv.Name] && !scope.HasAnyServiceSelection() {
+			if !relevantServers[srv.Name] && !scope.HasServices() {
 				// If no services are selected, connect to all servers
 			} else if !relevantServers[srv.Name] {
 				continue
@@ -490,7 +680,7 @@ func (m *Model) executeApplyAsync() tea.Cmd {
 			}
 			executor.RegisterServer(srv.Name, srv.SSH.Host, srv.SSH.Port, srv.SSH.User, password, strictHostKeyChecking)
 		}
-		results := executor.Apply()
+		results := executor.Apply(ctx)
 		return applyCompleteAsyncMsg{results: results}
 	}
 }

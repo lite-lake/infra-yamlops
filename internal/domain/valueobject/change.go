@@ -25,13 +25,14 @@ func (ct ChangeType) String() string {
 }
 
 type Change struct {
-	changeType   ChangeType
-	entity       string
-	name         string
-	oldState     interface{}
-	newState     interface{}
-	actions      []string
-	remoteExists bool
+	changeType     ChangeType
+	entity         string
+	name           string
+	oldState       interface{}
+	newState       interface{}
+	actions        []string
+	remoteExists   bool
+	forcedNoChange bool
 }
 
 func NewChange(changeType ChangeType, entity, name string) *Change {
@@ -63,28 +64,31 @@ func (c *Change) OldState() interface{} { return c.oldState }
 func (c *Change) NewState() interface{} { return c.newState }
 func (c *Change) Actions() []string     { return c.actions }
 func (c *Change) RemoteExists() bool    { return c.remoteExists }
+func (c *Change) ForcedNoChange() bool  { return c.forcedNoChange }
 
 func (c *Change) WithOldState(state interface{}) *Change {
 	return &Change{
-		changeType:   c.changeType,
-		entity:       c.entity,
-		name:         c.name,
-		oldState:     state,
-		newState:     c.newState,
-		actions:      c.actions,
-		remoteExists: c.remoteExists,
+		changeType:     c.changeType,
+		entity:         c.entity,
+		name:           c.name,
+		oldState:       state,
+		newState:       c.newState,
+		actions:        c.actions,
+		remoteExists:   c.remoteExists,
+		forcedNoChange: c.forcedNoChange,
 	}
 }
 
 func (c *Change) WithNewState(state interface{}) *Change {
 	return &Change{
-		changeType:   c.changeType,
-		entity:       c.entity,
-		name:         c.name,
-		oldState:     c.oldState,
-		newState:     state,
-		actions:      c.actions,
-		remoteExists: c.remoteExists,
+		changeType:     c.changeType,
+		entity:         c.entity,
+		name:           c.name,
+		oldState:       c.oldState,
+		newState:       state,
+		actions:        c.actions,
+		remoteExists:   c.remoteExists,
+		forcedNoChange: c.forcedNoChange,
 	}
 }
 
@@ -92,25 +96,40 @@ func (c *Change) WithActions(actions ...string) *Change {
 	newActions := make([]string, len(actions))
 	copy(newActions, actions)
 	return &Change{
-		changeType:   c.changeType,
-		entity:       c.entity,
-		name:         c.name,
-		oldState:     c.oldState,
-		newState:     c.newState,
-		actions:      newActions,
-		remoteExists: c.remoteExists,
+		changeType:     c.changeType,
+		entity:         c.entity,
+		name:           c.name,
+		oldState:       c.oldState,
+		newState:       c.newState,
+		actions:        newActions,
+		remoteExists:   c.remoteExists,
+		forcedNoChange: c.forcedNoChange,
 	}
 }
 
 func (c *Change) WithRemoteExists(exists bool) *Change {
 	return &Change{
-		changeType:   c.changeType,
-		entity:       c.entity,
-		name:         c.name,
-		oldState:     c.oldState,
-		newState:     c.newState,
-		actions:      c.actions,
-		remoteExists: exists,
+		changeType:     c.changeType,
+		entity:         c.entity,
+		name:           c.name,
+		oldState:       c.oldState,
+		newState:       c.newState,
+		actions:        c.actions,
+		remoteExists:   exists,
+		forcedNoChange: c.forcedNoChange,
+	}
+}
+
+func (c *Change) WithForcedNoChange(forced bool) *Change {
+	return &Change{
+		changeType:     c.changeType,
+		entity:         c.entity,
+		name:           c.name,
+		oldState:       c.oldState,
+		newState:       c.newState,
+		actions:        c.actions,
+		remoteExists:   c.remoteExists,
+		forcedNoChange: forced,
 	}
 }
 
@@ -122,6 +141,9 @@ func (c *Change) Equals(other *Change) bool {
 		return false
 	}
 	if c.remoteExists != other.remoteExists {
+		return false
+	}
+	if c.forcedNoChange != other.forcedNoChange {
 		return false
 	}
 	if len(c.actions) != len(other.actions) {
@@ -139,12 +161,13 @@ func (c *Change) Clone() *Change {
 	newActions := make([]string, len(c.actions))
 	copy(newActions, c.actions)
 	return &Change{
-		changeType:   c.changeType,
-		entity:       c.entity,
-		name:         c.name,
-		oldState:     c.oldState,
-		newState:     c.newState,
-		actions:      newActions,
-		remoteExists: c.remoteExists,
+		changeType:     c.changeType,
+		entity:         c.entity,
+		name:           c.name,
+		oldState:       c.oldState,
+		newState:       c.newState,
+		actions:        newActions,
+		remoteExists:   c.remoteExists,
+		forcedNoChange: c.forcedNoChange,
 	}
 }
