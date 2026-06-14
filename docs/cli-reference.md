@@ -652,6 +652,7 @@ yamlops cli service cleanup -e prod --yes
 | `--type` | 服务类别筛选：`biz` / `infra` / `biz,infra`（默认全部） |
 | `--zone` | 网区筛选（逗号分隔多选） |
 | `--server` | 服务器筛选（逗号分隔多选） |
+| `--service` | 服务名筛选（逗号分隔多选） |
 | `--dry-run` | 预览变更不执行 |
 | `--yes` | 跳过确认 |
 | `--concurrency` | 并发数（默认 5） |
