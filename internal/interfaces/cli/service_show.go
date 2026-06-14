@@ -64,6 +64,9 @@ func runServiceShow(ctx *Context, filters ServiceCmdFilters, detail bool) {
 		if filters.Zone != "" && !matchesFilter(zone, filters.Zone) {
 			continue
 		}
+		if filters.Service != "" && !matchesFilter(svc.Name, filters.Service) {
+			continue
+		}
 		rows = append(rows, serviceRow{Zone: zone, Server: svc.Server, Service: svc.Name, Image: svc.Image})
 	}
 	for _, infra := range cfg.InfraServices {
@@ -79,6 +82,9 @@ func runServiceShow(ctx *Context, filters ServiceCmdFilters, detail bool) {
 			zone = srv.Zone
 		}
 		if filters.Zone != "" && !matchesFilter(zone, filters.Zone) {
+			continue
+		}
+		if filters.Service != "" && !matchesFilter(infra.Name, filters.Service) {
 			continue
 		}
 		rows = append(rows, serviceRow{Zone: zone, Server: infra.Server, Service: infra.Name, Image: infra.Image, IsInfra: true})

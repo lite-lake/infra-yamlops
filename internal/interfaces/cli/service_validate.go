@@ -56,6 +56,9 @@ func runServiceValidate(ctx *Context, filters ServiceCmdFilters) {
 			if srv := serverMap[svc.Server]; srv != nil && filters.Zone != "" && !matchesFilter(srv.Zone, filters.Zone) {
 				continue
 			}
+			if filters.Service != "" && !matchesFilter(svc.Name, filters.Service) {
+				continue
+			}
 			if existing, ok := allNames[svc.Name]; ok {
 				errors = append(errors, validationError{msg: fmt.Sprintf("Service '%s': name conflicts with %s", svc.Name, existing), suggestion: fmt.Sprintf("Rename one of the conflicting services in services.yaml")})
 			} else {
@@ -69,6 +72,9 @@ func runServiceValidate(ctx *Context, filters ServiceCmdFilters) {
 				continue
 			}
 			if srv := serverMap[infra.Server]; srv != nil && filters.Zone != "" && !matchesFilter(srv.Zone, filters.Zone) {
+				continue
+			}
+			if filters.Service != "" && !matchesFilter(infra.Name, filters.Service) {
 				continue
 			}
 			if existing, ok := allNames[infra.Name]; ok {
@@ -86,6 +92,9 @@ func runServiceValidate(ctx *Context, filters ServiceCmdFilters) {
 				continue
 			}
 			if srv := serverMap[svc.Server]; srv != nil && filters.Zone != "" && !matchesFilter(srv.Zone, filters.Zone) {
+				continue
+			}
+			if filters.Service != "" && !matchesFilter(svc.Name, filters.Service) {
 				continue
 			}
 
@@ -150,6 +159,9 @@ func runServiceValidate(ctx *Context, filters ServiceCmdFilters) {
 			if srv := serverMap[infra.Server]; srv != nil && filters.Zone != "" && !matchesFilter(srv.Zone, filters.Zone) {
 				continue
 			}
+			if filters.Service != "" && !matchesFilter(infra.Name, filters.Service) {
+				continue
+			}
 
 			// Entity-level validation
 			if err := infra.Validate(); err != nil {
@@ -199,6 +211,9 @@ func runServiceValidate(ctx *Context, filters ServiceCmdFilters) {
 			if srv := serverMap[svc.Server]; srv != nil && filters.Zone != "" && !matchesFilter(srv.Zone, filters.Zone) {
 				continue
 			}
+			if filters.Service != "" && !matchesFilter(svc.Name, filters.Service) {
+				continue
+			}
 			if portsByServer[svc.Server] == nil {
 				portsByServer[svc.Server] = make(map[int]string)
 			}
@@ -218,6 +233,9 @@ func runServiceValidate(ctx *Context, filters ServiceCmdFilters) {
 				continue
 			}
 			if srv := serverMap[infra.Server]; srv != nil && filters.Zone != "" && !matchesFilter(srv.Zone, filters.Zone) {
+				continue
+			}
+			if filters.Service != "" && !matchesFilter(infra.Name, filters.Service) {
 				continue
 			}
 			if portsByServer[infra.Server] == nil {
@@ -255,6 +273,9 @@ func runServiceValidate(ctx *Context, filters ServiceCmdFilters) {
 				continue
 			}
 			if srv := serverMap[svc.Server]; srv != nil && filters.Zone != "" && !matchesFilter(srv.Zone, filters.Zone) {
+				continue
+			}
+			if filters.Service != "" && !matchesFilter(svc.Name, filters.Service) {
 				continue
 			}
 			for _, g := range svc.Gateways {

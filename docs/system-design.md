@@ -973,6 +973,7 @@ yamlops
 | --zone | server/service 子命令 | 按区域过滤 |
 | --server | server/service 子命令 | 按服务器过滤 |
 | --type | service 子命令 | 服务类别过滤 (biz/infra) |
+| --service | service 子命令 | 按服务名过滤（逗号分隔多选） |
 | --dry-run | 所有变更命令 | 预览变更不执行 |
 | --yes | 所有变更命令 | 跳过确认 |
 | --force | service deploy/dns deploy/dns pull | 强制执行 |

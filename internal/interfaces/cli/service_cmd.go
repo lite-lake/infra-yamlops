@@ -19,9 +19,10 @@ import (
 )
 
 type ServiceCmdFilters struct {
-	Type   string
-	Zone   string
-	Server string
+	Type    string
+	Zone    string
+	Server  string
+	Service string
 }
 
 func buildServiceScope(filters ServiceCmdFilters, forceDeploy bool) (*valueobject.Scope, error) {
@@ -31,6 +32,10 @@ func buildServiceScope(filters ServiceCmdFilters, forceDeploy bool) (*valueobjec
 	}
 	if filters.Server != "" {
 		scope = scope.WithServers(splitAndTrim(filters.Server, ","))
+	}
+	if filters.Service != "" {
+		names := splitAndTrim(filters.Service, ",")
+		scope = scope.WithBizServices(names).WithInfraServices(names)
 	}
 	serviceTypes, err := parseServiceTypes(filters.Type)
 	if err != nil {
@@ -63,12 +68,14 @@ Commands:
 
 Flags:
   --type string         Service type filter: biz, infra, biz,infra (default: all)
+  --service string      Service name filter (comma-separated)
   --detail              Show detailed information (for show command)
   --concurrency int     Concurrency for server operations (default: 5)
 
 Examples:
   yamlops cli service show -e prod --type biz
   yamlops cli service deploy -e prod --type biz --dry-run
+  yamlops cli service deploy -e prod --service my-api,my-worker
   yamlops cli service stop -e prod --type infra --yes
   yamlops cli service cleanup -e prod --dry-run`,
 	}
@@ -76,6 +83,7 @@ Examples:
 	serviceCmd.PersistentFlags().StringVar(&filters.Type, "type", "", "Service type filter: biz, infra, biz,infra (default: all)")
 	serviceCmd.PersistentFlags().StringVar(&filters.Zone, "zone", "", "Zone filter (comma-separated)")
 	serviceCmd.PersistentFlags().StringVar(&filters.Server, "server", "", "Server filter (comma-separated)")
+	serviceCmd.PersistentFlags().StringVar(&filters.Service, "service", "", "Service name filter (comma-separated)")
 
 	serviceCmd.AddCommand(newServiceShowCommand(ctx, &filters))
 	serviceCmd.AddCommand(newServiceValidateCommand(ctx, &filters))
@@ -194,7 +202,7 @@ func runServiceDeployUnified(ctx *Context, filters ServiceCmdFilters, dryRun, ye
 	DisplayPlanHeader(PlanHeader{
 		Title: buildPlanTitle("service deploy", dryRun, force),
 		Env:   ctx.Env,
-		Extra: planTypeExtra(filters.Type),
+		Extra: planTypeAndServiceExtra(filters.Type, filters.Service),
 	})
 
 	if len(serviceChanges) == 0 {
@@ -262,7 +270,7 @@ func runServiceStopUnified(ctx *Context, filters ServiceCmdFilters, dryRun, yes 
 	DisplayPlanHeader(PlanHeader{
 		Title: buildPlanTitle("service stop", dryRun, false),
 		Env:   ctx.Env,
-		Extra: planTypeExtra(filters.Type),
+		Extra: planTypeAndServiceExtra(filters.Type, filters.Service),
 	})
 
 	var rows []PlanRow
@@ -319,7 +327,7 @@ func runServiceRestartUnified(ctx *Context, filters ServiceCmdFilters, dryRun, y
 	DisplayPlanHeader(PlanHeader{
 		Title: buildPlanTitle("service restart", dryRun, false),
 		Env:   ctx.Env,
-		Extra: planTypeExtra(filters.Type),
+		Extra: planTypeAndServiceExtra(filters.Type, filters.Service),
 	})
 
 	var rows []PlanRow
@@ -390,7 +398,7 @@ func runServiceCleanupUnified(ctx *Context, filters ServiceCmdFilters, dryRun, y
 	DisplayPlanHeader(PlanHeader{
 		Title: buildPlanTitle("service cleanup", dryRun, false),
 		Env:   ctx.Env,
-		Extra: planTypeExtra(filters.Type),
+		Extra: planTypeAndServiceExtra(filters.Type, filters.Service),
 	})
 
 	envPrefix := "yo-" + ctx.Env + "-"
@@ -441,6 +449,24 @@ func planTypeExtra(typeFilter string) []PlanHeaderExtra {
 	return []PlanHeaderExtra{{Label: "TYPE", Value: typeFilter}}
 }
 
+func planServiceExtra(serviceFilter string) []PlanHeaderExtra {
+	if serviceFilter == "" {
+		return nil
+	}
+	return []PlanHeaderExtra{{Label: "SERVICE", Value: serviceFilter}}
+}
+
+func planTypeAndServiceExtra(typeFilter, serviceFilter string) []PlanHeaderExtra {
+	var extra []PlanHeaderExtra
+	if typeFilter != "" {
+		extra = append(extra, PlanHeaderExtra{Label: "TYPE", Value: typeFilter})
+	}
+	if serviceFilter != "" {
+		extra = append(extra, PlanHeaderExtra{Label: "SERVICE", Value: serviceFilter})
+	}
+	return extra
+}
+
 func loadConfigFromContext(ctx *Context) (*entity.Config, error) {
 	wf := NewWorkflow(ctx.Env, ctx.ConfigDir)
 	cfg, err := wf.LoadConfig(context.Background())
@@ -477,6 +503,9 @@ func collectTargetServicesUnified(cfg *entity.Config, filters ServiceCmdFilters)
 			if srv != nil && filters.Zone != "" && !matchesFilter(srv.Zone, filters.Zone) {
 				continue
 			}
+			if filters.Service != "" && !matchesFilter(svc.Name, filters.Service) {
+				continue
+			}
 			result = append(result, targetServiceUnified{Name: svc.Name, Server: svc.Server, IsInfra: false})
 		}
 	}
@@ -487,6 +516,9 @@ func collectTargetServicesUnified(cfg *entity.Config, filters ServiceCmdFilters)
 			}
 			srv := cfg.GetServerMap()[svc.Server]
 			if srv != nil && filters.Zone != "" && !matchesFilter(srv.Zone, filters.Zone) {
+				continue
+			}
+			if filters.Service != "" && !matchesFilter(svc.Name, filters.Service) {
 				continue
 			}
 			result = append(result, targetServiceUnified{Name: svc.Name, Server: svc.Server, IsInfra: true})

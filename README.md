@@ -264,11 +264,12 @@ yamlops
 ./yamlops cli service show -e prod
 ./yamlops cli service show -e prod --type biz
 ./yamlops cli service show -e prod --type infra
-./yamlops cli service show -e prod --detail
+./yamlops cli service show -e prod --service my-api --detail
 
 # 验证服务配置
 ./yamlops cli service validate -e prod
 ./yamlops cli service validate -e prod --type biz
+./yamlops cli service validate -e prod --service my-api
 
 # 部署服务
 ./yamlops cli service deploy -e prod --dry-run
@@ -276,12 +277,18 @@ yamlops
 ./yamlops cli service deploy -e prod --type biz --force
 ./yamlops cli service deploy -e prod --type biz --yes
 
+# 按服务名筛选
+./yamlops cli service deploy -e prod --service my-api --yes
+./yamlops cli service deploy -e prod --service my-api,my-worker --yes
+
 # 停止服务
 ./yamlops cli service stop -e prod --type biz --dry-run
 ./yamlops cli service stop -e prod --type biz --yes
+./yamlops cli service stop -e prod --service my-api --yes
 
 # 重启服务
 ./yamlops cli service restart -e prod --type biz --yes
+./yamlops cli service restart -e prod --service my-api --yes
 
 # 清理孤儿资源
 ./yamlops cli service cleanup -e prod --dry-run
@@ -295,6 +302,7 @@ yamlops
 | `--type` | 服务类别筛选：`biz` / `infra` / `biz,infra`（默认全部） |
 | `--zone` | 网区筛选（逗号分隔多选） |
 | `--server` | 服务器筛选（逗号分隔多选） |
+| `--service` | 服务名筛选（逗号分隔多选） |
 | `--detail` | 显示详细信息 |
 | `--dry-run` | 预览变更不执行 |
 | `--yes` | 跳过确认 |
@@ -567,7 +575,7 @@ vim userdata/prod/services_biz.yaml
 ```bash
 # 1. 修改 services_biz.yaml 中的 image 字段
 # 2. 验证并应用
-./yamlops cli service validate -e prod && ./yamlops cli service deploy -e prod --type biz --yes
+./yamlops cli service validate -e prod && ./yamlops cli service deploy -e prod --service my-api --yes
 ```
 
 ### 3. 新增服务器
@@ -602,10 +610,16 @@ vim userdata/prod/services_biz.yaml
 ### 5. 日常部署
 
 ```bash
-# 预览变更
+# 按服务名预览变更
+./yamlops cli service deploy -e prod --service my-api --dry-run
+
+# 按服务名确认后执行
+./yamlops cli service deploy -e prod --service my-api --yes
+
+# 按网区预览变更
 ./yamlops cli service deploy -e prod --zone cn-east --dry-run
 
-# 确认后执行
+# 按网区确认后执行
 ./yamlops cli service deploy -e prod --zone cn-east --yes
 ```
 

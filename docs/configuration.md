@@ -37,9 +37,9 @@ YAMLOps 支持多环境隔离，每个环境有独立的配置目录：
 使用 `-e` 标志指定环境：
 
 ```bash
-yamlops plan -e prod
-yamlops apply -e staging
-yamlops validate -e dev
+yamlops cli service deploy -e prod --dry-run
+yamlops cli service validate -e staging
+yamlops cli config validate -e dev
 ```
 
 ---

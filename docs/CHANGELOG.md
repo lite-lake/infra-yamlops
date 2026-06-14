@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **`--service` flag**: Service name filter for all `service` subcommands (`show`, `validate`, `deploy`, `stop`, `restart`, `cleanup`). Supports comma-separated multiple values (e.g., `--service my-api,my-worker`)
+
 ## [1.0.0] - 2026-06-10
 
 ### Added
@@ -62,7 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--check-only` flag**: Replaced by `--dry-run`
 - **`--sync-only` flag**: Replaced by `--yes`
 - **`--biz` / `--infra` flags**: Replaced by `--type biz` / `--type infra`
-- **`--service <name>` flag**: Not supported, use `--type` or TUI selection
+- **`--service <name>` flag**: Now supported as `--service <name>` (comma-separated for multiple services)
 - **`DNSOnly` field in Scope**: DNS-only path auto-detected from scope fields
 - **TUI fragmented ViewState**: stop/restart/cleanup each had separate Confirm/Progress/Complete views, now unified
 

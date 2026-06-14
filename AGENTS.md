@@ -281,6 +281,32 @@ services:
 | 重启 | `yamlops cli service restart` | 重启容器（不同步文件/镜像） |
 | 清理 | `yamlops cli service cleanup` | 移除孤立容器和目录 |
 
+## 服务过滤维度
+
+所有 `service` 子命令均支持以下过滤 flag（可组合使用，取交集）：
+
+| Flag | 说明 | 示例 |
+|------|------|------|
+| `--type` | 服务类型：`biz`、`infra`、`biz,infra` | `--type biz` |
+| `--server` | 服务器名（逗号分隔多选） | `--server s1,s2` |
+| `--zone` | 网区名（逗号分隔多选） | `--zone prod` |
+| `--service` | 服务名（逗号分隔多选） | `--service my-api,my-worker` |
+
+示例：
+```bash
+# 按服务名单独部署
+yamlops cli service deploy -e prod --service my-api
+
+# 按服务名 + 服务器组合过滤
+yamlops cli service deploy -e prod --service my-api --server s1
+
+# 按服务名停止
+yamlops cli service stop -e prod --service my-api --yes
+
+# 按服务名查看
+yamlops cli service show -e prod --service my-api --detail
+```
+
 ## 相关 Skills
 
 | Skill | 位置 | 用途 |

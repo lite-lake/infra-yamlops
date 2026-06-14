@@ -447,6 +447,7 @@ yamlops cli service show -e prod --type biz --detail
 | `--type` | 服务类别筛选：`biz` / `infra` / `biz,infra`（默认全部） |
 | `--zone` | 网区筛选（逗号分隔多选） |
 | `--server` | 服务器筛选（逗号分隔多选） |
+| `--service` | 服务名筛选（逗号分隔多选） |
 | `--detail` | 显示详细信息（Image、Ports、Endpoints、Gateways、Health） |
 
 **`--type` 参数说明**：
@@ -469,12 +470,9 @@ cn-west   srv-cn3   scheduler
 
 Total: 4 services across 3 servers in 2 zones
 
-# service show -e prod --type biz --detail
+# service show -e prod --service api-server --detail
 ZONE      SERVER    SERVICE       IMAGE
 cn-east   srv-cn1   api-server    docker.../api:latest
-cn-east   srv-cn1   web-server    docker.../web:latest
-cn-east   srv-cn2   worker        docker.../worker:latest
-cn-west   srv-cn3   scheduler     docker.../scheduler:latest
 
 SERVICE: api-server
   Image:      docker.cnb.cool/litelake/api:latest
@@ -484,7 +482,7 @@ SERVICE: api-server
   Gateways:   api.demo.litelake.cn (http+https)
   Health:     /health (interval: 30s)
 
-Total: 4 services across 3 servers in 2 zones
+Total: 1 services across 1 servers in 1 zones
 ```
 
 ---
@@ -496,7 +494,17 @@ Total: 4 services across 3 servers in 2 zones
 ```bash
 yamlops cli service validate -e prod
 yamlops cli service validate -e prod --type biz
+yamlops cli service validate -e prod --service my-api
 ```
+
+**标志**：
+
+| 标志 | 说明 |
+|------|------|
+| `--type` | 服务类别筛选：`biz` / `infra` / `biz,infra`（默认全部） |
+| `--zone` | 网区筛选（逗号分隔多选） |
+| `--server` | 服务器筛选（逗号分隔多选） |
+| `--service` | 服务名筛选（逗号分隔多选） |
 
 **验证内容**：
 - 实体自验证（name、server、image、ports、healthcheck 等）
@@ -520,11 +528,17 @@ yamlops cli service deploy -e prod --type biz --dry-run
 # 按网区/服务器筛选
 yamlops cli service deploy -e prod --zone cn-east --dry-run
 
+# 按服务名筛选（单个）
+yamlops cli service deploy -e prod --service my-api --dry-run
+
+# 按服务名筛选（多个）
+yamlops cli service deploy -e prod --service my-api,my-worker --dry-run
+
 # 应用变更（交互确认）
 yamlops cli service deploy -e prod --type biz
 
 # 跳过确认
-yamlops cli service deploy -e prod --type biz --yes
+yamlops cli service deploy -e prod --service my-api --yes
 
 # 强制部署（即使无变更）
 yamlops cli service deploy -e prod --type biz --force
@@ -540,6 +554,7 @@ yamlops cli service deploy -e prod --type biz --force --dry-run
 | `--type` | 服务类别筛选：`biz` / `infra` / `biz,infra`（默认全部） |
 | `--zone` | 网区筛选（逗号分隔多选） |
 | `--server` | 服务器筛选（逗号分隔多选） |
+| `--service` | 服务名筛选（逗号分隔多选） |
 | `--dry-run` | 预览变更不执行 |
 | `--yes` | 跳过确认 |
 | `--force` | 强制部署（即使配置无变更） |
@@ -555,11 +570,14 @@ yamlops cli service deploy -e prod --type biz --force --dry-run
 # 预览将停止的服务
 yamlops cli service stop -e prod --type biz --dry-run
 
+# 按服务名停止
+yamlops cli service stop -e prod --service my-api --dry-run
+
 # 停止服务（交互确认）
 yamlops cli service stop -e prod --type biz
 
 # 跳过确认
-yamlops cli service stop -e prod --type biz --yes
+yamlops cli service stop -e prod --service my-api --yes
 ```
 
 **标志**：
@@ -569,6 +587,7 @@ yamlops cli service stop -e prod --type biz --yes
 | `--type` | 服务类别筛选：`biz` / `infra` / `biz,infra`（默认全部） |
 | `--zone` | 网区筛选（逗号分隔多选） |
 | `--server` | 服务器筛选（逗号分隔多选） |
+| `--service` | 服务名筛选（逗号分隔多选） |
 | `--dry-run` | 预览变更不执行 |
 | `--yes` | 跳过确认 |
 | `--concurrency` | 并发数（默认 5） |
@@ -583,11 +602,14 @@ yamlops cli service stop -e prod --type biz --yes
 # 预览将重启的服务
 yamlops cli service restart -e prod --type biz --dry-run
 
+# 按服务名重启
+yamlops cli service restart -e prod --service my-api --dry-run
+
 # 重启服务（交互确认）
 yamlops cli service restart -e prod --type biz
 
 # 跳过确认
-yamlops cli service restart -e prod --type biz --yes
+yamlops cli service restart -e prod --service my-api --yes
 ```
 
 **标志**：
@@ -597,6 +619,7 @@ yamlops cli service restart -e prod --type biz --yes
 | `--type` | 服务类别筛选：`biz` / `infra` / `biz,infra`（默认全部） |
 | `--zone` | 网区筛选（逗号分隔多选） |
 | `--server` | 服务器筛选（逗号分隔多选） |
+| `--service` | 服务名筛选（逗号分隔多选） |
 | `--dry-run` | 预览变更不执行 |
 | `--yes` | 跳过确认 |
 | `--concurrency` | 并发数（默认 5） |
@@ -677,25 +700,34 @@ yamlops cli dns deploy -e prod --domain example.com --yes
 
 ```bash
 # 查看服务详情
-yamlops cli service show -e prod --type biz --detail
+yamlops cli service show -e prod --service my-api --detail
 
 # 预览变更
-yamlops cli service deploy -e prod --type biz --dry-run
+yamlops cli service deploy -e prod --service my-api --dry-run
 
 # 应用更新
-yamlops cli service deploy -e prod --type biz --yes
+yamlops cli service deploy -e prod --service my-api --yes
 ```
 
 ### 服务运维操作
 
 ```bash
-# 停止服务
+# 按服务名停止
+yamlops cli service stop -e prod --service my-api --yes
+
+# 按服务名重启
+yamlops cli service restart -e prod --service my-api --yes
+
+# 按服务名重新部署
+yamlops cli service deploy -e prod --service my-api --yes
+
+# 停止服务（按类别）
 yamlops cli service stop -e prod --type biz --yes
 
-# 重启服务
+# 重启服务（按类别）
 yamlops cli service restart -e prod --type biz --yes
 
-# 重新部署服务
+# 重新部署服务（按类别）
 yamlops cli service deploy -e prod --type biz --yes
 
 # 清理孤儿资源

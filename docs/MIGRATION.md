@@ -75,7 +75,7 @@ v1.0.0 进行了全面的命令重组，主要变化：
 | `--sync-only` | `--yes` | server setup |
 | `--biz` | `--type biz` | service 子命令 |
 | `--infra` | `--type infra` | service 子命令 |
-| `--service <name>` | 不支持，使用 `--type` 或 TUI 逐项选择 | - |
+| `--service <name>` | `--service <name>` | service 子命令（支持逗号分隔多选） |
 
 ---
 
@@ -93,7 +93,7 @@ yamlops cli apply -e prod --service api --auto-approve
 **新脚本**：
 ```bash
 #!/bin/bash
-yamlops cli service deploy -e prod --type biz --yes
+yamlops cli service deploy -e prod --service api --yes
 ```
 
 ### 环境同步
@@ -195,6 +195,7 @@ deploy:
 - [ ] 替换 `--auto-approve` 为 `--yes`
 - [ ] 替换 `--check-only` / `--sync-only` 为 `--dry-run` / `--yes`
 - [ ] 替换 `--biz` / `--infra` 为 `--type biz` / `--type infra`
+- [ ] 使用 `--service <name>` 替代旧的按服务名称筛选方式
 - [ ] 检查 BizService 与 InfraService 是否存在同名（新约束禁止同名，`service validate` 会检测）
 - [ ] 更新 CI/CD 配置文件
 - [ ] 更新文档和 README
@@ -239,11 +240,15 @@ A: 这两个命令的功能被 `server setup --dry-run` 和 `server setup --yes`
 
 ### Q: `--type` 参数的语义变了？
 
-A: 是的。旧版本中 `--biz`/`--infra` 是按服务名称筛选，新版本中 `--type biz`/`--type infra` 是按类别筛选。如需精确到具体服务，请使用 `--zone`/`--server` 缩小范围，或使用 TUI 的逐项勾选功能。
+A: 是的。旧版本中 `--biz`/`--infra` 是按服务名称筛选，新版本中 `--type biz`/`--type infra` 是按类别筛选。如需精确到具体服务，请使用 `--service` 按名称筛选（支持逗号分隔多选）。
 
 ### Q: 如何在脚本中按服务名称精确部署？
 
-A: CLI 不提供按服务名称筛选的参数。建议：
-1. 使用 `--zone`/`--server` 缩小范围
-2. 使用 TUI 的逐项勾选功能
-3. 确保每个服务器上只部署需要更新的服务
+A: 使用 `--service` 参数：
+```bash
+# 单个服务
+yamlops cli service deploy -e prod --service my-api --yes
+
+# 多个服务
+yamlops cli service deploy -e prod --service my-api,my-worker --yes
+```
