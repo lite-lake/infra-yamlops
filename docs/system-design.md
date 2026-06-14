@@ -969,11 +969,14 @@ yamlops
 
 | 标志 | 适用命令 | 描述 |
 |------|----------|------|
-| --domain / -d | plan, apply, dns | 按域名过滤 |
-| --zone / -z | plan, apply, app | 按区域过滤 |
-| --server / -s | plan, apply, app, env | 按服务器过滤 |
-| --service | plan, apply | 按服务过滤 |
-| --auto-approve | apply, dns apply | 跳过确认提示 |
+| --domain | dns show/deploy/pull | 按域名过滤 |
+| --zone | server/service 子命令 | 按区域过滤 |
+| --server | server/service 子命令 | 按服务器过滤 |
+| --type | service 子命令 | 服务类别过滤 (biz/infra) |
+| --dry-run | 所有变更命令 | 预览变更不执行 |
+| --yes | 所有变更命令 | 跳过确认 |
+| --force | service deploy/dns deploy/dns pull | 强制执行 |
+| --detail | 所有 show 命令 | 显示详细信息 |
 
 ### 7.4 TUI 快捷键
 
@@ -982,16 +985,15 @@ yamlops
 | ↑/k, ↓/j | 上下移动 |
 | Space | 切换选择 |
 | Enter | 确认/展开 |
-| a/n | 选择/取消当前项 |
-| A/N | 全选/全不选 |
-| p | 生成计划 |
-| r | 刷新配置 |
+| Esc | 返回上一级/取消 |
 | ? | 帮助 |
-| x | 取消当前操作 |
-| Tab | 切换视图 |
-| s | 同步 |
-| Esc | 返回 |
-| q/Ctrl+C | 退出 |
+| q | 退出（仅主菜单） |
+| a / n | 全选/全不选 |
+| d | 切换摘要/详细视图 |
+| f | 切换 force 模式 |
+| / | 搜索过滤 |
+| Ctrl+C | 中断执行 |
+| r | 重新 Plan |
 
 ---
 
@@ -1075,78 +1077,71 @@ password: {secret: db_password}
 
 ```bash
 # 1. 验证配置
-yamlops cli validate -e prod
+yamlops cli service validate -e prod
+yamlops cli server validate -e prod
+yamlops cli dns validate -e prod
+yamlops cli config validate -e prod
 
-# 2. 生成执行计划
-yamlops cli plan -e prod
+# 2. 预览变更
+yamlops cli service deploy -e prod --dry-run
 
 # 3. 应用变更
-yamlops cli apply -e prod
+yamlops cli service deploy -e prod --yes
 ```
 
 ### 10.2 服务器设置
 
 ```bash
-# 完整设置
-yamlops cli server setup -e prod --server prod-server-1
+# 预览环境差异
+yamlops cli server setup -e prod --server prod-server-1 --dry-run
 
-# 仅检查
-yamlops cli server check -e prod --zone cn-east
-
-# 仅同步
-yamlops cli server sync -e prod --server prod-server-1
+# 同步环境
+yamlops cli server setup -e prod --server prod-server-1 --yes
 ```
 
 ### 10.3 DNS 管理
 
 ```bash
 # 从 ISP 拉取域名
-yamlops cli dns pull domains --isp aliyun
+yamlops cli dns pull domains -e prod --isp aliyun
 
 # 从域名拉取记录
-yamlops cli dns pull records --domain example.com
+yamlops cli dns pull records -e prod --domain example.com
 
-# 生成 DNS 变更计划
-yamlops cli dns plan -e prod
+# 预览 DNS 变更
+yamlops cli dns deploy -e prod --dry-run
 
 # 应用 DNS 变更
-yamlops cli dns apply -e prod --auto-approve
+yamlops cli dns deploy -e prod --yes
 ```
 
-### 10.4 应用部署
+### 10.4 服务部署
 
 ```bash
-# 生成部署计划
-yamlops cli app plan -e prod --server prod-server-1
+# 预览变更
+yamlops cli service deploy -e prod --server prod-server-1 --dry-run
 
-# 应用部署
-yamlops cli app apply -e prod --server prod-server-1
+# 应用变更
+yamlops cli service deploy -e prod --server prod-server-1 --yes
 ```
 
 ### 10.5 服务操作
 
 ```bash
 # 部署服务
-yamlops cli service deploy -e prod --service api-server
+yamlops cli service deploy -e prod --type biz --yes
 
 # 停止服务
-yamlops cli service stop -e prod --service api-server
+yamlops cli service stop -e prod --type biz --yes
 
 # 重启服务
-yamlops cli service restart -e prod --service api-server
+yamlops cli service restart -e prod --type biz --yes
 
 # 清理孤立资源
-yamlops cli service cleanup -e prod
+yamlops cli service cleanup -e prod --yes
 ```
 
-### 10.6 清理操作
-
-```bash
-# 清理孤立资源
-yamlops cli clean -e prod
-```
-
-### 10.7 交互模式
+### 10.6 交互模式
 
 ```bash
 # 启动 TUI 界面
