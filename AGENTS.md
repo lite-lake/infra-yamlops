@@ -200,7 +200,7 @@ func TestServer_Validate(t *testing.T) {
 | external_backends | external_backends | []string | ⚠️ | 外部后端 URL（与 image 二选一） |
 | registry | registry | string | ❌ | Docker Registry 名称 |
 | ports | ports | []ServicePort | ❌ | 端口映射 |
-| env | env | map[string]SecretRef | ❌ | 环境变量（部署时自动注入 `OPS_ENV_NAME`/`OPS_ZONE_NAME`/`OPS_SERVER_NAME`/`OPS_SERVICE_NAME`） |
+| env | env | map[string]SecretRef | ❌ | 环境变量（部署时自动注入 `DEPLOY_ENV_NAME`/`DEPLOY_ZONE_NAME`/`DEPLOY_SERVER_NAME`/`DEPLOY_SERVICE_NAME`） |
 | secrets | secrets | []string | ❌ | 依赖的密钥列表 |
 | volumes | volumes | []ServiceVolume | ❌ | 卷挂载 |
 | healthcheck | healthcheck | ServiceHealthcheck | ❌ | 健康检查配置 |
@@ -263,7 +263,7 @@ services:
 |------|-----------|------|------|------|
 | name | name | string | ✅ | 服务名称 |
 | type | type | string | ✅ | 类型（当前仅 `gateway`） |
-| server | server | string | ✅ | 部署服务器 |
+| server | server | string | ✅ | 部署主机 |
 | networks | networks | []string | ❌ | Docker 网络列表 |
 | image | image | string | ✅ | Docker 镜像 |
 | ports | ports | GatewayPorts | ❌ | 端口配置（http/https） |

@@ -119,11 +119,11 @@ func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizServ
 
 	serverMap := config.GetServerMap()
 	if server, ok := serverMap[svc.Server]; ok {
-		envMap["OPS_ZONE_NAME"] = server.Zone
+		envMap["DEPLOY_ZONE_NAME"] = server.Zone
 	}
-	envMap["OPS_ENV_NAME"] = g.env
-	envMap["OPS_SERVER_NAME"] = svc.Server
-	envMap["OPS_SERVICE_NAME"] = svc.Name
+	envMap["DEPLOY_ENV_NAME"] = g.env
+	envMap["DEPLOY_SERVER_NAME"] = svc.Server
+	envMap["DEPLOY_SERVICE_NAME"] = svc.Name
 
 	envFileName := fmt.Sprintf("%s.env", svc.Name)
 	envFile := filepath.Join(serverDir, envFileName)

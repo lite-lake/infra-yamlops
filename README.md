@@ -458,7 +458,7 @@ services:
     networks:
       - yamlops-prod
 
-> **自动注入的 OPS_ 环境变量**：部署时 yamlops 会自动向 `.env` 文件注入 `OPS_ENV_NAME`（环境）、`OPS_ZONE_NAME`（网区）、`OPS_SERVER_NAME`（服务器）、`OPS_SERVICE_NAME`（服务名），无需在 `env` 字段中配置。容器内应用可直接读取，用于日志标记、链路追踪等场景。
+> **自动注入的 DEPLOY_ 环境变量**：部署时 yamlops 会自动向 `.env` 文件注入 `DEPLOY_ENV_NAME`（部署环境）、`DEPLOY_ZONE_NAME`（部署网区）、`DEPLOY_SERVER_NAME`（部署主机）、`DEPLOY_SERVICE_NAME`（部署服务），无需在 `env` 字段中配置。容器内应用可直接读取，用于日志标记、链路追踪等场景。
     healthcheck:
       path: /health
       interval: 30s
