@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/lite-lake/infra-yamlops/internal/application/generator/compose"
 	"github.com/lite-lake/infra-yamlops/internal/constants"
@@ -69,7 +70,7 @@ func (g *Generator) generateInfraServiceCompose(serverDir string, infra *entity.
 
 func (g *Generator) generateInfraServiceGateway(serverDir string, infra *entity.InfraService, config *entity.Config) error {
 	if infra.GatewayPorts != nil {
-		composeContent, err := g.generateInfraGatewayCompose(infra)
+		composeContent, err := g.generateInfraGatewayCompose(serverDir, infra, config)
 		if err != nil {
 			return fmt.Errorf("failed to generate gateway compose for %s: %w", infra.Name, err)
 		}
@@ -90,15 +91,15 @@ func (g *Generator) generateInfraServiceGateway(serverDir string, infra *entity.
 	return nil
 }
 
-func (g *Generator) generateInfraGatewayCompose(infra *entity.InfraService) (string, error) {
+func (g *Generator) generateInfraGatewayCompose(serverDir string, infra *entity.InfraService, config *entity.Config) (string, error) {
 	ports := []string{
 		fmt.Sprintf("%d:%d", infra.GatewayPorts.HTTP, infra.GatewayPorts.HTTP),
 		fmt.Sprintf("%d:%d", infra.GatewayPorts.HTTPS, infra.GatewayPorts.HTTPS),
 	}
 
 	volumes := []string{
-		"./gateway.yml:/app/configs/server.yml:ro",
-		"./cache:/app/cache",
+		constants.GatewayConfigPath,
+		constants.GatewayCachePath,
 	}
 
 	networks := infra.Networks
@@ -106,10 +107,47 @@ func (g *Generator) generateInfraGatewayCompose(infra *entity.InfraService) (str
 		networks = []string{fmt.Sprintf("yamlops-%s", g.env)}
 	}
 
+	envMap := make(map[string]string)
+	secrets := config.GetSecretsMap()
+	for k, ref := range infra.Env {
+		val, err := ref.Resolve(secrets)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve env %s for gateway %s: %w", k, infra.Name, err)
+		}
+		envMap[k] = val
+	}
+	for _, secretName := range infra.Secrets {
+		if val, ok := secrets[secretName]; ok {
+			envMap[strings.ToUpper(secretName)] = val
+		}
+	}
+
+	serverMap := config.GetServerMap()
+	if server, ok := serverMap[infra.Server]; ok {
+		envMap["DEPLOY_ZONE_NAME"] = server.Zone
+	}
+	envMap["DEPLOY_ENV_NAME"] = g.env
+	envMap["DEPLOY_SERVER_NAME"] = infra.Server
+	envMap["DEPLOY_SERVICE_NAME"] = infra.Name
+
+	envFileName := fmt.Sprintf("%s.env", infra.Name)
+	envFile := filepath.Join(serverDir, envFileName)
+
+	envLines := []string{}
+	for k, v := range envMap {
+		envLines = append(envLines, fmt.Sprintf("%s=%s", k, v))
+	}
+	envContent := strings.Join(envLines, "\n") + "\n"
+
+	if err := os.WriteFile(envFile, []byte(envContent), 0600); err != nil {
+		return "", fmt.Errorf("failed to write env file %s: %w", envFile, err)
+	}
+
 	composeSvc := &compose.ComposeService{
 		Name:       infra.Name,
 		Image:      infra.Image,
 		Ports:      ports,
+		EnvFiles:   []string{envFileName},
 		Volumes:    volumes,
 		Networks:   networks,
 		ExtraHosts: []string{constants.HostDockerGateway},
