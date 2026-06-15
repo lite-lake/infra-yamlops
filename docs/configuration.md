@@ -343,6 +343,7 @@ services:
 > 
 > | 变量 | 说明 | 示例值 |
 > |------|------|--------|
+> | `OPS_ENV_NAME` | 当前环境名称（`-e` 参数值） | `prod` |
 > | `OPS_ZONE_NAME` | 网区名称（取自服务器所属 zone） | `prod` |
 > | `OPS_SERVER_NAME` | 部署目标服务器名称 | `srv-gn1a` |
 > | `OPS_SERVICE_NAME` | 当前服务名称 | `my-api` |

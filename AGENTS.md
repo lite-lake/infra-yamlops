@@ -200,7 +200,7 @@ func TestServer_Validate(t *testing.T) {
 | external_backends | external_backends | []string | ⚠️ | 外部后端 URL（与 image 二选一） |
 | registry | registry | string | ❌ | Docker Registry 名称 |
 | ports | ports | []ServicePort | ❌ | 端口映射 |
-| env | env | map[string]SecretRef | ❌ | 环境变量（部署时自动注入 `OPS_ZONE_NAME`/`OPS_SERVER_NAME`/`OPS_SERVICE_NAME`） |
+| env | env | map[string]SecretRef | ❌ | 环境变量（部署时自动注入 `OPS_ENV_NAME`/`OPS_ZONE_NAME`/`OPS_SERVER_NAME`/`OPS_SERVICE_NAME`） |
 | secrets | secrets | []string | ❌ | 依赖的密钥列表 |
 | volumes | volumes | []ServiceVolume | ❌ | 卷挂载 |
 | healthcheck | healthcheck | ServiceHealthcheck | ❌ | 健康检查配置 |

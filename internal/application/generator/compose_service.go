@@ -121,6 +121,7 @@ func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizServ
 	if server, ok := serverMap[svc.Server]; ok {
 		envMap["OPS_ZONE_NAME"] = server.Zone
 	}
+	envMap["OPS_ENV_NAME"] = g.env
 	envMap["OPS_SERVER_NAME"] = svc.Server
 	envMap["OPS_SERVICE_NAME"] = svc.Name
 
