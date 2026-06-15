@@ -1826,8 +1826,8 @@ func (m Model) infoDetailMaxIndex() int {
 		}
 		totalServices := bizCount + infraCount
 		if totalServices > 0 {
-			count++                  // summary header
-			count += totalServices   // summary rows
+			count++                // summary header
+			count += totalServices // summary rows
 		}
 		if showBiz {
 			for _, svc := range m.Config.Services {
@@ -1875,7 +1875,7 @@ func (m Model) infoDetailMaxIndex() int {
 	case "server_show":
 		// Summary table
 		if len(m.Config.Servers) > 0 {
-			count++                  // summary header
+			count++                        // summary header
 			count += len(m.Config.Servers) // summary rows
 		}
 		for _, srv := range m.Config.Servers {
@@ -1897,7 +1897,7 @@ func (m Model) infoDetailMaxIndex() int {
 	case "dns_show":
 		// Summary table
 		if len(m.Config.Domains) > 0 {
-			count++                  // summary header
+			count++                        // summary header
 			count += len(m.Config.Domains) // summary rows
 		}
 		for _, domain := range m.Config.Domains {
@@ -1912,7 +1912,7 @@ func (m Model) infoDetailMaxIndex() int {
 	case "config_show_isps":
 		// Summary table
 		if len(m.Config.ISPs) > 0 {
-			count++                // summary header
+			count++                     // summary header
 			count += len(m.Config.ISPs) // summary rows
 		}
 		for _, isp := range m.Config.ISPs {
@@ -1937,7 +1937,7 @@ func (m Model) infoDetailMaxIndex() int {
 	case "config_show_registries":
 		// Summary table
 		if len(m.Config.Registries) > 0 {
-			count++                     // summary header
+			count++                           // summary header
 			count += len(m.Config.Registries) // summary rows
 		}
 		for range m.Config.Registries {

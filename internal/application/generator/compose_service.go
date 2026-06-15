@@ -29,7 +29,7 @@ func (g *Generator) generateServiceComposes(config *entity.Config) error {
 			if svc.Image == "" {
 				continue
 			}
-			if err := g.generateServiceCompose(serverDir, svc, config.GetSecretsMap()); err != nil {
+			if err := g.generateServiceCompose(serverDir, svc, config); err != nil {
 				return err
 			}
 		}
@@ -57,7 +57,7 @@ func (g *Generator) generateServiceComposesWithScope(config *entity.Config, scop
 			if svc.Image == "" {
 				continue
 			}
-			if err := g.generateServiceCompose(serverDir, svc, config.GetSecretsMap()); err != nil {
+			if err := g.generateServiceCompose(serverDir, svc, config); err != nil {
 				return err
 			}
 		}
@@ -66,7 +66,7 @@ func (g *Generator) generateServiceComposesWithScope(config *entity.Config, scop
 	return nil
 }
 
-func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizService, secrets map[string]string) error {
+func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizService, config *entity.Config) error {
 	ports := []string{}
 	for _, port := range svc.Ports {
 		ports = append(ports, fmt.Sprintf("%d:%d", port.Host, port.Container))
@@ -101,6 +101,7 @@ func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizServ
 		}
 	}
 
+	secrets := config.GetSecretsMap()
 	envMap := make(map[string]string)
 	for k, ref := range svc.Env {
 		val, err := ref.Resolve(secrets)
@@ -115,6 +116,13 @@ func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizServ
 			envMap[envKey] = val
 		}
 	}
+
+	serverMap := config.GetServerMap()
+	if server, ok := serverMap[svc.Server]; ok {
+		envMap["OPS_ZONE_NAME"] = server.Zone
+	}
+	envMap["OPS_SERVER_NAME"] = svc.Server
+	envMap["OPS_SERVICE_NAME"] = svc.Name
 
 	envFileName := fmt.Sprintf("%s.env", svc.Name)
 	envFile := filepath.Join(serverDir, envFileName)

@@ -338,6 +338,16 @@ services:
 | `ports` | []Port | 否 | 端口映射列表 |
 | `env` | map | 否 | 环境变量 |
 | `secrets` | []string | 否 | 依赖的密钥列表 |
+
+> **自动注入的 OPS_ 环境变量**：部署时 yamlops 会自动向每个业务服务的 `.env` 文件注入以下变量，无需在 `env` 字段中配置：
+> 
+> | 变量 | 说明 | 示例值 |
+> |------|------|--------|
+> | `OPS_ZONE_NAME` | 网区名称（取自服务器所属 zone） | `prod` |
+> | `OPS_SERVER_NAME` | 部署目标服务器名称 | `srv-gn1a` |
+> | `OPS_SERVICE_NAME` | 当前服务名称 | `my-api` |
+> 
+> 容器内的应用可直接通过 `os.Getenv("OPS_ZONE_NAME")` 等方式读取，用于日志标记、链路追踪、多环境适配等场景。
 | `volumes` | []Volume | 否 | 卷挂载 |
 | `healthcheck.path` | string | 否 | 健康检查路径 |
 | `healthcheck.interval` | string | 否 | 检查间隔 |

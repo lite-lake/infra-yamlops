@@ -21,8 +21,8 @@ import (
 
 func newDNSPullCommand(ctx *Context) *cobra.Command {
 	var (
-		pullISP      string
-		pullDomains  string
+		pullISP     string
+		pullDomains string
 	)
 
 	dnsPullCmd := &cobra.Command{
