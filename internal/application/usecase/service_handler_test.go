@@ -306,9 +306,7 @@ services:
 		Client:     mockSSH,
 		RemoteDir:  "/opt/yamlops/yo-prod-testapp",
 	}
-	result, err := ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{
-		RestartAfterUp: false,
-	})
+	result, err := ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -352,9 +350,7 @@ func TestServiceHandler_DeployService_ReadFileError(t *testing.T) {
 		Client:     mockSSH,
 		RemoteDir:  "/opt/test",
 	}
-	result, err := ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{
-		RestartAfterUp: false,
-	})
+	result, err := ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/lite-lake/infra-yamlops/internal/constants"
 	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
@@ -100,12 +99,9 @@ func GetComposeFilePath(ch *valueobject.Change, deps DepsProvider) string {
 }
 
 type DeployComposeConfig struct {
-	RemoteDir      string
-	ComposeFile    string
-	EnvFile        string
-	Env            string
-	ServiceName    string
-	RestartAfterUp bool
+	RemoteDir   string
+	ComposeFile string
+	EnvFile     string
 }
 
 func DeployComposeFile(client contract.SSHClient, cfg *DeployComposeConfig, result *Result) bool {
@@ -116,10 +112,6 @@ func DeployComposeFile(client contract.SSHClient, cfg *DeployComposeConfig, resu
 	if _, err := os.Stat(cfg.ComposeFile); err != nil {
 		return true
 	}
-
-	checkCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml ps --quiet 2>/dev/null || true", cfg.RemoteDir)
-	existingStdout, _, _ := client.Run(checkCmd)
-	isServiceRunning := strings.TrimSpace(existingStdout) != ""
 
 	content, err := os.ReadFile(cfg.ComposeFile)
 	if err != nil {
@@ -146,38 +138,13 @@ func DeployComposeFile(client contract.SSHClient, cfg *DeployComposeConfig, resu
 		}
 	}
 
-	if isServiceRunning {
-		pullCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml pull", cfg.RemoteDir)
-		_, pullStderr, pullErr := client.Run(pullCmd)
-		if pullErr != nil {
-			result.Warnings = append(result.Warnings, fmt.Sprintf("image pull failed: %s", pullStderr))
-		}
-
-		cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d --pull=always --force-recreate", cfg.RemoteDir)
-		stdout, stderr, err := client.Run(cmd)
-		if err != nil {
-			result.Error = fmt.Errorf("%w: in %s: %w, stderr: %s", domainerr.ErrDockerComposeFailed, cfg.RemoteDir, err, stderr)
-			result.Output = stdout + "\n" + stderr
-			return false
-		}
-		result.Output = stdout
-		return true
-	}
-
 	pullCmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml pull", cfg.RemoteDir)
 	_, pullStderr, pullErr := client.Run(pullCmd)
 	if pullErr != nil {
 		result.Warnings = append(result.Warnings, fmt.Sprintf("image pull failed: %s", pullStderr))
 	}
 
-	var cmd string
-	if cfg.RestartAfterUp {
-		containerName := fmt.Sprintf(constants.ServiceNameFormat, cfg.Env, cfg.ServiceName)
-		cmd = fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d && sudo docker restart %s", cfg.RemoteDir, containerName)
-	} else {
-		cmd = fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d", cfg.RemoteDir)
-	}
-
+	cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d --pull=always --force-recreate", cfg.RemoteDir)
 	stdout, stderr, err := client.Run(cmd)
 	if err != nil {
 		result.Error = fmt.Errorf("%w: in %s: %w, stderr: %s", domainerr.ErrDockerComposeFailed, cfg.RemoteDir, err, stderr)
@@ -225,7 +192,6 @@ type ServiceDeployContext struct {
 type DeployServiceOptions struct {
 	PreDeployHook  func(result *Result) error
 	PostDeployHook func(result *Result) error
-	RestartAfterUp bool
 }
 
 type ServiceRestartManager struct {
@@ -356,12 +322,9 @@ func ExecuteServiceDeploy(change *valueobject.Change, ctx *ServiceDeployContext,
 		envFile = composeFile[:len(composeFile)-len(".compose.yaml")] + ".env"
 	}
 	if !DeployComposeFile(ctx.Client, &DeployComposeConfig{
-		RemoteDir:      ctx.RemoteDir,
-		ComposeFile:    composeFile,
-		EnvFile:        envFile,
-		Env:            deps.Env(),
-		ServiceName:    change.Name(),
-		RestartAfterUp: opts.RestartAfterUp,
+		RemoteDir:   ctx.RemoteDir,
+		ComposeFile: composeFile,
+		EnvFile:     envFile,
 	}, result) {
 		return result, nil
 	}

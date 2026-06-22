@@ -194,7 +194,7 @@ func TestInfraServiceHandler_ExecuteServiceDeploy_InvalidState(t *testing.T) {
 		Client:     mockSSH,
 		RemoteDir:  "/opt/test",
 	}
-	result, err := ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{RestartAfterUp: true})
+	result, err := ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -240,7 +240,7 @@ services:
 		Client:     mockSSH,
 		RemoteDir:  "/opt/test",
 	}
-	result, err := ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{RestartAfterUp: true})
+	result, err := ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

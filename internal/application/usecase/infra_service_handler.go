@@ -41,7 +41,6 @@ func (h *InfraServiceHandler) Apply(ctx context.Context, change *valueobject.Cha
 	return ExecuteServiceDeploy(change, deployCtx, deps, DeployServiceOptions{
 		PreDeployHook:  h.createInfraTypePreHook(infra, change.Name(), deployCtx, deps),
 		PostDeployHook: h.createInfraTypePostHook(infra, change.Name(), deployCtx, deps),
-		RestartAfterUp: true,
 	})
 }
 
