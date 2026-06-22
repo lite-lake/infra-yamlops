@@ -144,7 +144,7 @@ func DeployComposeFile(client contract.SSHClient, cfg *DeployComposeConfig, resu
 		result.Warnings = append(result.Warnings, fmt.Sprintf("image pull failed: %s", pullStderr))
 	}
 
-	cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d --pull=always --force-recreate", cfg.RemoteDir)
+	cmd := fmt.Sprintf("sudo docker compose -f %s/docker-compose.yml up -d --force-recreate --pull never", cfg.RemoteDir)
 	stdout, stderr, err := client.Run(cmd)
 	if err != nil {
 		result.Error = fmt.Errorf("%w: in %s: %w, stderr: %s", domainerr.ErrDockerComposeFailed, cfg.RemoteDir, err, stderr)
