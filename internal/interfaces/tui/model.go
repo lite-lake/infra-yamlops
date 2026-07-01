@@ -10,6 +10,7 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/application/usecase"
 	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+	"github.com/lite-lake/infra-yamlops/internal/environment"
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/dns"
 	"github.com/lite-lake/infra-yamlops/internal/interfaces/tui/components"
 )
@@ -71,6 +72,17 @@ type orphanServicesScannedMsg struct {
 type serviceCleanupCompleteMsg struct {
 	results []CleanupResult
 	err     error
+}
+
+type dockerPruneScannedMsg struct {
+	results []DockerPruneScanResult
+	err     error
+}
+
+type DockerPruneScanResult struct {
+	ServerName string
+	DiskUsage  *environment.DockerDiskUsage
+	ScanError  string
 }
 
 type dnsProviderCreatedMsg struct {
@@ -514,6 +526,7 @@ func NewModel(env string, configDir string, concurrency int) Model {
 						{Label: "Show servers", Operation: "server_show"},
 						{Label: "Validate servers", Operation: "server_validate"},
 						{Label: "Setup server environment", Operation: "server_setup"},
+						{Label: "Docker prune", Operation: "docker_prune"},
 					},
 				},
 				{

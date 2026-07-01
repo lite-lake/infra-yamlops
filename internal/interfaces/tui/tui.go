@@ -99,6 +99,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleOrphanServicesScannedMsg(msg)
 	case serviceCleanupCompleteMsg:
 		return m.handleServiceCleanupCompleteMsg(msg)
+	case dockerPruneScannedMsg:
+		return m.handleDockerPruneScannedMsg(msg)
 	case applyProgressMsg:
 		return m.handleApplyProgressMsg(msg, &cmds)
 	case applyCompleteAsyncMsg:
@@ -305,6 +307,18 @@ func (m Model) handleServiceCleanupCompleteMsg(msg serviceCleanupCompleteMsg) (t
 	}
 	m.Cleanup.CleanupResults = msg.results
 	m.ViewState = ViewStateComplete
+	return m, nil
+}
+
+func (m Model) handleDockerPruneScannedMsg(msg dockerPruneScannedMsg) (tea.Model, tea.Cmd) {
+	m.Loading.Active = false
+	if msg.err != nil {
+		m.UI.ErrorMessage = formatErrorMessage("Failed to scan Docker disk usage", msg.err)
+		return m, nil
+	}
+	m.generateDockerPrunePlan(msg.results)
+	m.ViewState = ViewStatePlan
+	m.Action.ConfirmSelected = 0
 	return m, nil
 }
 
@@ -575,7 +589,7 @@ func (m Model) handleEscape() (tea.Model, tea.Cmd) {
 			m.DNS.PendingDomains = nil
 			m.DNS.PendingISPs = nil
 			m.ViewState = ViewStateDNSMenu
-		} else if m.Action.OperationType == "server_setup" {
+		} else if m.Action.OperationType == "server_setup" || m.Action.OperationType == "docker_prune" {
 			m.ViewState = ViewStateServerMenu
 		} else {
 			m.ViewState = ViewStateTreeService
@@ -636,7 +650,7 @@ func (m Model) handleCancel() (tea.Model, tea.Cmd) {
 			m.DNS.PendingDomains = nil
 			m.DNS.PendingISPs = nil
 			m.ViewState = ViewStateDNSMenu
-		} else if m.Action.OperationType == "server_setup" {
+		} else if m.Action.OperationType == "server_setup" || m.Action.OperationType == "docker_prune" {
 			m.ViewState = ViewStateServerMenu
 		} else {
 			m.ViewState = ViewStateFilter

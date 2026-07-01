@@ -314,6 +314,8 @@ func (m Model) operationNavigationPath(action string) string {
 		return "Service > Cleanup > " + action
 	case "server_setup":
 		return "Server > Setup > " + action
+	case "docker_prune":
+		return "Server > Prune > " + action
 	case "dns_deploy":
 		return "DNS > Deploy > " + action
 	case "dns_pull_domains":
@@ -2073,6 +2075,7 @@ func (m Model) renderServerMenuContent() string {
 		"Show servers",
 		"Validate servers",
 		"Setup server environment",
+		"Docker prune",
 		"Back to Main Menu",
 	}
 	var content strings.Builder

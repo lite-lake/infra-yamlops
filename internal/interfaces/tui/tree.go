@@ -617,6 +617,11 @@ func (m *Model) executeApplyAsync() tea.Cmd {
 			return m.executeServerEnvSyncAsync()()
 		}
 
+		// Handle docker_prune operation: delegate to executeDockerPruneAsync
+		if m.Action.OperationType == "docker_prune" {
+			return m.executeDockerPruneAsync()()
+		}
+
 		if m.Action.PlanResult == nil || !m.Action.PlanResult.HasChanges() {
 			return applyCompleteAsyncMsg{}
 		}

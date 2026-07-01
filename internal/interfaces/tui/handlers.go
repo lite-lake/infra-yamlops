@@ -160,7 +160,12 @@ func (m Model) handleEnter() (tea.Model, tea.Cmd) {
 			m.ViewState = ViewStatePlan
 			m.Action.ConfirmSelected = 0
 			return m, nil
-		case 3: // Back to Main Menu
+		case 3: // Docker prune
+			m.Action.OperationType = "docker_prune"
+			m.Loading.Active = true
+			m.Loading.Message = "Scanning Docker disk usage..."
+			return m, tea.Batch(tickSpinner(), m.scanDockerDiskUsageAsync())
+		case 4: // Back to Main Menu
 			m.ViewState = ViewStateMainMenu
 			return m, nil
 		}
@@ -623,6 +628,11 @@ func (m Model) executeMainMenuOperation(operation string) (tea.Model, tea.Cmd) {
 		m.initPlanComponent()
 		m.ViewState = ViewStatePlan
 		m.Action.ConfirmSelected = 0
+	case "docker_prune":
+		m.Action.OperationType = "docker_prune"
+		m.Loading.Active = true
+		m.Loading.Message = "Scanning Docker disk usage..."
+		return m, tea.Batch(tickSpinner(), m.scanDockerDiskUsageAsync())
 	case "dns_show":
 		m.Action.OperationType = "dns_show"
 		m.SourceMenu = ViewStateMainMenu

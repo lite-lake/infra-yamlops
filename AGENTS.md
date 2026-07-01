@@ -281,6 +281,45 @@ services:
 | 重启 | `yamlops cli service restart` | 重启容器（不同步文件/镜像） |
 | 清理 | `yamlops cli service cleanup` | 移除孤立容器和目录 |
 
+## 服务器操作
+
+| 操作 | CLI 命令 | 描述 |
+|-----------|-------------|-------------|
+| 查看 | `yamlops cli server show` | 列出服务器 |
+| 验证 | `yamlops cli server validate` | 验证服务器配置 |
+| 环境同步 | `yamlops cli server setup` | 同步 APT 源、Docker 网络、Registry 登录 |
+| Docker 清理 | `yamlops cli server prune` | 清理服务器上未使用的 Docker 资源 |
+
+### Docker Prune 详细说明
+
+```bash
+# 清理所有服务器上未使用的 Docker 资源（镜像、容器、卷、构建缓存）
+yamlops cli server prune -e prod
+
+# 预览可回收空间（不执行）
+yamlops cli server prune -e prod --dry-run
+
+# 按服务器过滤
+yamlops cli server prune -e prod --server s1,s2
+
+# 按网区过滤
+yamlops cli server prune -e prod --zone prod
+
+# 只清理镜像
+yamlops cli server prune -e prod --filter image
+
+# 清理指定资源类型（可组合）
+yamlops cli server prune -e prod --filter image,volume
+
+# 跳过确认直接执行
+yamlops cli server prune -e prod --yes
+```
+
+`--filter` 可选值：`all`（默认）、`image`、`container`、`volume`、`builder`。
+
+TUI 中可通过 `Server Management > Docker prune` 菜单项执行，流程为：
+扫描磁盘使用 → Plan（选择目标服务器）→ Progress（执行清理）→ Complete（结果展示）。
+
 ## 服务过滤维度
 
 所有 `service` 子命令均支持以下过滤 flag（可组合使用，取交集）：

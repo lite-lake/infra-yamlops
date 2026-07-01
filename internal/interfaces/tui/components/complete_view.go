@@ -172,6 +172,7 @@ var actionStatusMap = map[string]string{
 	"create": "deployed",
 	"update": "updated",
 	"delete": "deleted",
+	"prune":  "pruned",
 }
 
 // actionStatus returns the appropriate status text for the given action.

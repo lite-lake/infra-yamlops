@@ -106,7 +106,7 @@ func init() {
 	})
 
 	RegisterCursorController(ViewStateServerMenu, func(m *Model) CursorController {
-		return &simpleCursor{cursor: &m.Server.ServiceMenuIndex, maxValue: 3} // 4 items (0-3)
+		return &simpleCursor{cursor: &m.Server.ServiceMenuIndex, maxValue: 4} // 5 items (0-4)
 	})
 
 	RegisterCursorController(ViewStateDNSMenu, func(m *Model) CursorController {
