@@ -426,6 +426,73 @@ yamlops cli server setup -e prod --yes
 
 ---
 
+### yamlops cli server prune
+
+清理服务器上未使用的 Docker 资源（镜像、容器、卷、构建缓存）。
+
+```bash
+# 预览可回收空间
+yamlops cli server prune -e prod --dry-run
+
+# 清理所有服务器
+yamlops cli server prune -e prod
+
+# 按服务器筛选
+yamlops cli server prune -e prod --server srv-cn1 --dry-run
+
+# 按网区筛选
+yamlops cli server prune -e prod --zone cn-east
+
+# 只清理指定类型资源
+yamlops cli server prune -e prod --filter image
+yamlops cli server prune -e prod --filter volume
+
+# 跳过确认
+yamlops cli server prune -e prod --yes
+```
+
+**标志**：
+
+| 标志 | 说明 |
+|------|------|
+| `--zone` | 网区筛选（逗号分隔多选） |
+| `--server` | 服务器筛选（逗号分隔多选） |
+| `--filter` | 清理目标：`all`（默认）、`image`、`container`、`volume`、`builder` |
+| `--dry-run` | 预览可回收空间不执行 |
+| `--yes` | 跳过确认 |
+
+**输出示例**：
+
+```
+# server prune -e prod --dry-run
+=== Server Prune Plan ===
+Environment: prod
+Filter: all
+
+ACTION  SERVER    DETAILS
+prune   srv-cn1   reclaimable: Images: 8.2GB, Containers: 0B, Volumes: 1.3GB, Build Cache: 3.0GB (filter: all)
+prune   srv-cn2   reclaimable: Images: 3.8GB, Containers: 0B, Volumes: 0.3GB, Build Cache: 1.0GB (filter: all)
+
+Summary: 2 servers to be pruned
+
+[dry-run] No changes made.
+
+# server prune -e prod --yes
+=== Server Prune Plan ===
+Environment: prod
+...
+
+Executing...
+[1/2] prune  srv-cn1  srv-cn1  pruned  ✓
+[2/2] prune  srv-cn2  srv-cn2  pruned  ✓
+
+Result: 2 succeeded, 0 failed
+```
+
+> 注意：此操作清理服务器上**所有**未使用的 Docker 资源，不限于 yamlops 管理的容器。运行中的容器和已引用的镜像/卷不受影响。
+
+---
+
 ## 服务管理命令
 
 ### yamlops cli service show

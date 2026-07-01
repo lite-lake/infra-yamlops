@@ -1100,7 +1100,17 @@ yamlops cli server setup -e prod --server prod-server-1 --dry-run
 yamlops cli server setup -e prod --server prod-server-1 --yes
 ```
 
-### 10.3 DNS 管理
+### 10.3 服务器 Docker 清理
+
+```bash
+# 预览可回收空间
+yamlops cli server prune -e prod --dry-run
+
+# 清理所有服务器
+yamlops cli server prune -e prod --yes
+```
+
+### 10.4 DNS 管理
 
 ```bash
 # 从 ISP 拉取域名
@@ -1116,7 +1126,7 @@ yamlops cli dns deploy -e prod --dry-run
 yamlops cli dns deploy -e prod --yes
 ```
 
-### 10.4 服务部署
+### 10.5 服务部署
 
 ```bash
 # 预览变更
@@ -1126,7 +1136,7 @@ yamlops cli service deploy -e prod --server prod-server-1 --dry-run
 yamlops cli service deploy -e prod --server prod-server-1 --yes
 ```
 
-### 10.5 服务操作
+### 10.6 服务操作
 
 ```bash
 # 部署服务
@@ -1142,7 +1152,7 @@ yamlops cli service restart -e prod --type biz --yes
 yamlops cli service cleanup -e prod --yes
 ```
 
-### 10.6 交互模式
+### 10.7 交互模式
 
 ```bash
 # 启动 TUI 界面

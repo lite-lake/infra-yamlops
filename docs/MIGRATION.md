@@ -252,3 +252,17 @@ yamlops cli service deploy -e prod --service my-api --yes
 # 多个服务
 yamlops cli service deploy -e prod --service my-api,my-worker --yes
 ```
+
+### Q: 如何清理服务器上的 Docker 垃圾？
+
+A: 使用 `server prune` 命令，替代手动 `docker system prune -a`：
+```bash
+# 预览可回收空间
+yamlops cli server prune -e prod --dry-run
+
+# 清理所有服务器
+yamlops cli server prune -e prod --yes
+
+# 只清理镜像
+yamlops cli server prune -e prod --filter image --yes
+```

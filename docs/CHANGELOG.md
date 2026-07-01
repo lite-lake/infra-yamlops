@@ -10,6 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **`--service` flag**: Service name filter for all `service` subcommands (`show`, `validate`, `deploy`, `stop`, `restart`, `cleanup`). Supports comma-separated multiple values (e.g., `--service my-api,my-worker`)
+- **`server prune` command**: Prune unused Docker resources on servers. Supports `--filter` (image/container/volume/builder/all), `--dry-run` preview, and concurrent multi-server execution
+- **TUI Docker prune**: `Server Management > Docker prune` menu entry with disk usage scan → Plan → Progress → Complete workflow
 
 ## [1.0.0] - 2026-06-10
 
