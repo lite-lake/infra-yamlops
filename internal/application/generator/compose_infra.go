@@ -96,6 +96,9 @@ func (g *Generator) generateInfraGatewayCompose(serverDir string, infra *entity.
 		fmt.Sprintf("%d:%d", infra.GatewayPorts.HTTP, infra.GatewayPorts.HTTP),
 		fmt.Sprintf("%d:%d", infra.GatewayPorts.HTTPS, infra.GatewayPorts.HTTPS),
 	}
+	for _, p := range infra.Ports {
+		ports = append(ports, fmt.Sprintf("%d:%d", p.Host, p.Container))
+	}
 
 	volumes := []string{
 		constants.GatewayConfigPath,

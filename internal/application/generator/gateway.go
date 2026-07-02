@@ -241,6 +241,9 @@ func (g *Generator) generateGatewayCompose(serverDir string, gw *entity.InfraSer
 		fmt.Sprintf("%d:%d", httpPort, httpPort),
 		fmt.Sprintf("%d:%d", httpsPort, httpsPort),
 	}
+	for _, p := range gw.Ports {
+		ports = append(ports, fmt.Sprintf("%d:%d", p.Host, p.Container))
+	}
 
 	volumes := []string{
 		constants.GatewayConfigPath,
