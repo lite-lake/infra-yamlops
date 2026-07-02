@@ -35,6 +35,10 @@ type wafConfig struct {
 	} `yaml:"crs"`
 }
 
+type hostWAFConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
 type sslConfig struct {
 	Remote struct {
 		Enabled           bool   `yaml:"enabled"`
@@ -46,18 +50,19 @@ type sslConfig struct {
 }
 
 type hostConfig struct {
-	Name                string   `yaml:"name"`
-	Port                int      `yaml:"port"`
-	SSLPort             int      `yaml:"ssl_port,omitempty"`
-	Backend             []string `yaml:"backend"`
-	HealthCheck         string   `yaml:"health_check,omitempty"`
-	HealthCheckInterval string   `yaml:"health_check_interval,omitempty"`
-	HealthCheckTimeout  string   `yaml:"health_check_timeout,omitempty"`
-	HealthCheckEnabled  *bool    `yaml:"health_check_enabled,omitempty"`
-	PreserveHostHeader  bool     `yaml:"preserve_host_header"`
-	GZipEnabled         *bool    `yaml:"g_zip_enabled,omitempty"`
-	OverrideHost        string   `yaml:"override_host,omitempty"`
-	StripProxyHeaders   *bool    `yaml:"strip_proxy_headers,omitempty"`
+	Name                string         `yaml:"name"`
+	Port                int            `yaml:"port"`
+	SSLPort             int            `yaml:"ssl_port,omitempty"`
+	Backend             []string       `yaml:"backend"`
+	HealthCheck         string         `yaml:"health_check,omitempty"`
+	HealthCheckInterval string         `yaml:"health_check_interval,omitempty"`
+	HealthCheckTimeout  string         `yaml:"health_check_timeout,omitempty"`
+	HealthCheckEnabled  *bool          `yaml:"health_check_enabled,omitempty"`
+	PreserveHostHeader  bool           `yaml:"preserve_host_header"`
+	GZipEnabled         *bool          `yaml:"g_zip_enabled,omitempty"`
+	OverrideHost        string         `yaml:"override_host,omitempty"`
+	StripProxyHeaders   *bool          `yaml:"strip_proxy_headers,omitempty"`
+	WAF                 *hostWAFConfig `yaml:"waf,omitempty"`
 }
 
 type gateConfig struct {
@@ -146,6 +151,9 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 			GZipEnabled:         h.GZipEnabled,
 			OverrideHost:        h.OverrideHost,
 			StripProxyHeaders:   h.StripProxyHeaders,
+		}
+		if h.WAFDisabled != nil && *h.WAFDisabled {
+			host.WAF = &hostWAFConfig{Enabled: false}
 		}
 		config.Hosts = append(config.Hosts, host)
 	}

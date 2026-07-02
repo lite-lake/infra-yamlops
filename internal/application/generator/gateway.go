@@ -134,6 +134,12 @@ func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.Service
 		httpPort = gw.GatewayPorts.HTTP
 	}
 
+	var wafDisabled *bool
+	if route.WAF != nil && route.WAF.Enabled != nil && !*route.WAF.Enabled {
+		t := true
+		wafDisabled = &t
+	}
+
 	return gate.HostRoute{
 		Name:                hostname,
 		Port:                httpPort,
@@ -147,6 +153,7 @@ func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.Service
 		GZipEnabled:         route.GzipEnabled,
 		OverrideHost:        route.OverrideHost,
 		StripProxyHeaders:   route.StripProxyHeaders,
+		WAFDisabled:         wafDisabled,
 	}
 }
 

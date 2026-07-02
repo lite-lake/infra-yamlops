@@ -101,29 +101,35 @@ func (p *ServicePort) Validate() error {
 	return nil
 }
 
+type RouteWAFConfig struct {
+	Enabled *bool `yaml:"enabled"` // nil=继承全局, true=显式开启, false=显式关闭
+}
+
 type ServiceGatewayRoute struct {
-	Hostname          string `yaml:"hostname"`
-	ContainerPort     int    `yaml:"container_port,omitempty"`
-	Path              string `yaml:"path,omitempty"`
-	HTTP              bool   `yaml:"http,omitempty"`
-	HTTPS             bool   `yaml:"https,omitempty"`
-	GzipEnabled       *bool  `yaml:"gzip_enabled,omitempty"`
-	OverrideHost      string `yaml:"override_host,omitempty"`
-	StripProxyHeaders *bool  `yaml:"strip_proxy_headers,omitempty"` // 是否剥离代理头部
+	Hostname          string          `yaml:"hostname"`
+	ContainerPort     int             `yaml:"container_port,omitempty"`
+	Path              string          `yaml:"path,omitempty"`
+	HTTP              bool            `yaml:"http,omitempty"`
+	HTTPS             bool            `yaml:"https,omitempty"`
+	GzipEnabled       *bool           `yaml:"gzip_enabled,omitempty"`
+	OverrideHost      string          `yaml:"override_host,omitempty"`
+	StripProxyHeaders *bool           `yaml:"strip_proxy_headers,omitempty"` // 是否剥离代理头部
+	WAF               *RouteWAFConfig `yaml:"waf,omitempty"`                 // 虚拟主机级 WAF 配置
 }
 
 type serviceGatewayRouteAlias ServiceGatewayRoute
 
 func (r *ServiceGatewayRoute) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var raw struct {
-		Hostname          string `yaml:"hostname"`
-		ContainerPort     *int   `yaml:"container_port"`
-		Path              string `yaml:"path,omitempty"`
-		HTTP              bool   `yaml:"http,omitempty"`
-		HTTPS             bool   `yaml:"https,omitempty"`
-		GzipEnabled       *bool  `yaml:"gzip_enabled,omitempty"`
-		OverrideHost      string `yaml:"override_host,omitempty"`
-		StripProxyHeaders *bool  `yaml:"strip_proxy_headers,omitempty"`
+		Hostname          string          `yaml:"hostname"`
+		ContainerPort     *int            `yaml:"container_port"`
+		Path              string          `yaml:"path,omitempty"`
+		HTTP              bool            `yaml:"http,omitempty"`
+		HTTPS             bool            `yaml:"https,omitempty"`
+		GzipEnabled       *bool           `yaml:"gzip_enabled,omitempty"`
+		OverrideHost      string          `yaml:"override_host,omitempty"`
+		StripProxyHeaders *bool           `yaml:"strip_proxy_headers,omitempty"`
+		WAF               *RouteWAFConfig `yaml:"waf,omitempty"`
 	}
 	if err := unmarshal(&raw); err != nil {
 		return err
@@ -141,6 +147,7 @@ func (r *ServiceGatewayRoute) UnmarshalYAML(unmarshal func(interface{}) error) e
 	r.GzipEnabled = raw.GzipEnabled
 	r.OverrideHost = raw.OverrideHost
 	r.StripProxyHeaders = raw.StripProxyHeaders
+	r.WAF = raw.WAF
 
 	return nil
 }

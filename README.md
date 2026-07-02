@@ -478,6 +478,8 @@ services:
         path: /
         http: true
         https: true
+        waf:
+          enabled: false          # 可选，关闭该 host 的 WAF（不设置则继承全局）
     internal: false
 ```
 
@@ -502,7 +504,7 @@ infra_services:
       endpoint: https://ssl.litelake.com/cert/json
       api_key: {secret: ssl_api_key}
     waf:
-      enabled: true
+      enabled: true              # 全局总开关，关闭后所有 host 的 WAF 均关闭
       whitelist:
         - 10.0.0.0/8
         - 192.168.0.0/16

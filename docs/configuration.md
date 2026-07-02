@@ -276,7 +276,7 @@ infra_services:
 | `ssl.mode` | string | 否 | SSL 模式（local/remote） |
 | `ssl.endpoint` | string | 条件 | SSL 服务端点（remote 模式必填） |
 | `ssl.api_key` | SecretRef | 否 | SSL API 密钥 |
-| `waf.enabled` | bool | 否 | 启用 WAF |
+| `waf.enabled` | bool | 否 | 启用 WAF（全局总开关，关闭后所有 host 的 WAF 均关闭） |
 | `waf.whitelist` | []string | 否 | IP 白名单（CIDR 格式） |
 | `log_level` | int | 否 | 日志级别 |
 | `notification.enabled` | bool | 否 | 启用通知 |
@@ -392,6 +392,7 @@ services:
 | `gzip_enabled` | *bool | 否 | 启用 gzip（nil 时继承全局） |
 | `override_host` | string | 否 | 覆盖发给上游的 Host 头 |
 | `strip_proxy_headers` | *bool | 否 | 剥离所有代理相关头部 |
+| `waf.enabled` | *bool | 否 | 虚拟主机级 WAF 开关（nil 继承全局，false 关闭该 host，true 等同继承全局） |
 
 ---
 

@@ -226,6 +226,33 @@ func TestServer_Validate(t *testing.T) {
 | gzip_enabled | gzip_enabled | *bool | nil(继承全局) | 启用 gzip |
 | override_host | override_host | string | (空) | 覆盖发给上游的 Host 头 |
 | strip_proxy_headers | strip_proxy_headers | *bool | nil(false) | 剥离所有代理相关头部 |
+| waf | waf | *RouteWAFConfig | nil(继承全局) | 虚拟主机级 WAF 配置 |
+
+### waf 字段说明
+
+`ServiceGatewayRoute.waf` 是一个可选块，用于按业务应用单独控制 WAF：
+
+- **不设置** `waf` 块：继承 gateway 全局 WAF 配置（默认开启）
+- `waf.enabled: false`：显式关闭该 host 的 WAF
+- `waf.enabled: true`：显式开启（等同不设置，继承全局）
+
+> **全局总开关优先**：`services_infra.yaml` 中的 `waf.enabled: false` 会关闭整个网关的 WAF，不论业务服务如何设置。
+
+当前 `RouteWAFConfig` 仅支持 `enabled` 字段，未来可扩展 WAF 规则、URL 规则等。
+
+示例配置：
+```yaml
+services:
+  - name: example-web-dev
+    server: srv-gn1a
+    gateways:
+      - hostname: example.env-dev.litelake.cn
+        path: /
+        http: true
+        https: true
+        waf:
+          enabled: false  # 关闭该 host 的 WAF
+```
 
 ### strip_proxy_headers 说明
 

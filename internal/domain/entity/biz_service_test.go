@@ -410,3 +410,71 @@ func TestBizService_GetServer(t *testing.T) {
 		t.Errorf("GetServer() = %v, want my-server", got)
 	}
 }
+
+func TestServiceGatewayRoute_WAF_UnmarshalYAML(t *testing.T) {
+	tests := []struct {
+		name       string
+		yamlData   string
+		wantWAF    *RouteWAFConfig
+		wantNil    bool
+		wantEnable *bool
+	}{
+		{
+			name:     "no waf block",
+			yamlData: "hostname: example.com\nhttp: true\n",
+			wantNil:  true,
+		},
+		{
+			name:     "waf block without enabled",
+			yamlData: "hostname: example.com\nwaf:\n  enabled:\n",
+			wantWAF:  &RouteWAFConfig{Enabled: nil},
+			wantNil:  false,
+		},
+		{
+			name:       "waf enabled true",
+			yamlData:   "hostname: example.com\nwaf:\n  enabled: true\n",
+			wantNil:    false,
+			wantEnable: boolPtr(true),
+		},
+		{
+			name:       "waf enabled false",
+			yamlData:   "hostname: example.com\nwaf:\n  enabled: false\n",
+			wantNil:    false,
+			wantEnable: boolPtr(false),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var route ServiceGatewayRoute
+			if err := yaml.Unmarshal([]byte(tt.yamlData), &route); err != nil {
+				t.Fatalf("Unmarshal() error = %v", err)
+			}
+			if tt.wantNil {
+				if route.WAF != nil {
+					t.Errorf("WAF = %v, want nil", route.WAF)
+				}
+				return
+			}
+			if route.WAF == nil {
+				t.Fatalf("WAF is nil, want non-nil")
+			}
+			if tt.wantEnable == nil {
+				if route.WAF.Enabled != nil {
+					t.Errorf("WAF.Enabled = %v, want nil", *route.WAF.Enabled)
+				}
+				return
+			}
+			if route.WAF.Enabled == nil {
+				t.Fatalf("WAF.Enabled is nil, want %v", *tt.wantEnable)
+			}
+			if *route.WAF.Enabled != *tt.wantEnable {
+				t.Errorf("WAF.Enabled = %v, want %v", *route.WAF.Enabled, *tt.wantEnable)
+			}
+		})
+	}
+}
+
+func boolPtr(b bool) *bool {
+	return &b
+}

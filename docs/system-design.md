@@ -828,6 +828,8 @@ hosts:
     ssl_port: 443
     backend:
       - http://host.docker.internal:10080
+    waf:
+      enabled: false          # per-host 关闭 WAF（仅在需要时生成，不设置则继承全局）
 ```
 
 ---
@@ -1069,6 +1071,7 @@ password: {secret: db_password}
 - WAF 白名单必须是有效的 CIDR 格式
 - 网关 SSL 模式必须是 local 或 remote
 - 域名支持通配符前缀 `*.`
+- `waf.enabled` 为全局总开关，关闭后所有 host 的 WAF 均关闭；`ServiceGatewayRoute.waf.enabled: false` 可单独关闭某 host 的 WAF
 
 ---
 
