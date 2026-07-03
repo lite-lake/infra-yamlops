@@ -25,7 +25,8 @@ type loggerConfig struct {
 }
 
 type wafConfig struct {
-	Enabled   bool `yaml:"enabled"`
+	Enabled   bool   `yaml:"enabled"`
+	Mode      string `yaml:"mode,omitempty"`
 	Whitelist struct {
 		IPRanges []string `yaml:"ip_ranges"`
 	} `yaml:"whitelist"`
@@ -36,7 +37,8 @@ type wafConfig struct {
 }
 
 type hostWAFConfig struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled bool   `yaml:"enabled"`
+	Mode    string `yaml:"mode,omitempty"`
 }
 
 type sslConfig struct {
@@ -97,6 +99,7 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 		},
 		WAF: wafConfig{
 			Enabled: cfg.WAFEnabled,
+			Mode:    cfg.WAFMode,
 			Whitelist: struct {
 				IPRanges []string `yaml:"ip_ranges"`
 			}{
@@ -154,6 +157,8 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 		}
 		if h.WAFDisabled != nil && *h.WAFDisabled {
 			host.WAF = &hostWAFConfig{Enabled: false}
+		} else if h.WAFMode != "" {
+			host.WAF = &hostWAFConfig{Enabled: true, Mode: h.WAFMode}
 		}
 		config.Hosts = append(config.Hosts, host)
 	}

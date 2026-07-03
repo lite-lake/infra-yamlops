@@ -102,7 +102,15 @@ func (p *ServicePort) Validate() error {
 }
 
 type RouteWAFConfig struct {
-	Enabled *bool `yaml:"enabled"` // nil=继承全局, true=显式开启, false=显式关闭
+	Enabled *bool  `yaml:"enabled"` // nil=继承全局, true=显式开启, false=显式关闭
+	Mode    string `yaml:"mode,omitempty"`
+}
+
+func (r *RouteWAFConfig) Validate() error {
+	if r.Mode != "" && r.Mode != "block" && r.Mode != "detect" {
+		return fmt.Errorf("waf.mode must be 'block' or 'detect', got '%s'", r.Mode)
+	}
+	return nil
 }
 
 type ServiceGatewayRoute struct {

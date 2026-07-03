@@ -10,6 +10,7 @@ type GatewayConfig struct {
 	Port         int
 	LogLevel     int
 	WAFEnabled   bool
+	WAFMode      string
 	Whitelist    []string
 	SSLMode      string
 	SSLEndpoint  string
@@ -29,6 +30,7 @@ type HostRoute struct {
 	PreserveHostHeader  bool
 	GZipEnabled         *bool // 使用指针以支持"未设置"状态
 	OverrideHost        string
-	StripProxyHeaders   *bool // 是否剥离代理头部，nil = 默认不剥离
-	WAFDisabled         *bool // nil = 继承全局，*true = 显式关闭该 host 的 WAF
+	StripProxyHeaders   *bool  // 是否剥离代理头部，nil = 默认不剥离
+	WAFDisabled         *bool  // nil = 继承全局，*true = 显式关闭该 host 的 WAF
+	WAFMode             string // 空 = 继承全局
 }
