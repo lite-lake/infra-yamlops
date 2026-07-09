@@ -102,13 +102,12 @@ func (p *ServicePort) Validate() error {
 }
 
 type RouteWAFConfig struct {
-	Enabled *bool  `yaml:"enabled"` // nil=继承全局, true=显式开启, false=显式关闭
-	Mode    string `yaml:"mode,omitempty"`
+	Mode string `yaml:"mode,omitempty"` // 空=继承全局 default_mode；block | detect | disabled
 }
 
 func (r *RouteWAFConfig) Validate() error {
-	if r.Mode != "" && r.Mode != "block" && r.Mode != "detect" {
-		return fmt.Errorf("waf.mode must be 'block' or 'detect', got '%s'", r.Mode)
+	if r.Mode != "" && r.Mode != "block" && r.Mode != "detect" && r.Mode != "disabled" {
+		return fmt.Errorf("waf.mode must be 'block', 'detect' or 'disabled', got '%s'", r.Mode)
 	}
 	return nil
 }

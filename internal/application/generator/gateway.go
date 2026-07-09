@@ -134,13 +134,8 @@ func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.Service
 		httpPort = gw.GatewayPorts.HTTP
 	}
 
-	var wafDisabled *bool
 	var wafMode string
 	if route.WAF != nil {
-		if route.WAF.Enabled != nil && !*route.WAF.Enabled {
-			t := true
-			wafDisabled = &t
-		}
 		wafMode = route.WAF.Mode
 	}
 
@@ -157,7 +152,6 @@ func (g *Generator) buildHostRoute(svc *entity.BizService, route *entity.Service
 		GZipEnabled:         route.GzipEnabled,
 		OverrideHost:        route.OverrideHost,
 		StripProxyHeaders:   route.StripProxyHeaders,
-		WAFDisabled:         wafDisabled,
 		WAFMode:             wafMode,
 	}
 }
@@ -178,7 +172,7 @@ func (g *Generator) buildHealthCheckConfig(svc *entity.BizService) (string, stri
 
 func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayConfig {
 	wafEnabled := false
-	wafMode := ""
+	wafDefaultMode := ""
 	var whitelist []string
 	sslMode := ""
 	sslEndpoint := ""
@@ -186,7 +180,7 @@ func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayCon
 
 	if gw.GatewayWAF != nil {
 		wafEnabled = gw.GatewayWAF.Enabled
-		wafMode = gw.GatewayWAF.Mode
+		wafDefaultMode = gw.GatewayWAF.DefaultMode
 		whitelist = gw.GatewayWAF.Whitelist
 	}
 	if gw.GatewaySSL != nil {
@@ -201,14 +195,14 @@ func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayCon
 	}
 
 	config := &gate.GatewayConfig{
-		Port:        httpPort,
-		LogLevel:    gw.GatewayLogLevel,
-		WAFEnabled:  wafEnabled,
-		WAFMode:     wafMode,
-		Whitelist:   whitelist,
-		SSLMode:     sslMode,
-		SSLEndpoint: sslEndpoint,
-		SSLAPIKey:   sslAPIKey,
+		Port:           httpPort,
+		LogLevel:       gw.GatewayLogLevel,
+		WAFEnabled:     wafEnabled,
+		WAFDefaultMode: wafDefaultMode,
+		Whitelist:      whitelist,
+		SSLMode:        sslMode,
+		SSLEndpoint:    sslEndpoint,
+		SSLAPIKey:      sslAPIKey,
 	}
 
 	// Map notification config if provided

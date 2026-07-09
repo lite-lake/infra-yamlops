@@ -2,6 +2,7 @@ package entity
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/lite-lake/infra-yamlops/internal/domain"
@@ -122,13 +123,35 @@ func TestGatewayWAFConfig_Validate(t *testing.T) {
 			config:  GatewayWAFConfig{Enabled: true, Whitelist: []string{"192.168.1.0/24", "10.0.0.0/8"}},
 			wantErr: nil,
 		},
+		{
+			name:    "valid default_mode block",
+			config:  GatewayWAFConfig{Enabled: true, DefaultMode: "block"},
+			wantErr: nil,
+		},
+		{
+			name:    "valid default_mode detect",
+			config:  GatewayWAFConfig{Enabled: true, DefaultMode: "detect"},
+			wantErr: nil,
+		},
+		{
+			name:    "valid default_mode disabled",
+			config:  GatewayWAFConfig{Enabled: true, DefaultMode: "disabled"},
+			wantErr: nil,
+		},
+		{
+			name:    "invalid default_mode",
+			config:  GatewayWAFConfig{Enabled: true, DefaultMode: "invalid"},
+			wantErr: fmt.Errorf("waf.default_mode must be 'block', 'detect' or 'disabled', got 'invalid'"),
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.config.Validate()
 			if tt.wantErr != nil {
-				if !errors.Is(err, tt.wantErr) {
+				if err == nil {
+					t.Errorf("Validate() expected error, got nil")
+				} else if !errors.Is(err, tt.wantErr) && err.Error() != tt.wantErr.Error() {
 					t.Errorf("Validate() error = %v, want %v", err, tt.wantErr)
 				}
 			} else if err != nil {

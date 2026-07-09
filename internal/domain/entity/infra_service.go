@@ -46,14 +46,14 @@ func (s *GatewaySSLConfig) Validate() error {
 }
 
 type GatewayWAFConfig struct {
-	Enabled   bool     `yaml:"enabled"`
-	Mode      string   `yaml:"mode,omitempty"`
-	Whitelist []string `yaml:"whitelist,omitempty"`
+	Enabled     bool     `yaml:"enabled"`
+	DefaultMode string   `yaml:"default_mode,omitempty"` // block | detect | disabled
+	Whitelist   []string `yaml:"whitelist,omitempty"`
 }
 
 func (w *GatewayWAFConfig) Validate() error {
-	if w.Mode != "" && w.Mode != "block" && w.Mode != "detect" {
-		return fmt.Errorf("waf.mode must be 'block' or 'detect', got '%s'", w.Mode)
+	if w.DefaultMode != "" && w.DefaultMode != "block" && w.DefaultMode != "detect" && w.DefaultMode != "disabled" {
+		return fmt.Errorf("waf.default_mode must be 'block', 'detect' or 'disabled', got '%s'", w.DefaultMode)
 	}
 	for _, cidr := range w.Whitelist {
 		if _, _, err := net.ParseCIDR(cidr); err != nil {

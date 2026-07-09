@@ -230,15 +230,14 @@ func TestServer_Validate(t *testing.T) {
 
 ### waf 字段说明
 
-`ServiceGatewayRoute.waf` 是一个可选块，用于按业务应用单独控制 WAF：
+`ServiceGatewayRoute.waf` 是一个可选块，用于按业务应用单独控制 WAF 运行模式：
 
-- **不设置** `waf` 块：继承 gateway 全局 WAF 配置（默认开启）
-- `waf.enabled: false`：显式关闭该 host 的 WAF
-- `waf.enabled: true`：显式开启（等同不设置，继承全局）
+- **不设置** `waf` 块：继承 gateway 全局 `default_mode`
+- `waf.mode: block`：该主机阻断模式（命中规则返回 403）
+- `waf.mode: detect`：该主机仅检测模式（命中规则仅记录，不阻断）
+- `waf.mode: disabled`：该主机停用 WAF（不挂载 WAF 中间件）
 
 > **全局总开关优先**：`services_infra.yaml` 中的 `waf.enabled: false` 会关闭整个网关的 WAF，不论业务服务如何设置。
-
-当前 `RouteWAFConfig` 仅支持 `enabled` 字段，未来可扩展 WAF 规则、URL 规则等。
 
 示例配置：
 ```yaml
@@ -251,7 +250,7 @@ services:
         http: true
         https: true
         waf:
-          enabled: false  # 关闭该 host 的 WAF
+          mode: disabled  # 停用该 host 的 WAF
 ```
 
 ### strip_proxy_headers 说明
@@ -295,7 +294,7 @@ services:
 | image | image | string | ✅ | Docker 镜像 |
 | ports | ports | GatewayPorts | ❌ | 端口配置（http/https） |
 | ssl | ssl | GatewaySSLConfig | ❌ | SSL 配置（mode/endpoint/api_key） |
-| waf | waf | GatewayWAFConfig | ❌ | WAF 配置（enabled/whitelist） |
+| waf | waf | GatewayWAFConfig | ❌ | WAF 配置（enabled/default_mode/whitelist） |
 | log_level | log_level | int | ❌ | 日志级别 |
 | notification | notification | GatewayNotification | ❌ | 通知配置（enabled/url/timeout） |
 

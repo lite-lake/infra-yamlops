@@ -367,6 +367,9 @@ func gatewayWAFConfigEqual(a, b *entity.GatewayWAFConfig) bool {
 		if x.Enabled != y.Enabled {
 			return false
 		}
+		if x.DefaultMode != y.DefaultMode {
+			return false
+		}
 		if !stringSlicesEqualUnordered(x.Whitelist, y.Whitelist) {
 			return false
 		}

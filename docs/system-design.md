@@ -1071,7 +1071,7 @@ password: {secret: db_password}
 - WAF 白名单必须是有效的 CIDR 格式
 - 网关 SSL 模式必须是 local 或 remote
 - 域名支持通配符前缀 `*.`
-- `waf.enabled` 为全局总开关，关闭后所有 host 的 WAF 均关闭；`ServiceGatewayRoute.waf.enabled: false` 可单独关闭某 host 的 WAF
+- `waf.enabled` 为全局总开关，关闭后所有 host 的 WAF 均关闭；`waf.default_mode` 设定默认运行模式（block/detect/disabled）；`ServiceGatewayRoute.waf.mode` 可单独覆盖某 host 的运行模式
 
 ---
 
