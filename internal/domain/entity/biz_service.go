@@ -163,6 +163,11 @@ func (r *ServiceGatewayRoute) Validate() error {
 	if r.Hostname == "" {
 		return domain.RequiredField("gateway hostname")
 	}
+	if r.WAF != nil {
+		if err := r.WAF.Validate(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

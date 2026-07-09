@@ -25,15 +25,24 @@ type loggerConfig struct {
 }
 
 type wafConfig struct {
-	Enabled     bool   `yaml:"enabled"`
+	Enabled     bool `yaml:"enabled"`
 	DefaultMode string `yaml:"default_mode,omitempty"`
 	Whitelist   struct {
-		IPRanges []string `yaml:"ip_ranges"`
+		Enabled  bool     `yaml:"enabled"`
+		IPRanges []string `yaml:"ip_ranges,omitempty"`
 	} `yaml:"whitelist"`
 	CRS struct {
 		Enabled bool   `yaml:"enabled"`
 		Version string `yaml:"version"`
 	} `yaml:"crs"`
+	Custom struct {
+		Enabled   bool   `yaml:"enabled"`
+		RulesFile string `yaml:"rules_file,omitempty"`
+	} `yaml:"custom"`
+	Debug struct {
+		LogLevel int    `yaml:"log_level,omitempty"`
+		LogFile  string `yaml:"log_file,omitempty"`
+	} `yaml:"debug,omitempty"`
 }
 
 type hostWAFConfig struct {
@@ -100,17 +109,29 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 			Enabled:     cfg.WAFEnabled,
 			DefaultMode: cfg.WAFDefaultMode,
 			Whitelist: struct {
-				IPRanges []string `yaml:"ip_ranges"`
+				Enabled  bool     `yaml:"enabled"`
+				IPRanges []string `yaml:"ip_ranges,omitempty"`
 			}{
+				Enabled:  cfg.WAFEnabled && len(cfg.Whitelist) > 0,
 				IPRanges: cfg.Whitelist,
 			},
 			CRS: struct {
 				Enabled bool   `yaml:"enabled"`
 				Version string `yaml:"version"`
 			}{
-				Enabled: true,
+				Enabled: cfg.WAFEnabled,
 				Version: constants.DefaultCRSVersion,
 			},
+			Custom: struct {
+				Enabled   bool   `yaml:"enabled"`
+				RulesFile string `yaml:"rules_file,omitempty"`
+			}{
+				Enabled: false,
+			},
+			Debug: struct {
+				LogLevel int    `yaml:"log_level,omitempty"`
+				LogFile  string `yaml:"log_file,omitempty"`
+			}{},
 		},
 		SSL: sslConfig{
 			Remote: struct {

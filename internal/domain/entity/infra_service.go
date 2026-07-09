@@ -204,6 +204,11 @@ func (s *InfraService) Validate() error {
 				return err
 			}
 		}
+		if s.GatewayWAF != nil {
+			if err := s.GatewayWAF.Validate(); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

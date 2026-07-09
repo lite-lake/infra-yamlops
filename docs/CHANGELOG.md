@@ -12,7 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`--service` flag**: Service name filter for all `service` subcommands (`show`, `validate`, `deploy`, `stop`, `restart`, `cleanup`). Supports comma-separated multiple values (e.g., `--service my-api,my-worker`)
 - **`server prune` command**: Prune unused Docker resources on servers. Supports `--filter` (image/container/volume/builder/all), `--dry-run` preview, and concurrent multi-server execution
 - **TUI Docker prune**: `Server Management > Docker prune` menu entry with disk usage scan → Plan → Progress → Complete workflow
-- **Per-host WAF control**: `ServiceGatewayRoute.waf.enabled` field to enable/disable WAF for individual business services. Global `waf.enabled` in `services_infra.yaml` acts as master switch; per-host `waf.enabled: false` disables WAF for that host only
+- **Per-host WAF control**: `ServiceGatewayRoute.waf.mode` field to control WAF mode for individual business services (block/detect/disabled). Global `waf.enabled` in `services_infra.yaml` acts as master switch; per-host `waf.mode: disabled` disables WAF for that host only. Not setting `waf` block inherits global `default_mode`
 
 ## [1.0.0] - 2026-06-10
 
