@@ -83,8 +83,12 @@ func (g *Generator) generateServiceCompose(serverDir string, svc *entity.BizServ
 
 	var healthCheck *compose.HealthCheck
 	if svc.Healthcheck != nil {
+		containerPort := "80"
+		if len(svc.Gateways) > 0 && svc.Gateways[0].ContainerPort != 0 {
+			containerPort = fmt.Sprintf("%d", svc.Gateways[0].ContainerPort)
+		}
 		healthCheck = &compose.HealthCheck{
-			Test:     []string{"CMD", "curl", "-f", svc.Healthcheck.Path},
+			Test:     []string{"CMD", "curl", "-sf", "http://localhost:" + containerPort + svc.Healthcheck.Path},
 			Interval: svc.Healthcheck.Interval,
 			Timeout:  svc.Healthcheck.Timeout,
 			Retries:  3,
