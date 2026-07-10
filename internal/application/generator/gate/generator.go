@@ -5,6 +5,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	defaultGZipLevel          = 6
+	defaultGZipMinSize        = 0
+	defaultArchiveDir         = "./applogs/archive"
+	defaultMaxRetentionDays   = 30
+	defaultCRSDownloadTimeout = 60
+	defaultCRSProxyURL        = "http://proxy.s.gentleltd.com:7890"
+)
+
 type Generator struct{}
 
 func NewGenerator() *Generator {
@@ -14,26 +23,32 @@ func NewGenerator() *Generator {
 type serverConfig struct {
 	Port         int  `yaml:"port"`
 	GZipEnabled  bool `yaml:"g_zip_enabled"`
+	GZipLevel    int  `yaml:"g_zip_level"`
+	GZipMinSize  int  `yaml:"g_zip_min_size"`
 	HTTP2Enabled bool `yaml:"http2_enabled"`
 }
 
 type loggerConfig struct {
-	Level         int    `yaml:"level"`
-	EnableConsole bool   `yaml:"enable_console"`
-	EnableFile    bool   `yaml:"enable_file"`
-	LogDir        string `yaml:"log_dir,omitempty"`
+	Level            int    `yaml:"level"`
+	EnableConsole    bool   `yaml:"enable_console"`
+	EnableFile       bool   `yaml:"enable_file"`
+	LogDir           string `yaml:"log_dir"`
+	ArchiveDir       string `yaml:"archive_dir"`
+	MaxRetentionDays int    `yaml:"max_retention_days"`
+	EnableColor      bool   `yaml:"enable_color"`
 }
 
 type wafConfig struct {
-	Enabled     bool `yaml:"enabled"`
+	Enabled     bool   `yaml:"enabled"`
 	DefaultMode string `yaml:"default_mode,omitempty"`
 	Whitelist   struct {
 		Enabled  bool     `yaml:"enabled"`
 		IPRanges []string `yaml:"ip_ranges,omitempty"`
 	} `yaml:"whitelist"`
 	CRS struct {
-		Enabled bool   `yaml:"enabled"`
-		Version string `yaml:"version"`
+		Enabled  bool                 `yaml:"enabled"`
+		Version  string               `yaml:"version"`
+		Download wafCRSDownloadConfig `yaml:"download"`
 	} `yaml:"crs"`
 	Custom struct {
 		Enabled   bool   `yaml:"enabled"`
@@ -43,6 +58,18 @@ type wafConfig struct {
 		LogLevel int    `yaml:"log_level,omitempty"`
 		LogFile  string `yaml:"log_file,omitempty"`
 	} `yaml:"debug,omitempty"`
+}
+
+type wafCRSDownloadConfig struct {
+	Timeout int               `yaml:"timeout"`
+	Proxy   wafCRSProxyConfig `yaml:"proxy"`
+}
+
+type wafCRSProxyConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	URL      string `yaml:"url,omitempty"`
+	Username string `yaml:"username,omitempty"`
+	Password string `yaml:"password,omitempty"`
 }
 
 type hostWAFConfig struct {
@@ -68,7 +95,7 @@ type hostConfig struct {
 	HealthCheckInterval string         `yaml:"health_check_interval,omitempty"`
 	HealthCheckTimeout  string         `yaml:"health_check_timeout,omitempty"`
 	HealthCheckEnabled  *bool          `yaml:"health_check_enabled,omitempty"`
-	PreserveHostHeader  bool           `yaml:"preserve_host_header"`
+	PreserveHostHeader  *bool          `yaml:"preserve_host_header,omitempty"`
 	GZipEnabled         *bool          `yaml:"g_zip_enabled,omitempty"`
 	OverrideHost        string         `yaml:"override_host,omitempty"`
 	StripProxyHeaders   *bool          `yaml:"strip_proxy_headers,omitempty"`
@@ -76,12 +103,12 @@ type hostConfig struct {
 }
 
 type gateConfig struct {
-	Server       serverConfig       `yaml:"server"`
-	Logger       loggerConfig       `yaml:"logger"`
-	WAF          wafConfig          `yaml:"waf"`
-	SSL          sslConfig          `yaml:"ssl"`
-	Notification notificationConfig `yaml:"notification,omitempty"`
-	Hosts        []hostConfig       `yaml:"hosts"`
+	Server       serverConfig        `yaml:"server"`
+	Logger       loggerConfig        `yaml:"logger"`
+	WAF          wafConfig           `yaml:"waf"`
+	SSL          *sslConfig          `yaml:"ssl,omitempty"`
+	Notification *notificationConfig `yaml:"notification,omitempty"`
+	Hosts        []hostConfig        `yaml:"hosts"`
 }
 
 type notificationConfig struct {
@@ -97,13 +124,18 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 		Server: serverConfig{
 			Port:         cfg.Port,
 			GZipEnabled:  true,
+			GZipLevel:    defaultGZipLevel,
+			GZipMinSize:  defaultGZipMinSize,
 			HTTP2Enabled: true,
 		},
 		Logger: loggerConfig{
-			Level:         cfg.LogLevel,
-			EnableConsole: true,
-			EnableFile:    true,
-			LogDir:        constants.DefaultLogDir,
+			Level:            cfg.LogLevel,
+			EnableConsole:    true,
+			EnableFile:       true,
+			LogDir:           constants.DefaultLogDir,
+			ArchiveDir:       defaultArchiveDir,
+			MaxRetentionDays: defaultMaxRetentionDays,
+			EnableColor:      true,
 		},
 		WAF: wafConfig{
 			Enabled:     cfg.WAFEnabled,
@@ -116,11 +148,19 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 				IPRanges: cfg.Whitelist,
 			},
 			CRS: struct {
-				Enabled bool   `yaml:"enabled"`
-				Version string `yaml:"version"`
+				Enabled  bool                 `yaml:"enabled"`
+				Version  string               `yaml:"version"`
+				Download wafCRSDownloadConfig `yaml:"download"`
 			}{
 				Enabled: cfg.WAFEnabled,
 				Version: constants.DefaultCRSVersion,
+				Download: wafCRSDownloadConfig{
+					Timeout: defaultCRSDownloadTimeout,
+					Proxy: wafCRSProxyConfig{
+						Enabled: true,
+						URL:     defaultCRSProxyURL,
+					},
+				},
 			},
 			Custom: struct {
 				Enabled   bool   `yaml:"enabled"`
@@ -131,9 +171,16 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 			Debug: struct {
 				LogLevel int    `yaml:"log_level,omitempty"`
 				LogFile  string `yaml:"log_file,omitempty"`
-			}{},
+			}{
+				LogLevel: 3,
+				LogFile:  "/dev/stdout",
+			},
 		},
-		SSL: sslConfig{
+		Hosts: make([]hostConfig, 0, len(hosts)),
+	}
+
+	if sslEnabled {
+		config.SSL = &sslConfig{
 			Remote: struct {
 				Enabled           bool   `yaml:"enabled"`
 				Endpoint          string `yaml:"endpoint"`
@@ -141,19 +188,17 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 				UpdateCheckWindow string `yaml:"update_check_window,omitempty"`
 				APIKey            string `yaml:"api_key,omitempty"`
 			}{
-				Enabled:           sslEnabled,
+				Enabled:           true,
 				Endpoint:          cfg.SSLEndpoint,
 				AutoUpdate:        true,
 				UpdateCheckWindow: "00:00-00:59",
 				APIKey:            cfg.SSLAPIKey,
 			},
-		},
-		Hosts: make([]hostConfig, 0, len(hosts)),
+		}
 	}
 
-	// Map notification config if provided
 	if cfg.Notification != nil {
-		config.Notification = notificationConfig{
+		config.Notification = &notificationConfig{
 			Enabled: cfg.Notification.Enabled,
 			URL:     cfg.Notification.URL,
 			Timeout: cfg.Notification.Timeout,
@@ -161,6 +206,7 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 	}
 
 	for _, h := range hosts {
+		preserveHost := h.PreserveHostHeader
 		host := hostConfig{
 			Name:                h.Name,
 			Port:                h.Port,
@@ -170,7 +216,7 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 			HealthCheckInterval: h.HealthCheckInterval,
 			HealthCheckTimeout:  h.HealthCheckTimeout,
 			HealthCheckEnabled:  h.HealthCheckEnabled,
-			PreserveHostHeader:  true,
+			PreserveHostHeader:  &preserveHost,
 			GZipEnabled:         h.GZipEnabled,
 			OverrideHost:        h.OverrideHost,
 			StripProxyHeaders:   h.StripProxyHeaders,
