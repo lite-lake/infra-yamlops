@@ -11,7 +11,6 @@ const (
 	defaultArchiveDir         = "./applogs/archive"
 	defaultMaxRetentionDays   = 30
 	defaultCRSDownloadTimeout = 60
-	defaultCRSProxyURL        = "http://proxy.s.gentleltd.com:7890"
 )
 
 type Generator struct{}
@@ -157,8 +156,8 @@ func (g *Generator) Generate(cfg *GatewayConfig, hosts []HostRoute) (string, err
 				Download: wafCRSDownloadConfig{
 					Timeout: defaultCRSDownloadTimeout,
 					Proxy: wafCRSProxyConfig{
-						Enabled: true,
-						URL:     defaultCRSProxyURL,
+						Enabled: cfg.CRSProxyURL != "",
+						URL:     cfg.CRSProxyURL,
 					},
 				},
 			},

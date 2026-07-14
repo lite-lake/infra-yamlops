@@ -12,6 +12,7 @@ type GatewayConfig struct {
 	WAFEnabled     bool
 	WAFDefaultMode string
 	Whitelist      []string
+	CRSProxyURL    string
 	SSLMode        string
 	SSLEndpoint    string
 	SSLAPIKey      string

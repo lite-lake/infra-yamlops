@@ -174,6 +174,7 @@ func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayCon
 	wafEnabled := false
 	wafDefaultMode := ""
 	var whitelist []string
+	var crsProxyURL string
 	sslMode := ""
 	sslEndpoint := ""
 	sslAPIKey := ""
@@ -182,6 +183,7 @@ func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayCon
 		wafEnabled = gw.GatewayWAF.Enabled
 		wafDefaultMode = gw.GatewayWAF.DefaultMode
 		whitelist = gw.GatewayWAF.Whitelist
+		crsProxyURL = gw.GatewayWAF.CRSProxyURL
 	}
 	if gw.GatewaySSL != nil {
 		sslMode = gw.GatewaySSL.Mode
@@ -200,6 +202,7 @@ func (g *Generator) buildGatewayConfig(gw *entity.InfraService) *gate.GatewayCon
 		WAFEnabled:     wafEnabled,
 		WAFDefaultMode: wafDefaultMode,
 		Whitelist:      whitelist,
+		CRSProxyURL:    crsProxyURL,
 		SSLMode:        sslMode,
 		SSLEndpoint:    sslEndpoint,
 		SSLAPIKey:      sslAPIKey,

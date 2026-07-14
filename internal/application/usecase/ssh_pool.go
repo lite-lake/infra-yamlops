@@ -55,7 +55,7 @@ func NewSSHPoolWithFactory(factory SSHClientFactory) *SSHPool {
 }
 
 func (p *SSHPool) Get(info *ServerInfo) (contract.SSHClient, error) {
-	key := fmt.Sprintf("%s:%d:%s:%s:%t", info.Host, info.Port, info.User, info.Password, info.StrictHostKeyChecking)
+	key := fmt.Sprintf("%s:%d:%s:%t", info.Host, info.Port, info.User, info.StrictHostKeyChecking)
 
 	p.mu.RLock()
 	if entry, ok := p.clients[key]; ok {

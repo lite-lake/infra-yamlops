@@ -49,6 +49,7 @@ type GatewayWAFConfig struct {
 	Enabled     bool     `yaml:"enabled"`
 	DefaultMode string   `yaml:"default_mode,omitempty"` // block | detect | disabled
 	Whitelist   []string `yaml:"whitelist,omitempty"`
+	CRSProxyURL string   `yaml:"crs_proxy_url,omitempty"` // CRS 下载代理 URL，为空则不使用代理
 }
 
 func (w *GatewayWAFConfig) Validate() error {
