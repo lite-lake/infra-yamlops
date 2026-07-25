@@ -393,6 +393,7 @@ services:
 | `gzip_enabled` | *bool | 否 | 启用 gzip（nil 时继承全局） |
 | `override_host` | string | 否 | 覆盖发给上游的 Host 头 |
 | `strip_proxy_headers` | *bool | 否 | 剥离所有代理相关头部 |
+| `robots_deny_all` | *bool | 否 | 强制覆盖 /robots.txt 拒绝所有搜索引擎爬虫（网关层直接返回，不转发后端） |
 | `waf.mode` | string | 否 | 虚拟主机级 WAF 运行模式（空继承全局 default_mode，block/detect/disabled） |
 
 ---

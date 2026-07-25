@@ -226,6 +226,7 @@ func TestServer_Validate(t *testing.T) {
 | gzip_enabled | gzip_enabled | *bool | nil(继承全局) | 启用 gzip |
 | override_host | override_host | string | (空) | 覆盖发给上游的 Host 头 |
 | strip_proxy_headers | strip_proxy_headers | *bool | nil(false) | 剥离所有代理相关头部 |
+| robots_deny_all | robots_deny_all | *bool | nil(false) | 强制覆盖 /robots.txt 拒绝所有爬虫，透传给 infra-gate 网关层直接返回 |
 | waf | waf | *RouteWAFConfig | nil(继承全局) | 虚拟主机级 WAF 配置 |
 
 ### waf 字段说明
@@ -280,6 +281,10 @@ services:
         https: true
         strip_proxy_headers: true  # 禁用所有代理头部
 ```
+
+### robots_deny_all 说明
+
+`robots_deny_all` 透传给 infra-gate 的 `HostConfig.robots_deny_all`。设置为 `true` 时，网关层直接拦截 `GET /robots.txt` 返回拒绝所有爬虫的固定响应（`User-agent: *` / `Disallow: /`），**不转发后端**——即使后端配置了自己的 robots.txt 也会被覆盖。`nil`/`false` 时关闭。详见 infra-gate 文档。
 
 ## 基础设施服务 (InfraService) 字段参考
 
