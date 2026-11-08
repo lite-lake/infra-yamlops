@@ -1,0 +1,4 @@
+# 全仓统一 LF：Go 工具链（gofmt/代码生成）一律输出 LF，与 Windows 全局
+# core.autocrlf=true 互相打架，导致工作区 LF 文件显示为幻影改动（status 标 M、diff 为空）。
+# 索引本就全 LF，本规则零内容变更；二进制文件由 text=auto 自动识别、不做转换。
+* text=auto eol=lf

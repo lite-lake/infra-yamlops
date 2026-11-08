@@ -1,0 +1,5 @@
+# 腾讯云 Ubuntu 22.04 (Jammy) 源
+deb https://mirrors.tencent.com/ubuntu/ jammy main restricted universe multiverse
+deb https://mirrors.tencent.com/ubuntu/ jammy-updates main restricted universe multiverse
+deb https://mirrors.tencent.com/ubuntu/ jammy-backports main restricted universe multiverse
+deb https://mirrors.tencent.com/ubuntu/ jammy-security main restricted universe multiverse

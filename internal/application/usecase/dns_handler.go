@@ -1,0 +1,161 @@
+package usecase
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain/contract"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+)
+
+type DNSHandler struct{}
+
+func NewDNSHandler() *DNSHandler {
+	return &DNSHandler{}
+}
+
+func (h *DNSHandler) EntityType() string {
+	return "dns_record"
+}
+
+func (h *DNSHandler) Apply(ctx context.Context, change *valueobject.Change, deps DepsProvider) (*Result, error) {
+	result := &Result{Change: change, Success: false}
+
+	record, ok := ExtractFromChange[entity.DNSRecord](change)
+	if !ok {
+		result.Error = fmt.Errorf("cannot extract DNS record from change")
+		return result, nil
+	}
+
+	domain, ok := deps.Domain(record.Domain)
+	if !ok {
+		result.Error = fmt.Errorf("%w: %s", domainerr.ErrDNSDomainNotFound, record.Domain)
+		return result, nil
+	}
+
+	provider, err := deps.DNSProvider(domain.DNSISP)
+	if err != nil {
+		result.Error = fmt.Errorf("get DNS provider: %w", err)
+		return result, nil
+	}
+
+	switch change.Type() {
+	case valueobject.ChangeTypeDelete:
+		return h.deleteRecord(ctx, change, record, provider)
+	case valueobject.ChangeTypeUpdate:
+		return h.updateRecord(ctx, change, record, provider)
+	default:
+		return h.createRecord(ctx, change, record, provider)
+	}
+}
+
+func (h *DNSHandler) createRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider contract.DNSProvider) (*Result, error) {
+	result := &Result{Change: change, Success: false}
+
+	dnsRecord := &contract.DNSRecord{
+		Name:  record.Name,
+		Type:  string(record.Type),
+		Value: record.Value,
+		TTL:   record.TTL,
+		Line:  record.Line,
+	}
+
+	if err := provider.CreateRecord(ctx, record.Domain, dnsRecord); err != nil {
+		result.Error = fmt.Errorf("%w: create record: %w", domainerr.ErrDNSError, err)
+		return result, nil
+	}
+
+	result.Success = true
+	result.Output = fmt.Sprintf("created DNS record %s.%s (%s line)", record.Name, record.Domain, record.EffectiveLine())
+	return result, nil
+}
+
+func (h *DNSHandler) updateRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider contract.DNSProvider) (*Result, error) {
+	result := &Result{Change: change, Success: false}
+
+	existingRecords, err := provider.ListRecords(ctx, record.Domain)
+	if err != nil {
+		result.Error = fmt.Errorf("%w: list existing records: %w", domainerr.ErrDNSError, err)
+		return result, nil
+	}
+
+	dnsRecord := &contract.DNSRecord{
+		Name:  record.Name,
+		Type:  string(record.Type),
+		Value: record.Value,
+		TTL:   record.TTL,
+		Line:  record.Line,
+	}
+
+	for _, r := range existingRecords {
+		recordName := r.Name
+		if recordName == record.Domain || recordName == "" {
+			recordName = "@"
+		} else if strings.HasSuffix(r.Name, "."+record.Domain) {
+			recordName = strings.TrimSuffix(r.Name, "."+record.Domain)
+		}
+
+		if recordName == record.Name && strings.EqualFold(r.Type, string(record.Type)) && effectiveRecordLine(r.Line) == record.EffectiveLine() {
+			if err := provider.UpdateRecord(ctx, record.Domain, r.ID, dnsRecord); err != nil {
+				result.Error = fmt.Errorf("%w: update record: %w", domainerr.ErrDNSError, err)
+				return result, nil
+			}
+			result.Success = true
+			result.Output = fmt.Sprintf("updated DNS record %s.%s (%s line)", record.Name, record.Domain, record.EffectiveLine())
+			return result, nil
+		}
+	}
+
+	if err := provider.CreateRecord(ctx, record.Domain, dnsRecord); err != nil {
+		result.Error = fmt.Errorf("%w: create record: %w", domainerr.ErrDNSError, err)
+		return result, nil
+	}
+
+	result.Success = true
+	result.Output = fmt.Sprintf("created DNS record %s.%s (%s line)", record.Name, record.Domain, record.EffectiveLine())
+	return result, nil
+}
+
+func (h *DNSHandler) deleteRecord(ctx context.Context, change *valueobject.Change, record *entity.DNSRecord, provider contract.DNSProvider) (*Result, error) {
+	result := &Result{Change: change, Success: false}
+
+	existingRecords, err := provider.ListRecords(ctx, record.Domain)
+	if err != nil {
+		result.Error = fmt.Errorf("%w: list existing records: %w", domainerr.ErrDNSError, err)
+		return result, nil
+	}
+
+	for _, r := range existingRecords {
+		recordName := r.Name
+		if recordName == record.Domain || recordName == "" {
+			recordName = "@"
+		} else if strings.HasSuffix(r.Name, "."+record.Domain) {
+			recordName = strings.TrimSuffix(r.Name, "."+record.Domain)
+		}
+
+		if recordName == record.Name && strings.EqualFold(r.Type, string(record.Type)) && effectiveRecordLine(r.Line) == record.EffectiveLine() {
+			if err := provider.DeleteRecord(ctx, record.Domain, r.ID); err != nil {
+				result.Error = fmt.Errorf("%w: delete record: %w", domainerr.ErrDNSError, err)
+				return result, nil
+			}
+			result.Success = true
+			result.Output = fmt.Sprintf("deleted DNS record %s.%s (%s line)", record.Name, record.Domain, record.EffectiveLine())
+			return result, nil
+		}
+	}
+
+	result.Success = true
+	result.Output = fmt.Sprintf("DNS record %s.%s (%s line) not found, skipping", record.Name, record.Domain, record.EffectiveLine())
+	return result, nil
+}
+
+// effectiveRecordLine 归一化解析线路，空值与 default 等价
+func effectiveRecordLine(line string) string {
+	if line == "" || line == "default" {
+		return "default"
+	}
+	return line
+}
