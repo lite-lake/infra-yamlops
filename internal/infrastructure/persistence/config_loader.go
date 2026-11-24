@@ -1,0 +1,253 @@
+package persistence
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
+	"sync"
+	"time"
+
+	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/repository"
+	"github.com/lite-lake/infra-yamlops/internal/domain/service"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/logger"
+	"gopkg.in/yaml.v3"
+)
+
+// ConfigLoader 负责加载和缓存 YAML 配置
+type ConfigLoader struct {
+	baseDir string
+	cache   map[string]*cacheEntry
+	mu      sync.RWMutex
+}
+
+// cacheEntry 配置缓存条目
+type cacheEntry struct {
+	config    *entity.Config
+	timestamp time.Time
+}
+
+const cacheTTL = 30 * time.Second
+
+// NewConfigLoader 创建配置加载器
+func NewConfigLoader(baseDir string) *ConfigLoader {
+	return &ConfigLoader{
+		baseDir: baseDir,
+		cache:   make(map[string]*cacheEntry),
+	}
+}
+
+// Load 加载配置（带缓存）
+func (l *ConfigLoader) Load(ctx context.Context, env string) (*entity.Config, error) {
+	log := logger.FromContext(ctx)
+
+	// 检查缓存
+	l.mu.RLock()
+	if entry, ok := l.cache[env]; ok && time.Since(entry.timestamp) < cacheTTL {
+		l.mu.RUnlock()
+		log.Debug("using cached config", "env", env)
+		return entry.config, nil
+	}
+	l.mu.RUnlock()
+
+	// 缓存未命中或已过期，重新加载
+	cfg, err := l.loadFromDisk(ctx, env)
+	if err != nil {
+		return nil, err
+	}
+
+	// 更新缓存
+	l.mu.Lock()
+	l.cache[env] = &cacheEntry{
+		config:    cfg,
+		timestamp: time.Now(),
+	}
+	l.mu.Unlock()
+
+	return cfg, nil
+}
+
+// loadFromDisk 从磁盘加载配置
+func (l *ConfigLoader) loadFromDisk(ctx context.Context, env string) (*entity.Config, error) {
+	log := logger.FromContext(ctx)
+
+	configDir := filepath.Join(l.baseDir, "userdata", env)
+	log.Debug("loading config from disk", "env", env, "dir", configDir)
+
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		log.Error("config directory not found", "dir", configDir)
+		return nil, fmt.Errorf("%w: %s", domainerr.ErrConfigNotFound, configDir)
+	}
+
+	cfg := &entity.Config{}
+	loaders := []struct {
+		filename string
+		loader   func(string, *entity.Config) error
+	}{
+		{"secrets.yaml", loadSecrets},
+		{"isps.yaml", loadISPs},
+		{"zones.yaml", loadZones},
+		{"services_infra.yaml", loadInfraServices},
+		{"servers.yaml", loadServers},
+		{"services_biz.yaml", loadServices},
+		{"registries.yaml", loadRegistries},
+		{"dns.yaml", loadDomains},
+		{"mesh.yaml", loadMesh},
+	}
+
+	for _, f := range loaders {
+		filePath := filepath.Join(configDir, f.filename)
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			log.Debug("config file skipped", "file", f.filename, "reason", "not found")
+			continue
+		}
+		log.Debug("loading config file", "file", f.filename)
+		if err := f.loader(filePath, cfg); err != nil {
+			log.Error("failed to load config file", "file", f.filename, "error", err)
+			return nil, fmt.Errorf("%w: %s: %w", domainerr.ErrConfigReadFailed, f.filename, err)
+		}
+	}
+
+	log.Info("config loaded from disk", "env", env)
+	return cfg, nil
+}
+
+// Validate 验证配置
+func (l *ConfigLoader) Validate(cfg *entity.Config) error {
+	return service.NewValidator(cfg).Validate()
+}
+
+// ClearCache 清除配置缓存
+func (l *ConfigLoader) ClearCache() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.cache = make(map[string]*cacheEntry)
+}
+
+// ClearEnvCache 清除特定环境的配置缓存
+func (l *ConfigLoader) ClearEnvCache(env string) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	delete(l.cache, env)
+}
+
+// loadEntity 从 YAML 文件加载实体列表
+func loadEntity[T any](filePath, yamlKey string) ([]T, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("reading config file %s: %w", filePath, err)
+	}
+
+	// 简单的 YAML 结构验证
+	var raw map[string]yaml.Node
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return nil, fmt.Errorf("parsing YAML in %s: %w", filePath, err)
+	}
+
+	node, ok := raw[yamlKey]
+	if !ok {
+		return nil, nil
+	}
+
+	var items []T
+	if err := node.Decode(&items); err != nil {
+		return nil, fmt.Errorf("parsing %s items in %s: %w", yamlKey, filePath, err)
+	}
+
+	return items, nil
+}
+
+// loadMesh 加载 mesh 组网全局设置（可选文件；结构 mesh: {domain_zone: ...}）。
+func loadMesh(fp string, cfg *entity.Config) error {
+	var raw struct {
+		Mesh *entity.MeshConfig `yaml:"mesh"`
+	}
+	data, err := os.ReadFile(fp)
+	if err != nil {
+		return fmt.Errorf("reading mesh config from %s: %w", fp, err)
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		return fmt.Errorf("parsing mesh config from %s: %w", fp, err)
+	}
+	cfg.Mesh = raw.Mesh
+	return nil
+}
+
+func loadSecrets(fp string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Secret](fp, "secrets")
+	if err != nil {
+		return fmt.Errorf("loading secrets from %s: %w", fp, err)
+	}
+	for i := range items {
+		items[i].Source = fp
+	}
+	cfg.Secrets = items
+	return nil
+}
+
+func loadISPs(fp string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.ISP](fp, "isps")
+	if err != nil {
+		return fmt.Errorf("loading ISPs from %s: %w", fp, err)
+	}
+	cfg.ISPs = items
+	return nil
+}
+
+func loadZones(fp string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Zone](fp, "zones")
+	if err != nil {
+		return fmt.Errorf("loading zones from %s: %w", fp, err)
+	}
+	cfg.Zones = items
+	return nil
+}
+
+func loadInfraServices(fp string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.InfraService](fp, "infra_services")
+	if err != nil {
+		return fmt.Errorf("loading infra services from %s: %w", fp, err)
+	}
+	cfg.InfraServices = items
+	return nil
+}
+
+func loadServers(fp string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Server](fp, "servers")
+	if err != nil {
+		return fmt.Errorf("loading servers from %s: %w", fp, err)
+	}
+	cfg.Servers = items
+	return nil
+}
+
+func loadServices(fp string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.BizService](fp, "services")
+	if err != nil {
+		return fmt.Errorf("loading services from %s: %w", fp, err)
+	}
+	cfg.Services = items
+	return nil
+}
+
+func loadRegistries(fp string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Registry](fp, "registries")
+	if err != nil {
+		return fmt.Errorf("loading registries from %s: %w", fp, err)
+	}
+	cfg.Registries = items
+	return nil
+}
+
+func loadDomains(fp string, cfg *entity.Config) error {
+	items, err := loadEntity[entity.Domain](fp, "domains")
+	if err != nil {
+		return fmt.Errorf("loading domains from %s: %w", fp, err)
+	}
+	cfg.Domains = items
+	return nil
+}
+
+var _ repository.ConfigLoader = (*ConfigLoader)(nil)

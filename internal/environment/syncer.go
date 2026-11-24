@@ -1,0 +1,309 @@
+package environment
+
+import (
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/network"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/ssh"
+)
+
+type Syncer struct {
+	client     *ssh.Client
+	server     *entity.Server
+	env        string
+	secrets    map[string]string
+	registries map[string]*entity.Registry
+}
+
+func NewSyncer(client *ssh.Client, server *entity.Server, env string, secrets map[string]string, registries []entity.Registry) *Syncer {
+	regMap := make(map[string]*entity.Registry)
+	for i := range registries {
+		regMap[registries[i].Name] = &registries[i]
+	}
+	return &Syncer{
+		client:     client,
+		server:     server,
+		env:        env,
+		secrets:    secrets,
+		registries: regMap,
+	}
+}
+
+func (s *Syncer) SyncAll() []SyncResult {
+	var results []SyncResult
+
+	results = append(results, s.SyncAPTSource())
+
+	results = append(results, s.SyncDockerNetwork())
+
+	results = append(results, s.SyncRegistries()...)
+
+	return results
+}
+
+func (s *Syncer) DryRun() []SyncResult {
+	var results []SyncResult
+
+	aptSource := s.server.Environment.APTSource
+	if aptSource == "" || aptSource == "official" {
+		results = append(results, SyncResult{
+			Name:    "apt_source",
+			Success: true,
+			Message: "[dry-run] would skip (using official or no change)",
+		})
+	} else {
+		results = append(results, SyncResult{
+			Name:    "apt_source",
+			Success: true,
+			Message: fmt.Sprintf("[dry-run] would configure apt source: %s", aptSource),
+		})
+	}
+
+	if len(s.server.Networks) == 0 {
+		results = append(results, SyncResult{
+			Name:    "docker_network",
+			Success: true,
+			Message: fmt.Sprintf("[dry-run] would create default network: yamlops-%s", s.env),
+		})
+	} else {
+		var names []string
+		for _, net := range s.server.Networks {
+			names = append(names, net.Name)
+		}
+		results = append(results, SyncResult{
+			Name:    "docker_network",
+			Success: true,
+			Message: fmt.Sprintf("[dry-run] would ensure networks: %s", strings.Join(names, ", ")),
+		})
+	}
+
+	if len(s.server.Environment.Registries) == 0 {
+		results = append(results, SyncResult{
+			Name:    "registries",
+			Success: true,
+			Message: "[dry-run] no registries to configure",
+		})
+	} else {
+		for _, regName := range s.server.Environment.Registries {
+			registry, ok := s.registries[regName]
+			if !ok {
+				results = append(results, SyncResult{
+					Name:    fmt.Sprintf("registry:%s", regName),
+					Success: false,
+					Message: fmt.Sprintf("[dry-run] registry not found in config: %s", regName),
+				})
+				continue
+			}
+			if IsRegistryLoggedIn(s.client, registry, false) {
+				results = append(results, SyncResult{
+					Name:    fmt.Sprintf("registry:%s", regName),
+					Success: true,
+					Message: fmt.Sprintf("[dry-run] already logged in to %s", registry.URL),
+				})
+			} else {
+				results = append(results, SyncResult{
+					Name:    fmt.Sprintf("registry:%s", regName),
+					Success: true,
+					Message: fmt.Sprintf("[dry-run] would login to %s", registry.URL),
+				})
+			}
+		}
+	}
+
+	return results
+}
+
+func (s *Syncer) SyncAPTSource() SyncResult {
+	aptSource := s.server.Environment.APTSource
+	if aptSource == "" || aptSource == "official" {
+		return SyncResult{
+			Name:    "apt_source",
+			Success: true,
+			Message: "skipped (using official or no change)",
+		}
+	}
+
+	content, err := GetAPTTemplate(aptSource)
+	if err != nil {
+		return SyncResult{
+			Name:    "apt_source",
+			Success: false,
+			Message: fmt.Sprintf("template not found: %s", aptSource),
+			Error:   err,
+		}
+	}
+
+	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("sources.list.%d", os.Getpid()))
+	if err := os.WriteFile(tmpFile, []byte(content), 0644); err != nil {
+		return SyncResult{
+			Name:    "apt_source",
+			Success: false,
+			Message: "failed to write temp file",
+			Error:   err,
+		}
+	}
+	defer os.Remove(tmpFile)
+
+	backupCmd := "sudo cp /etc/apt/sources.list /etc/apt/sources.list.bak.$(date +%Y%m%d%H%M%S)"
+	if _, stderr, err := s.client.Run(backupCmd); err != nil {
+		return SyncResult{
+			Name:    "apt_source",
+			Success: false,
+			Message: "failed to backup sources.list",
+			Error:   fmt.Errorf("%w: %s", err, stderr),
+		}
+	}
+
+	if err := s.client.UploadFileSudo(tmpFile, "/etc/apt/sources.list"); err != nil {
+		rollbackCmd := "sudo cp /etc/apt/sources.list.bak.* /etc/apt/sources.list 2>/dev/null || true"
+		s.client.Run(rollbackCmd)
+		return SyncResult{
+			Name:    "apt_source",
+			Success: false,
+			Message: "failed to upload sources.list",
+			Error:   err,
+		}
+	}
+
+	if _, stderr, err := s.client.Run("sudo apt-get update"); err != nil {
+		return SyncResult{
+			Name:    "apt_source",
+			Success: false,
+			Message: "apt-get update failed",
+			Error:   fmt.Errorf("%w: %s", err, stderr),
+		}
+	}
+
+	return SyncResult{
+		Name:    "apt_source",
+		Success: true,
+		Message: fmt.Sprintf("configured apt source: %s", aptSource),
+	}
+}
+
+func (s *Syncer) SyncDockerNetwork() SyncResult {
+	return s.SyncDockerNetworks()
+}
+
+func (s *Syncer) SyncDockerNetworks() SyncResult {
+	netMgr := network.NewManager(s.client)
+
+	if len(s.server.Networks) == 0 {
+		defaultNetwork := entity.ServerNetwork{
+			Name: fmt.Sprintf("yamlops-%s", s.env),
+			Type: entity.NetworkTypeBridge,
+		}
+		if err := netMgr.Ensure(&defaultNetwork); err != nil {
+			return SyncResult{
+				Name:    "docker_network",
+				Success: false,
+				Message: fmt.Sprintf("failed to create docker network %s", defaultNetwork.Name),
+				Error:   err,
+			}
+		}
+		return SyncResult{
+			Name:    "docker_network",
+			Success: true,
+			Message: fmt.Sprintf("network %s ready", defaultNetwork.Name),
+		}
+	}
+
+	var failedNetworks []string
+	for _, netSpec := range s.server.Networks {
+		if err := netMgr.Ensure(&netSpec); err != nil {
+			failedNetworks = append(failedNetworks, netSpec.Name)
+		}
+	}
+
+	if len(failedNetworks) > 0 {
+		return SyncResult{
+			Name:    "docker_network",
+			Success: false,
+			Message: fmt.Sprintf("failed to create networks: %s", strings.Join(failedNetworks, ", ")),
+			Error:   fmt.Errorf("network creation failed"),
+		}
+	}
+
+	return SyncResult{
+		Name:    "docker_network",
+		Success: true,
+		Message: fmt.Sprintf("all networks ready (%d networks)", len(s.server.Networks)),
+	}
+}
+
+func (s *Syncer) SyncRegistries() []SyncResult {
+	var results []SyncResult
+
+	if len(s.server.Environment.Registries) == 0 {
+		return results
+	}
+
+	for _, regName := range s.server.Environment.Registries {
+		registry, ok := s.registries[regName]
+		if !ok {
+			results = append(results, SyncResult{
+				Name:    fmt.Sprintf("registry:%s", regName),
+				Success: false,
+				Message: "not found in config",
+			})
+			continue
+		}
+
+		if IsRegistryLoggedIn(s.client, registry, false) {
+			results = append(results, SyncResult{
+				Name:    fmt.Sprintf("registry:%s", regName),
+				Success: true,
+				Message: fmt.Sprintf("already logged in to %s", registry.URL),
+			})
+			continue
+		}
+
+		username, err := registry.Credentials.Username.Resolve(s.secrets)
+		if err != nil {
+			results = append(results, SyncResult{
+				Name:    fmt.Sprintf("registry:%s", regName),
+				Success: false,
+				Message: "failed to resolve username",
+				Error:   err,
+			})
+			continue
+		}
+
+		password, err := registry.Credentials.Password.Resolve(s.secrets)
+		if err != nil {
+			results = append(results, SyncResult{
+				Name:    fmt.Sprintf("registry:%s", regName),
+				Success: false,
+				Message: "failed to resolve password",
+				Error:   err,
+			})
+			continue
+		}
+
+		cmd := fmt.Sprintf("sudo docker login -u %s --password-stdin %s 2>&1",
+			ssh.ShellEscape(username), ssh.ShellEscape(registry.URL))
+		stdout, _, err := s.client.RunWithStdin(password+"\n", cmd)
+
+		if err != nil {
+			results = append(results, SyncResult{
+				Name:    fmt.Sprintf("registry:%s", regName),
+				Success: false,
+				Message: fmt.Sprintf("login failed: %s", strings.TrimSpace(stdout)),
+				Error:   err,
+			})
+			continue
+		}
+
+		results = append(results, SyncResult{
+			Name:    fmt.Sprintf("registry:%s", regName),
+			Success: true,
+			Message: fmt.Sprintf("logged in to %s", registry.URL),
+		})
+	}
+
+	return results
+}

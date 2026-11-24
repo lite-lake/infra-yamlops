@@ -1,0 +1,83 @@
+package generator
+
+import (
+	"fmt"
+	"os"
+
+	"github.com/lite-lake/infra-yamlops/internal/application/generator/compose"
+	"github.com/lite-lake/infra-yamlops/internal/application/generator/gate"
+	"github.com/lite-lake/infra-yamlops/internal/domain/entity"
+	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
+)
+
+type Generator struct {
+	composeGen *compose.Generator
+	gateGen    *gate.Generator
+	outputDir  string
+	env        string
+}
+
+func NewGenerator(env, outputDir string) *Generator {
+	return &Generator{
+		composeGen: compose.NewGenerator(),
+		gateGen:    gate.NewGenerator(),
+		outputDir:  outputDir,
+		env:        env,
+	}
+}
+
+func (g *Generator) SetOutputDir(dir string) {
+	g.outputDir = dir
+}
+
+func (g *Generator) Generate(config *entity.Config) error {
+	return g.GenerateWithScope(config, nil)
+}
+
+func (g *Generator) GenerateWithScope(config *entity.Config, scope *valueobject.Scope) error {
+	// 第二跳条目漏标 hsts: "off" 的生成期告警（内部PRD §5.6，决策 D5）：
+	// 仅告警日志，不自动注入、不改写配置与渲染产物、不阻断生成。
+	g.warnSecondHopHSTS(config)
+
+	if scope == nil || scope.IsEmpty() {
+		if _, err := os.Stat(g.outputDir); err == nil {
+			if err := os.RemoveAll(g.outputDir); err != nil {
+				return fmt.Errorf("failed to clean output directory: %w", err)
+			}
+		}
+
+		if err := os.MkdirAll(g.outputDir, 0755); err != nil {
+			return fmt.Errorf("failed to create output directory: %w", err)
+		}
+
+		if err := g.generateServiceComposes(config); err != nil {
+			return err
+		}
+
+		if err := g.generateGatewayConfigs(config); err != nil {
+			return err
+		}
+
+		if err := g.generateInfraServiceComposes(config); err != nil {
+			return err
+		}
+	} else {
+		if err := os.MkdirAll(g.outputDir, 0755); err != nil {
+			return fmt.Errorf("failed to create output directory: %w", err)
+		}
+
+		if err := g.generateServiceComposesWithScope(config, scope); err != nil {
+			return err
+		}
+
+		if err := g.generateGatewayConfigsWithScope(config, scope); err != nil {
+			return err
+		}
+
+		if err := g.generateInfraServiceComposesWithScope(config, scope); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
