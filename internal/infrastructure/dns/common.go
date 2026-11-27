@@ -11,7 +11,24 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/constants"
 	domainerr "github.com/lite-lake/infra-yamlops/internal/domain"
 	"github.com/lite-lake/infra-yamlops/internal/domain/retry"
+	"github.com/lite-lake/infra-yamlops/internal/infrastructure/logger"
 )
+
+// MinTencentTTL 是 DNSPod 免费版允许的最小 TTL（秒）。
+const MinTencentTTL = 600
+
+// WarnProviderTTL 对已知存在 TTL 下限的 provider 给出非阻断告警。
+// DNSPod 免费版 ttl < 600 会被 API 拒绝或静默改写；本次迁移的现网值均 >= 600，
+// 告警用于后续域名迁移时提前暴露问题。
+func WarnProviderTTL(providerName string, ttl int) {
+	if providerName == "tencent" && ttl > 0 && ttl < MinTencentTTL {
+		logger.Warn("dns record ttl below provider minimum",
+			"provider", providerName,
+			"ttl", ttl,
+			"min_ttl", MinTencentTTL,
+		)
+	}
+}
 
 var validTTLs = []int{1, 5, 10, 20, 30, 60, 120, 180, 300, 600, 900, 1800, 3600, 7200, 18000, 43200, 86400}
 
@@ -108,6 +125,17 @@ func IsRetryableDNSError(err error) bool {
 		"internal server error",
 		"bad gateway",
 		"gateway timeout",
+		// 云厂商 SDK 错误码（大小写无关匹配）：腾讯云返回
+		// Code=RequestLimitExceeded / InternalError / ResourceUnavailable，
+		// 阿里云返回 Code=Throttling；这些均为可重试的瞬时故障。
+		"requestlimitexceeded",
+		"internalerror",
+		"internal error",
+		"resourceunavailable",
+		"serviceunavailable",
+		"throttling",
+		// 连接被对端提前关闭（SDK 报 ClientError.NetworkError + EOF）。
+		"eof",
 	}
 	for _, pattern := range retryablePatterns {
 		if strings.Contains(strings.ToLower(errStr), pattern) {

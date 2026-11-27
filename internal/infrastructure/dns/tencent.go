@@ -34,6 +34,40 @@ func (p *TencentProvider) Name() string {
 	return "tencent"
 }
 
+// DNSPod 的解析线路使用中文名（默认 / 境外），而配置与远端状态比对使用
+// 内部归一值（default / oversea，见 entity.DNSRecord.EffectiveLine）。
+// 分别做读取与写入两个方向的映射，避免线路丢失后被静默当作默认线路。
+var tencentLineToInternal = map[string]string{
+	"默认":      "default",
+	"Default": "default",
+	"default": "default",
+	"境外":      "oversea",
+	"Oversea": "oversea",
+	"oversea": "oversea",
+}
+
+var internalLineToTencent = map[string]string{
+	"default": "默认",
+	"oversea": "境外",
+}
+
+func toInternalLine(line string) string {
+	if v, ok := tencentLineToInternal[line]; ok {
+		return v
+	}
+	return line
+}
+
+func toTencentLine(line string) string {
+	if line == "" {
+		return "默认"
+	}
+	if v, ok := internalLineToTencent[line]; ok {
+		return v
+	}
+	return line
+}
+
 type tencentRecordMapper struct{}
 
 func (m *tencentRecordMapper) mapRecord(r *dnspod.RecordListItem) DNSRecord {
@@ -41,12 +75,17 @@ func (m *tencentRecordMapper) mapRecord(r *dnspod.RecordListItem) DNSRecord {
 	if r.TTL != nil {
 		ttl = int(*r.TTL)
 	}
+	line := ""
+	if r.Line != nil {
+		line = toInternalLine(*r.Line)
+	}
 	return DNSRecord{
 		ID:    strconv.FormatUint(*r.RecordId, 10),
 		Name:  *r.Name,
 		Type:  *r.Type,
 		Value: *r.Value,
 		TTL:   ttl,
+		Line:  line,
 	}
 }
 
@@ -105,12 +144,14 @@ func (p *TencentProvider) GetRecordsBySubDomain(domain string, subDomain string)
 }
 
 func (p *TencentProvider) CreateRecord(ctx context.Context, domain string, record *DNSRecord) error {
+	WarnProviderTTL(p.Name(), record.TTL)
 	ttl := uint64(p.NormalizeTTL(record.TTL))
 
 	req := dnspod.NewCreateRecordRequest()
 	req.Domain = common.StringPtr(domain)
 	req.SubDomain = common.StringPtr(record.Name)
 	req.RecordType = common.StringPtr(record.Type)
+	req.RecordLine = common.StringPtr(toTencentLine(record.Line))
 	req.Value = common.StringPtr(record.Value)
 	req.TTL = common.Uint64Ptr(ttl)
 
@@ -144,6 +185,7 @@ func (p *TencentProvider) UpdateRecord(ctx context.Context, domain string, recor
 		return domainerr.WrapOp("parse record ID", err)
 	}
 
+	WarnProviderTTL(p.Name(), record.TTL)
 	ttl := uint64(p.NormalizeTTL(record.TTL))
 
 	req := dnspod.NewModifyRecordRequest()
@@ -151,6 +193,7 @@ func (p *TencentProvider) UpdateRecord(ctx context.Context, domain string, recor
 	req.RecordId = common.Uint64Ptr(recordIDInt)
 	req.SubDomain = common.StringPtr(record.Name)
 	req.RecordType = common.StringPtr(record.Type)
+	req.RecordLine = common.StringPtr(toTencentLine(record.Line))
 	req.Value = common.StringPtr(record.Value)
 	req.TTL = common.Uint64Ptr(ttl)
 

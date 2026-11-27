@@ -2,6 +2,7 @@ package dns
 
 import (
 	"context"
+	"errors"
 	"testing"
 )
 
@@ -121,5 +122,31 @@ func TestEnsureRecord_CreatesNewLine(t *testing.T) {
 	}
 	if p.createCalls != 1 {
 		t.Errorf("expected 1 create for missing oversea line, got %d", p.createCalls)
+	}
+}
+
+func TestIsRetryableDNSError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"nil", nil, false},
+		{"network timeout", errors.New("dial tcp: i/o timeout"), true},
+		{"connection reset", errors.New("connection reset by peer"), true},
+		{"tencent rate limit", errors.New("TencentCloudSDKError: Code=RequestLimitExceeded, Message=..."), true},
+		{"tencent internal error", errors.New("TencentCloudSDKError: Code=InternalError, Message=..."), true},
+		{"tencent resource unavailable", errors.New("TencentCloudSDKError: Code=ResourceUnavailable, Message=..."), true},
+		{"aliyun throttling", errors.New("SDK.ServerError Code=Throttling"), true},
+		{"network eof", errors.New("ClientError.NetworkError, Message=Fail to get response: EOF"), true},
+		{"auth failure is not retryable", errors.New("TencentCloudSDKError: Code=AuthFailure.SignatureFailure"), false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := IsRetryableDNSError(tt.err); got != tt.want {
+				t.Errorf("IsRetryableDNSError(%v) = %v, want %v", tt.err, got, tt.want)
+			}
+		})
 	}
 }
