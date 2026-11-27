@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/lite-lake/infra-yamlops/internal/application/plan"
 	"github.com/lite-lake/infra-yamlops/internal/constants"
@@ -13,7 +12,6 @@ import (
 	"github.com/lite-lake/infra-yamlops/internal/domain/repository"
 	"github.com/lite-lake/infra-yamlops/internal/domain/service"
 	"github.com/lite-lake/infra-yamlops/internal/domain/valueobject"
-	"github.com/lite-lake/infra-yamlops/internal/infrastructure/dns"
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/persistence"
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/secrets"
 	"github.com/lite-lake/infra-yamlops/internal/infrastructure/state"
@@ -95,7 +93,11 @@ func (w *Workflow) Plan(ctx context.Context, outputDir string, scope *valueobjec
 
 		remoteState = w.stateFetcher.FetchWithScope(ctx, cfg, scope)
 	} else {
-		remoteState = w.fetchDNSRemoteState(ctx, cfg, scope)
+		var err error
+		remoteState, err = w.fetchDNSRemoteState(ctx, cfg, scope)
+		if err != nil {
+			return nil, nil, fmt.Errorf("fetch remote DNS state: %w", err)
+		}
 	}
 
 	opts := []plan.PlannerOption{
@@ -170,73 +172,8 @@ func (w *Workflow) SaveState(ctx context.Context, cfg *entity.Config) error {
 	return nil
 }
 
-func (w *Workflow) fetchDNSRemoteState(ctx context.Context, cfg *entity.Config, scope *valueobject.Scope) *repository.DeploymentState {
-	state := &repository.DeploymentState{
-		Services:      make(map[string]*entity.BizService),
-		InfraServices: make(map[string]*entity.InfraService),
-		Servers:       make(map[string]*entity.Server),
-		Zones:         make(map[string]*entity.Zone),
-		Domains:       make(map[string]*entity.Domain),
-		Records:       make(map[string]*entity.DNSRecord),
-		ISPs:          make(map[string]*entity.ISP),
-	}
-
-	selectedDomains := make(map[string]bool)
-	if scope != nil && len(scope.Domains()) > 0 {
-		for _, d := range scope.Domains() {
-			selectedDomains[d] = true
-		}
-	}
-
-	if len(selectedDomains) == 0 {
-		for _, d := range cfg.Domains {
-			selectedDomains[d.Name] = true
-		}
-	}
-
-	dnsFactory := dns.NewFactory()
-	secretsMap := cfg.GetSecretsMap()
-
-	for domainName := range selectedDomains {
-		domain := cfg.GetDomainMap()[domainName]
-		if domain == nil {
-			continue
-		}
-		isp := cfg.GetISPMap()[domain.DNSISP]
-		if isp == nil {
-			continue
-		}
-		provider, err := dnsFactory.Create(isp, secretsMap)
-		if err != nil {
-			continue
-		}
-		remoteRecords, err := provider.ListRecords(ctx, domainName)
-		if err != nil {
-			continue
-		}
-		for _, rr := range remoteRecords {
-			recordName := rr.Name
-			if recordName == domainName || recordName == "" {
-				recordName = "@"
-			} else if strings.HasSuffix(rr.Name, "."+domainName) {
-				recordName = strings.TrimSuffix(rr.Name, "."+domainName)
-			}
-			record := &entity.DNSRecord{
-				Domain: domainName,
-				Type:   entity.DNSRecordType(rr.Type),
-				Name:   recordName,
-				Value:  rr.Value,
-				TTL:    rr.TTL,
-				Line:   rr.Line,
-			}
-			key := fmt.Sprintf("%s:%s:%s:%s:%s", domainName, rr.Type, recordName, record.EffectiveLine(), record.Value)
-			state.Records[key] = record
-		}
-	}
-
-	for _, d := range cfg.Domains {
-		state.Domains[d.Name] = &d
-	}
-
-	return state
+// fetchDNSRemoteState 读取选中域名的远端 DNS 记录。失败必须上抛：静默返回空状态
+// 会让规划把全部配置记录判成 create（详见 FetchDNSRemoteState 注释）。
+func (w *Workflow) fetchDNSRemoteState(ctx context.Context, cfg *entity.Config, scope *valueobject.Scope) (*repository.DeploymentState, error) {
+	return FetchDNSRemoteState(ctx, cfg, scope)
 }

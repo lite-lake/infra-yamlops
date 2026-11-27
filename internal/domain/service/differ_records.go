@@ -20,6 +20,11 @@ func (s *DifferService) PlanRecords(plan *valueobject.Plan, cfgRecords []entity.
 
 	stateMap := make(map[string]*entity.DNSRecord)
 	for key, r := range s.state.Records {
+		// DNSPod 新建 zone 时自带 @ NS 系统记录（官方要求不得修改/删除），
+		// 不属于我方管理对象；不纳入计划，否则首次下发会尝试删除它。
+		if r.Type == entity.DNSRecordTypeNS {
+			continue
+		}
 		stateMap[key] = r
 	}
 

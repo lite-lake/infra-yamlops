@@ -214,7 +214,12 @@ func (m *Model) generatePlan() {
 
 	var state *plan.DeploymentState
 	if m.ViewMode == ViewModeDNS {
-		state = m.fetchDNSRemoteState()
+		var err error
+		state, err = m.fetchDNSRemoteState(m.Action.PlanScope)
+		if err != nil {
+			m.UI.ErrorMessage = fmt.Sprintf("Failed to fetch remote DNS state: %v", err)
+			return
+		}
 	} else {
 		fetcher := orchestrator.NewStateFetcher(string(m.Environment), m.ConfigDir)
 		state = fetcher.FetchWithScope(context.Background(), m.Config, m.Action.PlanScope)
@@ -301,7 +306,11 @@ func (m *Model) generatePlanAsync() tea.Cmd {
 
 		var state *plan.DeploymentState
 		if m.ViewMode == ViewModeDNS {
-			state = m.fetchDNSRemoteState()
+			fetched, fetchErr := m.fetchDNSRemoteState(scope)
+			if fetchErr != nil {
+				return planGeneratedMsg{err: fetchErr}
+			}
+			state = fetched
 		} else {
 			fetcher := orchestrator.NewStateFetcher(string(m.Environment), m.ConfigDir)
 			state = fetcher.FetchWithScope(context.Background(), m.Config, scope)
@@ -320,70 +329,8 @@ func (m *Model) generatePlanAsync() tea.Cmd {
 	}
 }
 
-func (m *Model) fetchDNSRemoteState() *plan.DeploymentState {
-	state := &plan.DeploymentState{
-		Services:      make(map[string]*entity.BizService),
-		InfraServices: make(map[string]*entity.InfraService),
-		Servers:       make(map[string]*entity.Server),
-		Zones:         make(map[string]*entity.Zone),
-		Domains:       make(map[string]*entity.Domain),
-		Records:       make(map[string]*entity.DNSRecord),
-		ISPs:          make(map[string]*entity.ISP),
-	}
-
-	selectedDomains := m.getSelectedDomains()
-	if len(selectedDomains) == 0 {
-		// 未选择任何域名时，回退为全部配置域（与 CLI dns deploy 不带 --domain 一致）。
-		// 否则远端 Records 为空，PlanRecords 会把所有配置记录误判为 create。
-		for _, d := range m.Config.Domains {
-			selectedDomains = append(selectedDomains, d.Name)
-		}
-	}
-
-	for _, domainName := range selectedDomains {
-		domain := m.Config.GetDomainMap()[domainName]
-		if domain == nil {
-			continue
-		}
-		isp := m.Config.GetISPMap()[domain.DNSISP]
-		if isp == nil {
-			continue
-		}
-		provider, err := createDNSProviderFromConfig(isp, m.Config.GetSecretsMap())
-		if err != nil {
-			continue
-		}
-		remoteRecords, err := provider.ListRecords(context.Background(), domainName)
-		if err != nil {
-			continue
-		}
-		for _, rr := range remoteRecords {
-			recordName := rr.Name
-			if recordName == domainName || recordName == "" {
-				recordName = "@"
-			} else if strings.HasSuffix(rr.Name, "."+domainName) {
-				recordName = strings.TrimSuffix(rr.Name, "."+domainName)
-			}
-			record := &entity.DNSRecord{
-				Domain: domainName,
-				Type:   entity.DNSRecordType(rr.Type),
-				Name:   recordName,
-				Value:  rr.Value,
-				TTL:    rr.TTL,
-				Line:   rr.Line,
-			}
-			// key 必须与 PlanRecords 的 recordKey 一致（5 段含 EffectiveLine 与 Value），
-			// 否则 state 与 cfg 永不匹配，所有记录被误判为 create/delete。
-			key := fmt.Sprintf("%s:%s:%s:%s:%s", domainName, rr.Type, recordName, record.EffectiveLine(), record.Value)
-			state.Records[key] = record
-		}
-	}
-
-	for _, d := range m.Config.Domains {
-		state.Domains[d.Name] = &d
-	}
-
-	return state
+func (m *Model) fetchDNSRemoteState(scope *valueobject.Scope) (*plan.DeploymentState, error) {
+	return orchestrator.FetchDNSRemoteState(context.Background(), m.Config, scope)
 }
 
 func (m *Model) getSelectedDomains() []string {
@@ -525,7 +472,11 @@ func (m *Model) generateForcePlanAsync() tea.Cmd {
 
 		var state *plan.DeploymentState
 		if m.ViewMode == ViewModeDNS {
-			state = m.fetchDNSRemoteState()
+			fetched, fetchErr := m.fetchDNSRemoteState(scope)
+			if fetchErr != nil {
+				return planGeneratedMsg{err: fetchErr}
+			}
+			state = fetched
 		} else {
 			fetcher := orchestrator.NewStateFetcher(string(m.Environment), m.ConfigDir)
 			state = fetcher.FetchWithScope(context.Background(), m.Config, scope)
